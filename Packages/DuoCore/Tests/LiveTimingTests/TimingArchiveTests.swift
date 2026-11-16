@@ -161,12 +161,15 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(loaded.header.at(Fixture.raceLightsOut + 300_000).totalLaps == 71)
         #expect(!loaded.timing.at(Fixture.raceLightsOut + 300_000).isEmpty)
         #expect(!loaded.stints.at(Fixture.raceLightsOut + 300_000).isEmpty)
+        // check:raceLightsOutUtc: SessionStatus "Started" at 00:53:44.576.
+        #expect(loaded.sessionStatus.started == Fixture.raceLightsOut)
+        #expect(loaded.sessionStatus.status(at: Fixture.raceLightsOut + 1) == "Started")
         // Not fetched: topics nothing reads yet, and CarData (fetched in the background later).
         let asked = Set(await http.requests.map { $0.url.lastPathComponent })
         #expect(asked == ["DriverList.json", "SessionInfo.json", "Position.z.jsonStream", "Heartbeat.jsonStream",
                           "TimingData.jsonStream", "TimingAppData.jsonStream", "RaceControlMessages.jsonStream",
-                          "TrackStatus.jsonStream", "LapCount.jsonStream", "ExtrapolatedClock.jsonStream",
-                          "WeatherData.jsonStream"])
+                          "TrackStatus.jsonStream", "SessionStatus.jsonStream", "LapCount.jsonStream",
+                          "ExtrapolatedClock.jsonStream", "WeatherData.jsonStream"])
     }
 
     @Test func qualifyingAsksForNoLapCount() async throws {
@@ -187,13 +190,24 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(loaded.positions.cars.count >= 20)
     }
 
+    @Test func missingSessionStatusIsOptional() async throws {
+        let http = try await Self.raceHTTP()
+        await http.serve(Self.racePath + "SessionStatus.jsonStream", status: 404)
+        let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
+        #expect(loaded.missing == ["SessionStatus"])
+        #expect(loaded.sessionStatus.started == nil)
+        #expect(loaded.sessionStatus.changes.isEmpty)
+        #expect(loaded.positions.cars.count >= 20)
+    }
+
     @Test func optionalTopicsGoMissingInTopicOrder() async throws {
         let http = try await Self.raceHTTP()
+        await http.serve(Self.racePath + "SessionStatus.jsonStream", status: 403)
         await http.serve(Self.racePath + "WeatherData.jsonStream", status: 404)
         await http.fail(Self.racePath + "TimingData.jsonStream", with: URLError(.timedOut))
         await http.serve(Self.racePath + "Heartbeat.jsonStream", status: 500)
         let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
-        #expect(loaded.missing == ["Heartbeat", "TimingData", "WeatherData"])
+        #expect(loaded.missing == ["Heartbeat", "TimingData", "SessionStatus", "WeatherData"])
         // Without the heartbeat the cars' own clocks give the start: 2.1 s early on this race
         // (check:raceStartsDifferMs).
         #expect(loaded.streamStart == Fixture.raceStart - 2_102)

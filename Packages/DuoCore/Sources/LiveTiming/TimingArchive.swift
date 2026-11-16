@@ -21,11 +21,14 @@ public struct LoadedSession: Sendable {
     public var stints: StintTimeline
     public var header: HeaderTimeline
     public var flags: TrackFlags
+    /// Empty when the archive has no SessionStatus.
+    public var sessionStatus: SessionStatusTimeline
     /// Optional topics the archive didn't give ("WeatherData", ...), in a fixed order.
     public var missing: [String]
 
     public init(info: TimingSessionInfo, drivers: [String: DriverInfo], streamStart: UTCms, positions: PositionSeries,
-                timing: TimingTimeline, stints: StintTimeline, header: HeaderTimeline, flags: TrackFlags, missing: [String]) {
+                timing: TimingTimeline, stints: StintTimeline, header: HeaderTimeline, flags: TrackFlags,
+                sessionStatus: SessionStatusTimeline = SessionStatusTimeline(), missing: [String]) {
         self.info = info
         self.drivers = drivers
         self.streamStart = streamStart
@@ -34,6 +37,7 @@ public struct LoadedSession: Sendable {
         self.stints = stints
         self.header = header
         self.flags = flags
+        self.sessionStatus = sessionStatus
         self.missing = missing
     }
 }
@@ -110,7 +114,7 @@ public actor TimingArchive {
     /// are optional and listed in `LoadedSession.missing` when the archive doesn't give them.
     /// LapCount is published for races (and sprints) only.
     static func topics(for session: ArchiveSession) -> [String] {
-        ["Heartbeat", "TimingData", "TimingAppData", "RaceControlMessages", "TrackStatus"]
+        ["Heartbeat", "TimingData", "TimingAppData", "RaceControlMessages", "TrackStatus", "SessionStatus"]
             + (session.type == "Race" ? ["LapCount"] : [])
             + ["ExtrapolatedClock", "WeatherData"]
     }
@@ -175,6 +179,7 @@ public actor TimingArchive {
             stints: await stints,
             header: await header,
             flags: await flags,
+            sessionStatus: SessionStatusTimeline.build(lines: lines("SessionStatus") ?? [], streamStart: streamStart),
             missing: topics.filter { lines($0) == nil }
         )
     }
