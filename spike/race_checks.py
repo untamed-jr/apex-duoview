@@ -85,6 +85,76 @@ def lap_chart(hist, upto):
     return rows
 
 
+def line_states(lines):
+    """Per car: [(offset, merged line)] after each stream line touching it (one state per line,
+    as TimingTimeline keeps)."""
+    merged, out = {}, {}
+    for off, j in lines:
+        for n, d in (j.get("Lines") or {}).items():
+            if not isinstance(d, dict):
+                continue
+            merged[n] = merge(merged.get(n), d)
+            h = out.setdefault(n, [])
+            if h and h[-1][0] == off:
+                h[-1] = (off, merged[n])
+            else:
+                h.append((off, merged[n]))
+    return out
+
+
+def race_lap(states, off, total):
+    """The leader's lap in progress at `off`: the most laps any car has finished, plus one,
+    capped at the race's length."""
+    done = 0
+    for h in states.values():
+        m = None
+        for o, x in h:
+            if o > off:
+                break
+            m = x
+        if m is not None and m.get("NumberOfLaps") is not None:
+            done = max(done, int(m["NumberOfLaps"]))
+    return min(done + 1, total)
+
+
+def last_lap(m):
+    cell = m.get("LastLapTime") or {}
+    if not cell.get("Value"):
+        return None, "empty"
+    pace = "overallBest" if cell.get("OverallFastest") is True else "personalBest" if cell.get("PersonalFastest") is True else "set"
+    return lap_ms(cell["Value"]), pace
+
+
+def events(states, upto, started):
+    """Pits after the start, retirements and new fastest laps up to `upto`, as (offset, kind, car)."""
+    out, fastest, baseline = [], [], None
+    for n, h in states.items():
+        prev = None
+        for o, m in h:
+            if o > upto:
+                break
+            if prev is None:
+                ms, pace = last_lap(m)
+                if pace == "overallBest":
+                    baseline = ms if baseline is None else min(baseline, ms)
+                prev = m
+                continue
+            if m.get("InPit") is True and prev.get("InPit") is not True and o >= started:
+                out.append((o, "pit", n))
+            if m.get("Retired") is True and prev.get("Retired") is not True:
+                out.append((o, "retirement", n))
+            ms, pace = last_lap(m)
+            pms, ppace = last_lap(prev)
+            if pace == "overallBest" and (ppace != "overallBest" or pms != ms):
+                fastest.append((o, n, ms))
+            prev = m
+    for o, n, ms in sorted(fastest, key=lambda f: (f[0], int(f[1]))):
+        if baseline is None or ms < baseline:
+            baseline = ms
+            out.append((o, "fastestLap", n))
+    return sorted(out)
+
+
 def car_data_checks():
     """Channel 45 in the qualifying CarData slice: present in how many samples, and in how many
     taken on a straight (150 km/h or more, throttle 95 % or more)."""
@@ -140,6 +210,24 @@ def main():
     check("raceLapChartColumnsWholeFixture", max(max(r) for r in whole.values()))
     r = whole.get("12", {})
     check("raceLapChartCar12WholeFixture", [r.get(l) for l in range(1, max(r) + 1)])
+
+    check("raceCar12CrossingOffsets", [o for o, _, crossed in hist["12"] if crossed])
+
+    states = line_states(timing)
+    ev = events(states, t10, lights)
+    check("raceEventsAtLightsOutPlus10min", [(o, k, n, race_lap(states, o, 71)) for o, k, n in ev])
+    ev = events(states, 10**12, lights)
+    check("raceEventsWholeFixture", [(o, k, n, race_lap(states, o, 71)) for o, k, n in ev])
+
+    # Qualifying's red flag: race control's RED FLAG (TrackFlags' red runs from it until a GREEN
+    # or CHEQUERED flag, and none comes in the fixture), earlier than TrackStatus's 5.
+    for off, j in read_stream(os.path.join(QUALI, "RaceControlMessages.jsonStream")):
+        msgs = j.get("Messages")
+        for m in (msgs if isinstance(msgs, list) else (msgs or {}).values()):
+            if m.get("Flag") == "RED":
+                check("qualiRedFlagUtc", utc_ms(m["Utc"]))
+    status = read_stream(os.path.join(QUALI, "TrackStatus.jsonStream"))
+    check("qualiTrackStatusRedUtc", [QUALI_START + o for o, j in status if j.get("Status") == "5"])
 
 
 if __name__ == "__main__":
