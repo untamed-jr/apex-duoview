@@ -302,4 +302,296 @@ import Foundation
         #expect(frames.filter(\.visible).count == 1)
         #expect(frames[0].rect.width >= 200)
     }
+
+    // MARK: Data layouts (beta.3)
+
+    static let dataIDs = ["flat.director", "book.dataScreen", "laptop.raceEngineer", "laptop.scrubDeck"]
+
+    static func regionRects(_ r: DataRegions) -> [CGRect] {
+        [r.map, r.tower, r.console, r.deck].compactMap { $0 }
+    }
+
+    static func near(_ a: CGRect?, _ b: CGRect, _ tol: CGFloat = 0.01) -> Bool {
+        guard let a else { return false }
+        return abs(a.minX - b.minX) < tol && abs(a.minY - b.minY) < tol
+            && abs(a.width - b.width) < tol && abs(a.height - b.height) < tol
+    }
+
+    static func usableFold(_ fold: CGRect?, posture: Posture, screen: CGSize) -> CGRect? {
+        guard let fold, posture == .book || posture == .laptop else { return nil }
+        let clipped = fold.intersection(CGRect(origin: .zero, size: screen))
+        guard !clipped.isNull, clipped.width > 0, clipped.height > 0,
+              posture == .book ? clipped.height > clipped.width : clipped.width > clipped.height
+        else { return nil }
+        return clipped
+    }
+
+    @Test func directorTowerColumnAndRow() {
+        let (screen, fold) = Self.referenceGeometry(.flat)
+        for n in 1...4 {
+            let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .flat,
+                                             feedCount: n, optionID: "flat.director")
+            let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .flat,
+                                                   feedCount: n, optionID: "flat.director")
+            // Full-height column, 200 wide, at the right edge inside the 6 pt margin.
+            #expect(Self.near(regions.tower, CGRect(x: 745, y: 6, width: 200, height: 657)),
+                    "n=\(n) \(String(describing: regions.tower))")
+            #expect(regions.console == nil && regions.deck == nil)
+            let visible = frames.filter(\.visible)
+            #expect(visible.count == min(n, 3), "n=\(n)")
+            let main = frames[0].rect
+            // Main is as wide as the column left of the tower allows (733 = 951 - 2 * 6 - 6 - 200).
+            #expect(abs(main.width - 733) < 0.01, "n=\(n) \(main)")
+            #expect(abs(main.minY - 6) < 0.01 && abs(main.minX - 6) < 0.01, "n=\(n) \(main)")
+            // The row: the other feeds and the map below the main feed, each at least 200 wide.
+            for f in visible.dropFirst() {
+                #expect(f.rect.width >= 200 - 0.01, "n=\(n) \(f.rect)")
+                #expect(abs(f.rect.minY - (main.maxY + 6)) < 0.01, "n=\(n) \(f.rect)")
+                #expect(f.rect.maxX <= 745 - 6 + 0.01, "n=\(n) \(f.rect)")
+            }
+            #expect(regions.map != nil, "n=\(n)")
+            if let map = regions.map {
+                #expect(map.width >= 200 - 0.01, "n=\(n) \(map)")
+                #expect(abs(map.minY - (main.maxY + 6)) < 0.01, "n=\(n) \(map)")
+                #expect(abs(map.maxY - 663) < 0.01 && abs(map.maxX - 739) < 0.01, "n=\(n) \(map)")
+            }
+        }
+    }
+
+    @Test func directorFourthFeedHidden() {
+        let (screen, fold) = Self.referenceGeometry(.flat)
+        let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .flat,
+                                         feedCount: 4, optionID: "flat.director")
+        #expect(frames.count == 4)
+        #expect(frames.prefix(3).allSatisfy { $0.visible })
+        #expect(frames[3].visible == false && frames[3].rect == frames[0].rect)
+        let three = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .flat,
+                                        feedCount: 3, optionID: "flat.director")
+        #expect(Array(frames.prefix(3)) == three)
+    }
+
+    @Test func dataScreenNothingInFold() {
+        let (screen, fold) = Self.referenceGeometry(.book)
+        for n in 1...4 {
+            let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book,
+                                             feedCount: n, optionID: "book.dataScreen")
+            let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .book,
+                                                   feedCount: n, optionID: "book.dataScreen")
+            let visible = frames.filter(\.visible)
+            #expect(visible.count == n, "n=\(n)")
+            // Feeds on the left screen, map and tower on the right; nothing in the fold.
+            for f in visible {
+                #expect(!f.rect.intersects(fold) && f.rect.maxX <= fold.minX - 6 + 0.01, "n=\(n) \(f.rect)")
+            }
+            #expect(regions.map != nil && regions.tower != nil, "n=\(n)")
+            #expect(regions.console == nil && regions.deck == nil)
+            for r in Self.regionRects(regions) {
+                #expect(!r.intersects(fold) && r.minX >= fold.maxX + 6 - 0.01 && r.maxX <= 945 + 0.01, "n=\(n) \(r)")
+            }
+            if let map = regions.map, let tower = regions.tower {
+                #expect(abs(map.minY - 6) < 0.01 && map.maxY < tower.minY, "n=\(n)")
+                #expect(abs(tower.maxY - 663) < 0.01, "n=\(n) \(tower)")
+            }
+        }
+        // Two feeds are stacked.
+        let two = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book, feedCount: 2, optionID: "book.dataScreen")
+        #expect(abs(two[0].rect.minX - two[1].rect.minX) < 0.01 && two[0].rect.maxY < two[1].rect.minY)
+    }
+
+    @Test func dataScreenFourFeedsGrid219() {
+        let (screen, fold) = Self.referenceGeometry(.book)
+        let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book,
+                                         feedCount: 4, optionID: "book.dataScreen")
+        #expect(frames.count == 4 && frames.allSatisfy(\.visible))
+        for f in frames { #expect(f.rect.width >= 210, "\(f.rect)") }
+        // Two columns and two rows.
+        #expect(Set(frames.map { ($0.rect.minX * 100).rounded() }).count == 2)
+        #expect(Set(frames.map { ($0.rect.minY * 100).rounded() }).count == 2)
+        let three = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book,
+                                        feedCount: 3, optionID: "book.dataScreen")
+        #expect(Array(frames.prefix(3)) == three)
+    }
+
+    @Test func laptopOneFeedDefaultsToScrubDeck() {
+        let (screen, fold) = Self.referenceGeometry(.laptop)
+        #expect(LayoutEngine.optionIDs(posture: .laptop, feedCount: 1, hasTiming: true)
+                == ["laptop.scrubDeck", "laptop.raceEngineer"])
+        #expect(LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: .laptop,
+                                             feedCount: 1, hasTiming: true)
+                == ["laptop.scrubDeck", "laptop.raceEngineer"])
+        let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .laptop,
+                                         feedCount: 1, optionID: "laptop.scrubDeck")
+        let mainUp = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .laptop,
+                                         feedCount: 1, optionID: "laptop.mainUp")
+        #expect(frames == mainUp)
+        let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .laptop,
+                                               feedCount: 1, optionID: "laptop.scrubDeck")
+        #expect(regions == DataRegions(deck: CGRect(x: 6, y: 502, width: 657, height: 443)))
+    }
+
+    @Test func raceEngineerConsoleIsBottomHalf() {
+        let (screen, fold) = Self.referenceGeometry(.laptop)
+        let bottom = CGRect(x: 6, y: 502, width: 657, height: 443)
+        for id in ["laptop.raceEngineer", "laptop.scrubDeck"] {
+            for n in 1...4 {
+                let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .laptop,
+                                                 feedCount: n, optionID: id)
+                let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .laptop,
+                                                       feedCount: n, optionID: id)
+                if id == "laptop.raceEngineer" {
+                    #expect(regions == DataRegions(console: bottom), "n=\(n)")
+                } else {
+                    #expect(regions == DataRegions(deck: bottom), "n=\(n)")
+                }
+                // The main feed alone in the top half; the others hidden under it.
+                #expect(frames.count == n)
+                #expect(frames[0].visible && frames[0].rect.maxY <= fold.minY - 6 + 0.01, "n=\(n)")
+                #expect(abs(frames[0].rect.width - 657) < 0.01, "n=\(n) \(frames[0].rect)")
+                for f in frames.dropFirst() { #expect(!f.visible && f.rect == frames[0].rect, "n=\(n)") }
+            }
+        }
+        #expect(LayoutEngine.optionIDs(posture: .laptop, feedCount: 2, hasTiming: true)
+                == ["laptop.oneUpOneDown", "laptop.raceEngineer", "laptop.scrubDeck"])
+    }
+
+    @Test func noDataOptionsWithoutTiming() {
+        for posture in Posture.allCases {
+            for n in 0...6 {
+                let plain = LayoutEngine.optionIDs(posture: posture, feedCount: n)
+                #expect(plain == LayoutEngine.optionIDs(posture: posture, feedCount: n, hasTiming: false))
+                #expect(plain.allSatisfy { !Self.dataIDs.contains($0) }, "\(posture) n=\(n)")
+                let timed = LayoutEngine.optionIDs(posture: posture, feedCount: n, hasTiming: true)
+                if posture == .laptop && min(max(n, 1), 4) == 1 {
+                    #expect(timed == ["laptop.scrubDeck", "laptop.raceEngineer"])
+                } else {
+                    // Data options are appended after the existing ones.
+                    #expect(Array(timed.prefix(plain.count)) == plain, "\(posture) n=\(n)")
+                    let extra = Array(timed.dropFirst(plain.count))
+                    switch posture {
+                    case .closed: #expect(extra.isEmpty)
+                    case .flat, .unknown: #expect(extra == ["flat.director"])
+                    case .book: #expect(extra == ["book.dataScreen"])
+                    case .laptop: #expect(extra == ["laptop.raceEngineer", "laptop.scrubDeck"])
+                    }
+                }
+                for p in [Posture.flat, .book, .laptop] {
+                    let (screen, fold) = Self.referenceGeometry(p)
+                    let usable = LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: posture, feedCount: n)
+                    #expect(usable == LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: posture,
+                                                                    feedCount: n, hasTiming: false))
+                    #expect(usable.allSatisfy { !Self.dataIDs.contains($0) }, "\(posture) n=\(n)")
+                }
+            }
+        }
+        // On the reference screens every data option fits.
+        let (s, f) = Self.referenceGeometry(.flat)
+        #expect(LayoutEngine.usableOptionIDs(screen: s, foldFrame: f, posture: .flat, feedCount: 4, hasTiming: true)
+                == ["flat.mainBelow", "flat.mainBesideBelow", "flat.grid", "flat.director"])
+        let (bs, bf) = Self.referenceGeometry(.book)
+        #expect(LayoutEngine.usableOptionIDs(screen: bs, foldFrame: bf, posture: .book, feedCount: 4, hasTiming: true)
+                == ["book.twoPerScreen", "book.perScreen", "book.across", "book.dataScreen"])
+        let (ls, lf) = Self.referenceGeometry(.laptop)
+        #expect(LayoutEngine.usableOptionIDs(screen: ls, foldFrame: lf, posture: .laptop, feedCount: 3, hasTiming: true)
+                == ["laptop.twoStacked", "laptop.twoSideBySide", "laptop.raceEngineer", "laptop.scrubDeck"])
+    }
+
+    @Test func dataRegionsNeverOverlapTiles() {
+        let screens = Self.screens + Self.oddScreens + [CGSize(width: 520, height: 900)]
+        for screen in screens {
+            let bounds = CGRect(origin: .zero, size: screen).insetBy(dx: -0.01, dy: -0.01)
+            let folds = Self.oddFolds + [Self.fold(for: .book, screen: screen), Self.fold(for: .laptop, screen: screen)]
+            for fold in folds {
+                for posture in Posture.allCases {
+                    let usable = Self.usableFold(fold, posture: posture, screen: screen)
+                    for n in 1...6 {
+                        let ids = Self.dataIDs + LayoutEngine.optionIDs(posture: posture, feedCount: n, hasTiming: true) + ["bogus"]
+                        for id in ids {
+                            let tag = "\(posture) \(id) n=\(n) \(screen) \(String(describing: fold))"
+                            let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: posture,
+                                                             feedCount: n, optionID: id)
+                            let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: posture,
+                                                                   feedCount: n, optionID: id)
+                            let rects = Self.regionRects(regions)
+                            #expect(frames.count == n, "\(tag)")
+                            #expect(frames.first?.visible == true, "\(tag)")
+                            if !Self.dataIDs.contains(id) { #expect(rects.isEmpty, "\(tag)") }
+                            for (i, r) in rects.enumerated() {
+                                #expect(bounds.contains(r), "\(tag) \(r)")
+                                #expect(r.width >= 200 - 0.01 && r.height > 0, "\(tag) \(r)")
+                                for f in frames where f.visible { #expect(!r.intersects(f.rect), "\(tag) \(r) \(f.rect)") }
+                                for other in rects.dropFirst(i + 1) { #expect(!r.intersects(other), "\(tag) \(r) \(other)") }
+                                if let usable { #expect(!r.intersects(usable), "\(tag) \(r)") }
+                            }
+                            // A data layout keeps its feed tiles out of the fold too.
+                            if !rects.isEmpty, let usable {
+                                for f in frames where f.visible { #expect(!f.rect.intersects(usable), "\(tag) \(f.rect)") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func usableDataOptionsLayOutAsThemselves() {
+        for screen in Self.screens {
+            for posture in Posture.allCases {
+                let fold = Self.fold(for: posture, screen: screen)
+                for n in 1...4 {
+                    let usable = LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: posture,
+                                                              feedCount: n, hasTiming: true)
+                    for id in usable where Self.dataIDs.contains(id) {
+                        let tag = "\(posture) \(id) n=\(n) \(screen)"
+                        let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: posture,
+                                                         feedCount: n, optionID: id)
+                        let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: posture,
+                                                               feedCount: n, optionID: id)
+                        #expect(!Self.regionRects(regions).isEmpty, "\(tag)")
+                        // Tiles: 16:9, at least 200 wide, inside the 6 pt margins; regions likewise.
+                        for f in frames where f.visible {
+                            #expect(f.rect.width >= 200 - 0.01, "\(tag) \(f.rect)")
+                            #expect(abs(f.rect.width * 9 / 16 - f.rect.height) < 0.5, "\(tag) \(f.rect)")
+                        }
+                        for r in frames.filter(\.visible).map(\.rect) + Self.regionRects(regions) {
+                            #expect(r.minX >= 6 - 0.01 && r.minY >= 6 - 0.01, "\(tag) \(r)")
+                            #expect(r.maxX <= screen.width - 6 + 0.01 && r.maxY <= screen.height - 6 + 0.01, "\(tag) \(r)")
+                        }
+                    }
+                }
+            }
+        }
+        // Every data option fits the reference screens with every feed count.
+        for (posture, ids) in [(Posture.flat, ["flat.director"]), (.book, ["book.dataScreen"]),
+                               (.laptop, ["laptop.raceEngineer", "laptop.scrubDeck"])] {
+            let (screen, fold) = Self.referenceGeometry(posture)
+            for n in 1...4 {
+                let usable = LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: posture,
+                                                          feedCount: n, hasTiming: true)
+                for id in ids { #expect(usable.contains(id), "\(id) n=\(n)") }
+            }
+        }
+    }
+
+    @Test func dataOptionFallsBackWithoutRegions() {
+        // A data option that doesn't fit falls back like any other, and then has no data regions.
+        let narrow = CGSize(width: 400, height: 700)
+        #expect(LayoutEngine.dataRegions(screen: narrow, foldFrame: nil, posture: .flat, feedCount: 4,
+                                         optionID: "flat.director") == DataRegions())
+        #expect(!LayoutEngine.usableOptionIDs(screen: narrow, foldFrame: nil, posture: .flat, feedCount: 4, hasTiming: true)
+            .contains("flat.director"))
+        // An id for another posture means the default, as any unknown id does.
+        let (s, f) = Self.referenceGeometry(.flat)
+        #expect(LayoutEngine.frames(screen: s, foldFrame: f, posture: .flat, feedCount: 3, optionID: "laptop.scrubDeck")
+                == LayoutEngine.frames(screen: s, foldFrame: f, posture: .flat, feedCount: 3, optionID: nil))
+        #expect(LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 3,
+                                         optionID: "laptop.scrubDeck") == DataRegions())
+        // No feeds or no screen: no regions.
+        #expect(LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 0,
+                                         optionID: "flat.director") == DataRegions())
+        #expect(LayoutEngine.dataRegions(screen: .zero, foldFrame: f, posture: .flat, feedCount: 2,
+                                         optionID: "flat.director") == DataRegions())
+        // Five feeds lay out as four.
+        #expect(LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 5, optionID: "flat.director")
+                == LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 4, optionID: "flat.director"))
+    }
 }

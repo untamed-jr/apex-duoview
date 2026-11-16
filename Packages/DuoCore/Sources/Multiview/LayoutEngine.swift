@@ -20,6 +20,26 @@ public struct TileFrame: Equatable, Sendable {
     }
 }
 
+/// Where a data layout puts its panels, in the same space as the tile frames. A panel the layout
+/// doesn't have is nil; every other layout has none.
+public struct DataRegions: Equatable, Sendable {
+    public var map: CGRect?
+    public var tower: CGRect?
+    /// Race Engineer's console.
+    public var console: CGRect?
+    /// Scrub Deck's event strip and lap chart.
+    public var deck: CGRect?
+
+    public init(map: CGRect? = nil, tower: CGRect? = nil, console: CGRect? = nil, deck: CGRect? = nil) {
+        self.map = map
+        self.tower = tower
+        self.console = console
+        self.deck = deck
+    }
+
+    var rects: [CGRect] { [map, tower, console, deck].compactMap { $0 } }
+}
+
 /// Pure layout engine: 16:9 tiles that use as much of the screen as possible.
 /// Geometry is a port of the shapes chosen by `spike/layout_search.py`.
 public enum LayoutEngine {
@@ -30,7 +50,27 @@ public enum LayoutEngine {
 
     // MARK: Options
 
+    /// The options without timing data (`hasTiming: false`).
     public static func optionIDs(posture: Posture, feedCount: Int) -> [String] {
+        optionIDs(posture: posture, feedCount: feedCount, hasTiming: false)
+    }
+
+    /// The posture's options, default first. With timing data the data layouts follow the
+    /// others; laptop with one feed then offers only Scrub Deck (the default) and Race Engineer.
+    public static func optionIDs(posture: Posture, feedCount: Int, hasTiming: Bool) -> [String] {
+        let plain = plainOptionIDs(posture: posture, feedCount: feedCount)
+        guard hasTiming else { return plain }
+        switch posture {
+        case .closed: return plain
+        case .flat, .unknown: return plain + ["flat.director"]
+        case .book: return plain + ["book.dataScreen"]
+        case .laptop:
+            if min(max(feedCount, 1), 4) == 1 { return ["laptop.scrubDeck", "laptop.raceEngineer"] }
+            return plain + ["laptop.raceEngineer", "laptop.scrubDeck"]
+        }
+    }
+
+    private static func plainOptionIDs(posture: Posture, feedCount: Int) -> [String] {
         let n = min(max(feedCount, 1), 4)
         switch posture {
         case .closed:
@@ -74,22 +114,39 @@ public enum LayoutEngine {
             return Array(repeating: TileFrame(rect: .zero, visible: false), count: feedCount)
         }
         let n = min(feedCount, 4)
-        var result = compute(screen: screen, foldFrame: foldFrame, posture: posture, n: n, optionID: optionID)
+        var result = compute(screen: screen, foldFrame: foldFrame, posture: posture, n: n, optionID: optionID).tiles
         while result.count < feedCount, let main = result.first {
             result.append(TileFrame(rect: main.rect, visible: false))
         }
         return result
     }
 
-    /// The options that fit this screen and fold (every visible tile at least 200 pt wide), in
-    /// `optionIDs` order of the posture the layout really uses (book or laptop without a usable
-    /// fold lay out as flat). Never empty: if nothing fits, the first option.
+    /// The data panels of the layout `frames` gives for the same arguments: empty unless that is a
+    /// data layout (after any fallback), and for no feeds or an empty screen. Regions keep the 6 pt
+    /// margins and gaps, are at least 200 pt wide, never overlap a visible tile or each other, and
+    /// stay out of the fold.
+    public static func dataRegions(screen: CGSize, foldFrame: CGRect?, posture: Posture,
+                                   feedCount: Int, optionID: String) -> DataRegions {
+        guard feedCount > 0, screen.width > 0, screen.height > 0 else { return DataRegions() }
+        return compute(screen: screen, foldFrame: foldFrame, posture: posture,
+                       n: min(feedCount, 4), optionID: optionID).regions
+    }
+
+    /// The options without timing data (`hasTiming: false`) that fit.
     public static func usableOptionIDs(screen: CGSize, foldFrame: CGRect?, posture: Posture,
                                        feedCount: Int) -> [String] {
+        usableOptionIDs(screen: screen, foldFrame: foldFrame, posture: posture, feedCount: feedCount, hasTiming: false)
+    }
+
+    /// The options that fit this screen and fold (every visible tile and data region at least
+    /// 200 pt wide), in `optionIDs` order of the posture the layout really uses (book or laptop
+    /// without a usable fold lay out as flat). Never empty: if nothing fits, the first option.
+    public static func usableOptionIDs(screen: CGSize, foldFrame: CGRect?, posture: Posture,
+                                       feedCount: Int, hasTiming: Bool) -> [String] {
         let n = min(max(feedCount, 1), 4)
-        if posture == .closed { return optionIDs(posture: .closed, feedCount: n) }
+        if posture == .closed { return optionIDs(posture: .closed, feedCount: n, hasTiming: hasTiming) }
         let (effective, fold) = resolve(screen: screen, foldFrame: foldFrame, posture: posture)
-        let all = optionIDs(posture: effective, feedCount: n)
+        let all = optionIDs(posture: effective, feedCount: n, hasTiming: hasTiming)
         guard screen.width > 0, screen.height > 0 else { return [all[0]] }
         let ok = all.filter { id in
             build(id: id, screen: screen, fold: fold, n: n).map { fits($0, screen: screen) } ?? false
@@ -132,30 +189,42 @@ public enum LayoutEngine {
         return (effective, f)
     }
 
-    private static func fits(_ frames: [TileFrame], screen: CGSize) -> Bool {
+    private static func fits(_ layout: Layout, screen: CGSize) -> Bool {
         let bounds = CGRect(origin: .zero, size: screen).insetBy(dx: -0.01, dy: -0.01)
-        return frames.filter(\.visible).allSatisfy {
-            $0.rect.width >= minWidth - 0.01 && bounds.contains($0.rect)
+        return layout.tiles.filter(\.visible).map(\.rect).allSatisfy {
+            $0.width >= minWidth - 0.01 && bounds.contains($0)
+        } && layout.regions.rects.allSatisfy {
+            $0.width >= minWidth - 0.01 && $0.height > 0 && bounds.contains($0)
         }
+    }
+
+    /// The options a chosen id is looked up and falls back among: the posture's list with timing
+    /// when the id is one of its data options, otherwise the list without, so that nil or an
+    /// unknown id still means the usual default.
+    private static func candidates(posture: Posture, n: Int, optionID: String?) -> [String] {
+        let plain = optionIDs(posture: posture, feedCount: n)
+        guard let id = optionID, !plain.contains(id) else { return plain }
+        let timed = optionIDs(posture: posture, feedCount: n, hasTiming: true)
+        return timed.contains(id) ? timed : plain
     }
 
     /// Preferred option first, then the posture's other options in order; if none fits, a single
     /// main tile (the 200 pt minimum is relaxed only for it) with the rest hidden.
     private static func compute(screen: CGSize, foldFrame: CGRect?, posture: Posture,
-                                n: Int, optionID: String?) -> [TileFrame] {
-        if posture == .closed { return closed(screen: screen, n: n) }
+                                n: Int, optionID: String?) -> Layout {
+        if posture == .closed { return Layout(tiles: closed(screen: screen, n: n)) }
         let (effective, fold) = resolve(screen: screen, foldFrame: foldFrame, posture: posture)
-        let options = optionIDs(posture: effective, feedCount: n)
+        let options = candidates(posture: effective, n: n, optionID: optionID)
         let chosen = optionID.flatMap { options.contains($0) ? $0 : nil } ?? options[0]
         for id in [chosen] + options.filter({ $0 != chosen }) {
-            if let f = build(id: id, screen: screen, fold: fold, n: n), fits(f, screen: screen) { return f }
+            if let l = build(id: id, screen: screen, fold: fold, n: n), fits(l, screen: screen) { return l }
         }
         // Last resort.
         let whole = wholeRegion(screen) ?? Region(x: 0, y: 0, w: screen.width, h: screen.height)
         var region = whole
         if effective == .laptop, let f = fold, let (top, _) = halves(whole, f), top.w >= minWidth { region = top }
         let main = one(region)
-        return (0..<n).map { TileFrame(rect: main, visible: $0 == 0) }
+        return Layout(tiles: (0..<n).map { TileFrame(rect: main, visible: $0 == 0) })
     }
 
     private static func closed(screen: CGSize, n: Int) -> [TileFrame] {
@@ -165,7 +234,16 @@ public enum LayoutEngine {
 
     // MARK: Shapes
 
-    struct Region { var x, y, w, h: CGFloat }
+    struct Region {
+        var x, y, w, h: CGFloat
+        var rect: CGRect { CGRect(x: x, y: y, width: w, height: h) }
+    }
+
+    /// One option's tiles (exactly n) and its data panels.
+    struct Layout {
+        var tiles: [TileFrame]
+        var regions = DataRegions()
+    }
 
     private static func fit(_ w: CGFloat, _ h: CGFloat) -> CGSize {
         let width = min(w, h / aspect)
@@ -259,6 +337,58 @@ public enum LayoutEngine {
         return best?.rects
     }
 
+    // MARK: Data shapes
+
+    /// Director's Desk: the tower a full-height column, 200 pt wide, on the right; the main feed
+    /// as large as fits left of it with room for a row below; the row is up to two more feeds and
+    /// the map in equal slots, each at least 200 pt wide. The feeds sit at the top of their slots
+    /// and the map takes its slot's full height. A fourth feed is hidden under the main tile.
+    private static func director(_ r: Region, _ n: Int) -> Layout? {
+        let towerWidth = minWidth
+        let left = r.w - towerWidth - gap
+        let k = min(n - 1, 2)
+        let slot = (left - gap * CGFloat(k)) / CGFloat(k + 1)
+        // The row is at least as tall as a 200 pt tile.
+        let mw = min(left, (r.h - gap - minWidth * aspect) / aspect)
+        guard slot >= minWidth - 0.01, mw >= minWidth - 0.01 else { return nil }
+        let rowY = r.y + mw * aspect + gap
+        let rowH = r.y + r.h - rowY
+        let feed = fit(slot, rowH)
+        var tiles = [TileFrame(rect: tile(r.x + (left - mw) / 2, r.y, mw))]
+        for j in 0..<k {
+            tiles.append(TileFrame(rect: tile(r.x + CGFloat(j) * (slot + gap) + (slot - feed.width) / 2, rowY, feed.width)))
+        }
+        while tiles.count < n { tiles.append(TileFrame(rect: tiles[0].rect, visible: false)) }
+        let map = CGRect(x: r.x + CGFloat(k) * (slot + gap), y: rowY, width: slot, height: rowH)
+        let tower = CGRect(x: r.x + r.w - towerWidth, y: r.y, width: towerWidth, height: r.h)
+        return Layout(tiles: tiles, regions: DataRegions(map: map, tower: tower))
+    }
+
+    /// Book data screen: the feeds on the left screen (one alone, two stacked, three or four in a
+    /// 2 x 2 grid); on the right screen the map on top, as tall as a 16:9 box of that width but at
+    /// most half the height, and the tower below it.
+    private static func dataScreen(_ l: Region, _ r: Region, _ n: Int) -> Layout? {
+        let feeds: [CGRect]
+        switch n {
+        case 1: feeds = [one(l)]
+        case 2: feeds = column(l, 2)
+        default: feeds = Array(gridCells(l).cells.prefix(n))
+        }
+        let mapHeight = min(r.w * aspect, (r.h - gap) / 2)
+        guard mapHeight > 0 else { return nil }
+        let map = CGRect(x: r.x, y: r.y, width: r.w, height: mapHeight)
+        let tower = CGRect(x: r.x, y: r.y + mapHeight + gap, width: r.w, height: r.h - mapHeight - gap)
+        return Layout(tiles: feeds.map { TileFrame(rect: $0) }, regions: DataRegions(map: map, tower: tower))
+    }
+
+    /// Race Engineer and Scrub Deck: the main feed in the top half, the others hidden under it;
+    /// the console or deck is the whole bottom half inside the margins.
+    private static func laptopData(top: Region, bottom: Region, n: Int, console: Bool) -> Layout {
+        let main = one(top)
+        let tiles = (0..<n).map { TileFrame(rect: main, visible: $0 == 0) }
+        return Layout(tiles: tiles, regions: console ? DataRegions(console: bottom.rect) : DataRegions(deck: bottom.rect))
+    }
+
     // MARK: Option builder
 
     private static func wholeRegion(_ screen: CGSize) -> Region? {
@@ -288,8 +418,9 @@ public enum LayoutEngine {
         return (t, b)
     }
 
-    /// Frames for one option, or nil when its regions are empty or the id is not for this fold.
-    private static func build(id: String, screen: CGSize, fold: CGRect?, n: Int) -> [TileFrame]? {
+    /// Frames (and data panels) for one option, or nil when its regions are empty or the id is not
+    /// for this fold.
+    private static func build(id: String, screen: CGSize, fold: CGRect?, n: Int) -> Layout? {
         guard let whole = wholeRegion(screen) else { return nil }
         func s() -> (Region, Region)? { fold.flatMap { sides(whole, $0) } }
         func h() -> (Region, Region)? { fold.flatMap { halves(whole, $0) } }
@@ -302,17 +433,21 @@ public enum LayoutEngine {
         case "flat.pyramid": rects = pyramid(whole)
         case "flat.mainBesideBelow": rects = mainBesideBelow(whole)
         case "flat.grid": rects = gridCells(whole).cells
+        case "flat.director": return director(whole, n)
         case "book.across":
             guard fold != nil else { return nil }
             let main = one(whole)
-            return (0..<n).map { TileFrame(rect: main, visible: $0 == 0) }
+            return Layout(tiles: (0..<n).map { TileFrame(rect: main, visible: $0 == 0) })
         case "book.oneSide": rects = s().map { [one($0.0)] }
         case "book.perScreen":
             // Slots 0 and 1, one per screen; with 3 or 4 feeds the others are hidden under the main
             // tile, as in "across".
             guard n >= 2, let halves = s() else { return nil }
             let pair = [one(halves.0), one(halves.1)]
-            return (0..<n).map { $0 < 2 ? TileFrame(rect: pair[$0]) : TileFrame(rect: pair[0], visible: false) }
+            return Layout(tiles: (0..<n).map { $0 < 2 ? TileFrame(rect: pair[$0]) : TileFrame(rect: pair[0], visible: false) })
+        case "book.dataScreen": return s().flatMap { dataScreen($0.0, $0.1, n) }
+        case "laptop.raceEngineer", "laptop.scrubDeck":
+            return h().map { laptopData(top: $0.0, bottom: $0.1, n: n, console: id == "laptop.raceEngineer") }
         case "book.oneLeftTwoRight": rects = s().map { [one($0.0)] + column($0.1, 2) }
         case "book.twoPerScreen": rects = s().map { column($0.0, 2) + column($0.1, 2) }
         case "laptop.mainUp": rects = h().map { [one($0.0)] }
@@ -323,6 +458,6 @@ public enum LayoutEngine {
         default: rects = nil
         }
         guard let rs = rects, rs.count == n else { return nil }
-        return rs.map { TileFrame(rect: $0) }
+        return Layout(tiles: rs.map { TileFrame(rect: $0) })
     }
 }
