@@ -1,6 +1,7 @@
 import F1TV
 import Foundation
 import Library
+import LiveTiming
 import Multiview
 import Observation
 
@@ -33,6 +34,9 @@ final class AppModel {
     @ObservationIgnored let multiviewStore: MultiviewStore
     /// The multiview player, shown full screen by the root while it has something to show.
     @ObservationIgnored let multiview: MultiviewController
+    /// Timing for whatever plays (F1's archive with this sign-in, MultiViewer's circuits), with the
+    /// one `TimingSettings` and `TimingArchive`; both players attach it.
+    @ObservationIgnored let timing: TimingController
     /// Your driver (Settings › Multiview › My driver): their onboard is the second default feed.
     /// Mirrors the multiview store, which isn't observed.
     private(set) var favouriteDriver: String?
@@ -49,12 +53,20 @@ final class AppModel {
         self.player = player
         self.recents = recents
         self.history = history
+        // Its own client: longer timeouts for the archive's large files, and the token never
+        // follows a redirect to another host. The token is read from the session when needed.
+        let timingHTTP = TimingHTTPClient()
+        let timing = TimingController(
+            archive: TimingArchive(http: timingHTTP, token: { await session.bearerToken() }),
+            settings: TimingSettings(store: store),
+            http: timingHTTP)
+        self.timing = timing
         self.playback = PlayerController(
-            coordinator: player, recents: recents, history: history, catalogue: catalogue)
+            coordinator: player, recents: recents, history: history, catalogue: catalogue, timing: timing)
         let multiviewStore = MultiviewStore(store: store)
         self.multiviewStore = multiviewStore
         self.multiview = MultiviewController(
-            coordinator: player, store: multiviewStore, recents: recents, history: history)
+            coordinator: player, store: multiviewStore, recents: recents, history: history, timing: timing)
         favouriteDriver = multiviewStore.favouriteDriver
     }
 

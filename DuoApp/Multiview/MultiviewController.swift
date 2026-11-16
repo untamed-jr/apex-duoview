@@ -3,6 +3,7 @@ import AVKit
 import F1TV
 import Foundation
 import Library
+import LiveTiming
 import Multiview
 import Observation
 import UIKit
@@ -14,6 +15,8 @@ import UIKit
 /// player; tiles only show a player's picture.
 /// Picture in picture shows the feed with the sound (from its tile's layer, so what is heard plays
 /// on without a break); the other feeds pause until it ends, then line up with it again.
+/// It attaches the session's timing (shared with the single-feed player) once the PLAY is
+/// answered, with a clock reading the main feed, and detaches it on close.
 /// Never logs or prints a stream URL, token or `MultiPlayInfo`.
 @MainActor
 @Observable
@@ -117,6 +120,8 @@ final class MultiviewController {
     @ObservationIgnored private let store: MultiviewStore
     @ObservationIgnored private let recents: RecentsStore
     @ObservationIgnored private let history: WatchHistory
+    /// The session's timing, shared with the single-feed player; the panels and marks read it.
+    @ObservationIgnored let timing: TimingController
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var defaultChannelId: Int?
@@ -181,11 +186,13 @@ final class MultiviewController {
     /// AVKit holds its delegate weakly: this keeps it.
     @ObservationIgnored private let pictureInPictureDelegate: MultiviewPictureInPictureDelegate
 
-    init(coordinator: PlayCoordinator, store: MultiviewStore, recents: RecentsStore, history: WatchHistory) {
+    init(coordinator: PlayCoordinator, store: MultiviewStore, recents: RecentsStore, history: WatchHistory,
+         timing: TimingController) {
         self.coordinator = coordinator
         self.store = store
         self.recents = recents
         self.history = history
+        self.timing = timing
         pictureInPictureDelegate = MultiviewPictureInPictureDelegate()
         presets = store.presets
         fewerFeeds = store.fewerFeeds
@@ -231,6 +238,7 @@ final class MultiviewController {
         // Keep the place in anything open, then drop it.
         save()
         teardownAll()
+        timing.detach()
         currentItem = nil
         resetSlots()
         feedURLs = [:]
@@ -274,8 +282,11 @@ final class MultiviewController {
         // Keep the place in the session being left, then drop it.
         save()
         teardownAll()
+        timing.detach()
         var showing = item
         if showing.title.isEmpty { showing.title = detail.title }
+        // A bookmark or resume keeps no metadata: the video's details say where its timing is.
+        if showing.timingRef == nil { showing.timingRef = detail.timingRef }
         currentItem = showing
         title = showing.title
         defaultChannelId = (detail.channels.first(where: \.isDefault) ?? detail.channels.first)?.id
@@ -309,6 +320,10 @@ final class MultiviewController {
             return
         }
         guard generation == mine else { return }
+        timing.attach(item: showing, clock: { [weak self] in
+            guard let self else { return (programDate: nil, playerSeconds: .nan) }
+            return self.timingClock()
+        })
 
         feedURLs = info.feeds
         // Links can't have expired seconds after this PLAY: a failure in the first minute is an
@@ -342,6 +357,7 @@ final class MultiviewController {
         save()
         generation += 1
         teardownAll()
+        timing.detach()
         currentItem = nil
         title = ""
         defaultChannelId = nil
@@ -365,6 +381,7 @@ final class MultiviewController {
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
         teardownAll()
+        timing.detach()
         currentItem = nil
         title = ""
         feedURLs = [:]
@@ -1199,6 +1216,16 @@ final class MultiviewController {
             save(recordHistory: watched?.player.timeControlStatus == .playing)
         }
         if let noticeAt, now.timeIntervalSince(noticeAt) >= Self.noticeDuration { dismissNotice() }
+    }
+
+    // MARK: Timing
+
+    /// The main feed's program date and position, read together from its item (picture time's
+    /// inputs). Not `position`, which moves on the 0.5 s tick and holds a seek's target.
+    private func timingClock() -> (programDate: Date?, playerSeconds: Double) {
+        guard let main = mainFeed, main.ready else { return (programDate: nil, playerSeconds: .nan) }
+        let now = main.item.currentTime()
+        return (programDate: main.item.currentDate(), playerSeconds: now.isNumeric ? now.seconds : .nan)
     }
 
     // MARK: The controls' view of the timeline

@@ -30,6 +30,8 @@ targets:
       - package: DuoCore
         product: Library
       - package: DuoCore
+        product: LiveTiming
+      - package: DuoCore
         product: Multiview
     settings:
       base:

@@ -3,6 +3,7 @@ import AVKit
 import F1TV
 import Foundation
 import Library
+import LiveTiming
 import Observation
 import UIKit
 
@@ -11,6 +12,8 @@ import UIKit
 /// It also holds AVKit's player view controller, so picture in picture outlives the cover: started
 /// from the player's button, the cover steps aside while the window plays; the window's restore
 /// brings the cover back with the same view controller.
+/// It attaches the session's timing (shared with the multiview) once the PLAY is answered, with a
+/// clock reading this player's program date and position, and detaches it on close.
 /// Never logs or prints the stream URL, tokens or `PlayInfo`.
 @MainActor
 @Observable
@@ -31,6 +34,8 @@ final class PlayerController {
     @ObservationIgnored private let recents: RecentsStore
     @ObservationIgnored private let history: WatchHistory
     @ObservationIgnored private let catalogue: Catalogue
+    /// The session's timing, shared with the multiview; the cover's map panel reads it.
+    @ObservationIgnored let timing: TimingController
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var currentChannel: Channel?
@@ -64,11 +69,13 @@ final class PlayerController {
     static let beginningPoll: Duration = .milliseconds(250)
     static let beginningAttempts = 40
 
-    init(coordinator: PlayCoordinator, recents: RecentsStore, history: WatchHistory, catalogue: Catalogue) {
+    init(coordinator: PlayCoordinator, recents: RecentsStore, history: WatchHistory, catalogue: Catalogue,
+         timing: TimingController) {
         self.coordinator = coordinator
         self.recents = recents
         self.history = history
         self.catalogue = catalogue
+        self.timing = timing
         pictureInPictureDelegate = PlayerPictureInPictureDelegate()
         pictureInPictureDelegate.owner = self
     }
@@ -110,6 +117,8 @@ final class PlayerController {
         // Keep the place in the feed being left, then drop it.
         save()
         teardownPlayback()
+        // Another feed of the same session keeps its timing; other content drops it.
+        if currentItem?.contentId != item.contentId { timing.detach() }
         currentItem = item
         currentChannel = channel
         errorText = nil
@@ -134,6 +143,10 @@ final class PlayerController {
             return
         }
         guard generation == mine else { return }
+        timing.attach(item: item, clock: { [weak self] in
+            guard let self else { return (programDate: nil, playerSeconds: .nan) }
+            return self.timingClock()
+        })
         begin(url: info.url, startAt: startAt)
     }
 
@@ -166,10 +179,12 @@ final class PlayerController {
             isLiveNow: bookmark.live,
             durationMs: bookmark.durationMs)
         let channel = channels.first(where: { $0.id == plan.channelId }) ?? Channel(id: plan.channelId, isDefault: true)
+        // A bookmark keeps no metadata: the video's details say where its timing is.
         let item = CatalogItem(
             contentId: bookmark.contentId,
             title: detail.title.isEmpty ? bookmark.title : detail.title,
-            picturePath: bookmark.picturePath)
+            picturePath: bookmark.picturePath,
+            timingRef: detail.timingRef)
         await start(item: item, channel: channel, startAt: plan.start)
     }
 
@@ -179,6 +194,7 @@ final class PlayerController {
         save()
         generation += 1
         teardownPlayback()
+        timing.detach()
         currentItem = nil
         currentChannel = nil
         errorText = nil
@@ -209,10 +225,20 @@ final class PlayerController {
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
         teardownPlayback()
+        timing.detach()
         currentItem = nil
         currentChannel = nil
         isLoading = false
         isPresented = false
+    }
+
+    // MARK: Timing
+
+    /// The program date and position of what plays, read together (picture time's inputs).
+    private func timingClock() -> (programDate: Date?, playerSeconds: Double) {
+        guard let item = player?.currentItem else { return (programDate: nil, playerSeconds: .nan) }
+        let now = item.currentTime()
+        return (programDate: item.currentDate(), playerSeconds: now.isNumeric ? now.seconds : .nan)
     }
 
     // MARK: Picture in picture
