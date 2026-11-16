@@ -72,10 +72,22 @@ import LiveTiming
         #expect(Self.place(44, slots, states: states, placedAt: placed) == .replace(slot: 2, channel: Self.onboard(44)))
         // A slot never placed by a tap counts as oldest.
         #expect(Self.place(44, slots, states: states, placedAt: [1: Self.t0, 2: Self.t0]) == .replace(slot: 3, channel: Self.onboard(44)))
-        // Equal times: the later slot (a smaller tile; the main feed is slot 0) goes.
-        #expect(Self.place(44, [Self.onboard(1), Self.onboard(4)], states: ["1": .pit, "4": .pit]) == .replace(slot: 1, channel: Self.onboard(44)))
+        // Equal times: the later slot goes.
+        #expect(Self.place(44, [Self.world, Self.onboard(1), Self.onboard(4)], states: ["1": .pit, "4": .pit]) == .replace(slot: 2, channel: Self.onboard(44)))
         // The rank comes before age.
         #expect(Self.place(44, slots, states: ["1": .push, "4": .push, "16": .pit], placedAt: placed) == .replace(slot: 3, channel: Self.onboard(44)))
+    }
+
+    @Test func placeNeverReplacesMain() {
+        // The main feed (slot 0) stays even when it is the least interesting onboard, as on Android.
+        let slots: [Channel?] = [Self.onboard(4), Self.onboard(1), Self.onboard(16)]
+        #expect(Self.place(44, slots, states: ["4": .pit, "1": .push, "16": .push],
+                           placedAt: [1: Self.t0, 2: Self.t0.addingTimeInterval(10)]) == .replace(slot: 1, channel: Self.onboard(44)))
+        #expect(Self.place(44, [Self.onboard(4)], states: ["4": .pit]) == .noFreeSpot)
+        #expect(Self.place(44, [Self.onboard(4), Self.world], states: ["4": .knockedOut]) == .noFreeSpot)
+        #expect(Self.place(44, [Self.onboard(4), Self.onboard(1)], audio: 2001, states: ["4": .pit]) == .noFreeSpot)
+        // Showing in the main slot already is still "make main".
+        #expect(Self.place(4, [Self.onboard(4), Self.onboard(1)]) == .makeMain(slot: 0))
     }
 
     @Test func placeNoOnboardForCar() {

@@ -32,13 +32,14 @@ public enum OnboardPlacement {
     /// 1. no onboard channel (with an id) for the car: `.noOnboard`;
     /// 2. the car's onboard already in a slot: `.makeMain` for that slot;
     /// 3. an empty slot (the first): `.fill`;
-    /// 4. otherwise `.replace` the least interesting onboard, as Android ranks them (`interest`):
+    /// 4. otherwise `.replace` the least interesting onboard other than the main feed (slot 0),
+    ///    as Android ranks them (`interest`):
     ///    a car in the pits or knocked out first, then an out lap, a cool-down lap or no lap
     ///    state yet, then a flying lap; an onboard without a racing number last. Ties go to the
     ///    slot placed longest ago (`placedAt`, by slot index; a slot missing from it counts as
-    ///    oldest), then to the later slot (the main feed is slot 0). The feed with the sound
+    ///    oldest), then to the later slot. The main feed, the feed with the sound
     ///    (`audioChannelId`) and feeds that aren't onboards (world feed, F1 Live, tracker, data)
-    ///    are never replaced;
+    ///    are never replaced, as on Android;
     /// 5. nothing to replace: `.noFreeSpot`.
     ///
     /// `lapStates` are by car number at picture time (`LapStates.at`); push laps only appear in
@@ -55,7 +56,7 @@ public enum OnboardPlacement {
             return .fill(slot: empty, channel: onboard)
         }
         let candidates = slots.enumerated().compactMap { index, channel -> (slot: Int, rank: Int, placed: Date)? in
-            guard let channel, channel.isOnboard else { return nil }
+            guard index != 0, let channel, channel.isOnboard else { return nil }
             if let audio = audioChannelId, channel.id == audio { return nil }
             let rank = channel.racingNumber.map { interest(lapStates[String($0)] ?? .unknown) } ?? 3
             return (index, rank, placedAt[index] ?? .distantPast)
