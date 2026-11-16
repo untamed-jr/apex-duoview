@@ -202,6 +202,7 @@ final class TimingController {
         if status != .idle { status = .idle }
         if snapshot != .empty { snapshot = .empty }
         if !tower.isEmpty { tower = [] }
+        if gapHeader != "Leader" { gapHeader = "Leader" }
         if header != .empty { header = .empty }
         if battleRival != nil { battleRival = nil }
         if !cards.isEmpty { cards = [:] }
