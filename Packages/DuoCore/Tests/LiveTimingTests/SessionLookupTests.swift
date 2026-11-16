@@ -109,4 +109,25 @@ import F1TV
         #expect(Set(undated) == [Self.saoPaulo + "2026-11-06_Race/", Self.saoPaulo + "2026-11-07_Race/", Self.saoPaulo + "2026-11-08_Race/"])
         #expect(SessionLookup.probePaths(ref: Self.ref(title: "Race"), meetingFolder: "2026/no-date/").isEmpty)
     }
+
+    /// Times from F1 TV's metadata or the caller can be anything: out of range they count as no
+    /// time, never an overflow trap.
+    @Test func probePathsSurviveExtremeTimes() {
+        let undated = Set(["2026-11-06", "2026-11-07", "2026-11-08"].map { Self.saoPaulo + "\($0)_Race/" })
+        for start in [Date(timeIntervalSince1970: 1e20), Date(timeIntervalSince1970: -1e20), Date(timeIntervalSince1970: .nan)] {
+            let paths = SessionLookup.probePaths(ref: Self.ref(title: "Race", start: start), meetingFolder: Self.saoPaulo)
+            #expect(Set(paths) == undated)
+        }
+        for watched in [UTCms.max, UTCms.min] {
+            let paths = SessionLookup.probePaths(ref: Self.ref(title: "Race"), meetingFolder: Self.saoPaulo,
+                                                 gmtOffsetSeconds: 14 * 3600, watched: watched)
+            #expect(Set(paths) == undated)
+        }
+        // An offset no track has is ignored, as if unknown.
+        let odd = SessionLookup.probePaths(ref: Self.ref(title: "Race"), meetingFolder: Self.saoPaulo,
+                                           gmtOffsetSeconds: .max, watched: Self.raceStart)
+        #expect(odd.contains(Self.saoPaulo + "2026-11-08_Race/"))
+        #expect(SessionLookup.match(index: Self.index, ref: Self.ref(title: "São Paulo Grand Prix"), watched: .max) == nil)
+        #expect(SessionLookup.match(index: Self.index, ref: Self.ref(title: "São Paulo Grand Prix"), watched: .min) == nil)
+    }
 }

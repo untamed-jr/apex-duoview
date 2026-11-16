@@ -59,21 +59,38 @@ public enum SessionLookup {
     public static func probePaths(ref: TimingRef, meetingFolder: String, gmtOffsetSeconds: Int? = nil,
                                   watched: UTCms? = nil) -> [String] {
         let folder = meetingFolder.hasSuffix("/") ? meetingFolder : meetingFolder + "/"
-        let moment = watched ?? ref.start.map { UTCms(($0.timeIntervalSince1970 * 1000).rounded()) }
+        let moment = (watched ?? ref.start.flatMap(utcMs)).flatMap { (-maxMomentMs...maxMomentMs).contains($0) ? $0 : nil }
+        let offset = gmtOffsetSeconds.flatMap { abs($0) <= F1Values.maxOffsetSeconds ? $0 : nil }
         var days: [String] = []
         if let moment {
-            let offsets: [Int] = gmtOffsetSeconds.map { [$0] } ?? [-12 * 3600, 0, 14 * 3600]
+            let offsets: [Int] = offset.map { [$0] } ?? [-12 * 3600, 0, 14 * 3600]
             for offset in offsets {
-                let day = dayString(F1Values.add(moment, Int64(offset) * 1000))
+                let day = dayString(moment + Int64(offset) * 1000)
                 if !days.contains(day) { days.append(day) }
             }
         } else if let last = folder.split(separator: "/").last, let raceDay = date(String(last.prefix(10))) {
             days = (0...2).map { dayString(raceDay - Int64($0) * 86_400_000) }
         }
-        let named = folders.filter { ref.title.range(of: $0.replacingOccurrences(of: "_", with: " "), options: .caseInsensitive) != nil }
-        let longest = named.map(\.count).max()
-        let names = longest.map { n in named.filter { $0.count == n } } ?? folders
+        let names = namedFolders(ref.title) ?? folders
         return days.flatMap { day in names.map { "\(folder)\(day)_\($0)/" } }
+    }
+
+    /// The session folders the title names, the longest only ("Sprint_Qualifying", not
+    /// "Qualifying"); nil when it names none.
+    static func namedFolders(_ title: String) -> [String]? {
+        let named = folders.filter { title.range(of: $0.replacingOccurrences(of: "_", with: " "), options: .caseInsensitive) != nil }
+        guard let longest = named.map(\.count).max() else { return nil }
+        return named.filter { $0.count == longest }
+    }
+
+    /// Moments past this (about the year 5000) are not a session's.
+    static let maxMomentMs: Int64 = 100_000_000_000_000
+
+    /// A date as ms since 1970; nil when it isn't a plausible moment.
+    static func utcMs(_ date: Date) -> UTCms? {
+        let ms = date.timeIntervalSince1970 * 1000
+        guard ms.isFinite, abs(ms) <= Double(maxMomentMs) else { return nil }
+        return UTCms(ms.rounded())
     }
 
     // MARK: Internals
@@ -133,7 +150,11 @@ public enum SessionLookup {
     /// "2026-11-08" for a UTC moment.
     static func dayString(_ t: UTCms) -> String {
         let c = utcCalendar.dateComponents([.year, .month, .day], from: Date(timeIntervalSince1970: Double(t) / 1000))
-        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+        func pad(_ n: Int?, _ width: Int) -> String {
+            let text = String(n ?? 0)
+            return String(repeating: "0", count: max(0, width - text.count)) + text
+        }
+        return "\(pad(c.year, 4))-\(pad(c.month, 2))-\(pad(c.day, 2))"
     }
 
     /// Midnight UTC of a "yyyy-MM-dd" day.

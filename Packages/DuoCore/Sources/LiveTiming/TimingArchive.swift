@@ -77,6 +77,9 @@ public actor TimingArchive {
         guard let index = await index(year: ref.year) else { return nil }
         if let found = SessionLookup.match(index: index, ref: ref, watched: watched) { return found }
         guard let meeting = SessionLookup.meeting(index: index, ref: ref) else { return nil }
+        // A probed session matches by key, by a name in the title or by the moment: with none of
+        // them, don't ask.
+        guard watched != nil || ref.sessionKey != nil || SessionLookup.namedFolders(ref.title) != nil else { return nil }
         let listed = Set(SessionLookup.candidates(index: index, ref: ref).map(\.session.path))
         let paths = SessionLookup.probePaths(ref: ref, meetingFolder: meeting.folder,
                                              gmtOffsetSeconds: meeting.gmtOffsetSeconds, watched: watched)
@@ -179,6 +182,8 @@ public actor TimingArchive {
     // MARK: Requests
 
     private func get(_ path: String, range: ClosedRange<Int>?) async -> ArchiveFile {
+        // A negative start would go out as a suffix range ("the last n bytes").
+        if let range, range.lowerBound < 0 { return .unavailable(status: 416) }
         guard let url = url(path) else { return .failed }
         var headers = ["User-Agent": Endpoints.userAgent]
         if let token = await token(), !token.isEmpty { headers["Authorization"] = "Bearer " + token }
@@ -196,9 +201,11 @@ public actor TimingArchive {
         case 200..<300:
             guard let range else { return .data(response.body) }
             // The whole file came back: keep to the asked-for bytes.
-            guard range.lowerBound >= 0, range.lowerBound < response.body.count else { return .unavailable(status: 416) }
+            let count = response.body.count
+            guard range.lowerBound < count else { return .unavailable(status: 416) }
+            // The upper bound may be Int.max ("to the end"): clamp before adding one.
             let start = response.body.startIndex + range.lowerBound
-            let end = response.body.startIndex + min(range.upperBound + 1, response.body.count)
+            let end = response.body.startIndex + min(range.upperBound, count - 1) + 1
             return .data(response.body.subdata(in: start..<end))
         case 401, 403, 404, 416:
             return .unavailable(status: response.status)

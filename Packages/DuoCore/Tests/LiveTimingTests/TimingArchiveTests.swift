@@ -128,6 +128,13 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await archive.range(sessionPath: "x/", name: "whole.z", bytes: 10...19) == .data(body.subdata(in: 10..<20)))
         #expect(await archive.range(sessionPath: "x/", name: "whole.z", bytes: 190...299) == .data(body.subdata(in: 190..<200)))
         #expect(await archive.range(sessionPath: "x/", name: "whole.z", bytes: 300...399) == .unavailable(status: 416))
+        // "To the end" as an open upper bound, without overflowing.
+        #expect(await archive.range(sessionPath: "x/", name: "whole.z", bytes: 150...Int.max) == .data(body.subdata(in: 150..<200)))
+        #expect(await http.requests.last?.headers["Range"] == "bytes=150-\(Int.max)")
+        // A negative start would be a suffix range: refused unsent.
+        let sent = await http.requests.count
+        #expect(await archive.range(sessionPath: "x/", name: "whole.z", bytes: -10...5) == .unavailable(status: 416))
+        #expect(await http.requests.count == sent)
     }
 
     @Test func indexStripsTheBOM() async throws {
@@ -272,6 +279,10 @@ struct LeakyError: Error, CustomStringConvertible {
         let probed = await http.requests.map(\.url.path).filter { $0.hasSuffix("SessionInfo.json") }
         #expect(probed.count == 8)
         #expect(probed.allSatisfy { $0.contains("/2026-11-08_") })
+        // Nothing could match a probe (no key, no moment, no session in the title): none sent.
+        let before = await http.requests.count
+        #expect(await Self.archive(http).session(for: live, watched: nil) == nil)
+        #expect(await http.requests.count == before + 1)  // the index only
         // Not this weekend, or no index: nothing.
         let elsewhere = TimingRef(year: 2026, meetingKey: "9999", meetingName: "Nowhere", title: "Race")
         #expect(await Self.archive(http).session(for: elsewhere, watched: Self.race.start) == nil)
