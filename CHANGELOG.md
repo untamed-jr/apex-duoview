@@ -4,6 +4,49 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.3, build 12 — tower, driver cards, tap a car
+
+- **Timing tower.** The Map control's second panel is now the tower, twice a second at picture
+  time: position, team colour, code, last lap (or PIT) in purple or green for pace, the gap
+  ("Leader" in a race, "Fastest" otherwise), the interval and the tyre (a compound ring with its
+  letter, and laps on the set). In qualifying the knockout zone is shaded and knocked-out cars
+  are dimmed. Its header shows "Lap 23/71" in a race or the session clock otherwise, the track
+  status, and the air and track temperature with a rain mark.
+- **Battle.** In a race, when your driver (Settings › Multiview › My driver) is within 1.0 s of
+  the car ahead or behind for two timing updates in a row, both rows glow and a "Battle" chip
+  appears on the map's header; tapping it opens the rival's onboard. Off with no driver picked.
+- **Driver cards** over every onboard, in multiview and in a single feed: position, number and
+  surname in the team colour, the running lap clock (PIT in the pits), the lap time for 6 s
+  after the line, three sector bars, the interval, and the speed in km/h or mph following the
+  phone's region (hidden when its data is more than 5 s old). Long-press a card for "Hide card";
+  a small button brings it back. On the map, a car on a flying lap in qualifying gets a yellow
+  ring.
+- **Tap a car** on the map or a row of the tower to open its onboard: in multiview it becomes
+  the main feed if it is showing, else fills an empty spot, else replaces the least interesting
+  onboard (never the main feed, the feed you hear, or the world feed, tracker or data); the new
+  feeds are remembered as a swap's are. In a single feed the player switches to that onboard at
+  the same moment. "No onboard for car 44 in this session." and "No free spot — change a feed in
+  the editor." say when it can't.
+- **Speed readouts** come from F1's car data, downloaded in the background once an onboard
+  shows (byte ranges when F1 serves them), kept on the phone for 7 days, and paused on mobile
+  data when "Speed readouts on mobile data" is off.
+
+### Untested — check later (build 12)
+
+- The zero-warnings build (regenerate the project with XcodeGen first: build 12 adds four files
+  to `DuoApp/Timing`).
+- **T-B2:** tap a car on the map and on the tower; the card shows the lap time and the speed.
+- Tap-a-car in multiview: a car already showing becomes the main feed; an empty spot fills; the
+  least interesting onboard is replaced; the notices; the last-used feeds after it.
+- Tap-a-car in a single feed: the onboard starts at the same moment as the feed before it.
+- The card's long-press "Hide card" on a tile beside the tile's own press-and-hold drag; "Show
+  card" afterwards; the card's size on a small tile and clear of the speaker button.
+- The speed readout: units on a phone set to the US or UK region (mph) and elsewhere (km/h);
+  hidden before the download reaches the picture and after a seek past it; the download pausing
+  on mobile data with the switch off, and not fetched again after a seek back.
+- The tower's columns fitting the panel's default width, the battle glow and chip during a race,
+  and the knockout shading in qualifying.
+
 ### v1.0-beta.3, build 11 — data on replays
 
 - **Track map on replays.** On a race, sprint, qualifying or practice replay, "Map" in the
