@@ -200,15 +200,25 @@ public struct LiveFeed: Sendable {
     /// How far apart in time a live change and its archive line may be found (the archive's
     /// start is a heartbeat estimate; the snapshot is stamped by the phone).
     static let seamWindowMs = Backfill.completeGapMs
+    /// How far the archive's clock may run behind live timing's. The archive's times are its
+    /// start (the median of 50 heartbeats' `Utc − offset`) plus each line's offset; over the
+    /// São Paulo race and qualifying the beats strayed from that median by −2.1 s to +0.1 s
+    /// while the session ran. An archive is taken to reach a live change only when its last
+    /// line is no more than this before the change.
+    static let seamToleranceMs: Int64 = 2_500
 
     /// Tops the feed up from F1's archive (Android's backfill), so nothing before the seam is
     /// lost and nothing across it counts twice. For each topic (archive lines are offsets from
     /// `archiveStart`):
     ///
-    /// - When the archive holds the topic's first live change (the same message, within
-    ///   `seamWindowMs` of it), the archive's lines before it come first, then the live lines
-    ///   from that change on. The archive and live timing are then one stream, whatever the
-    ///   snapshot's stamp says.
+    /// - When the archive reaches the topic's first live change (its last line is at most
+    ///   `seamToleranceMs` before it) and holds it (the same message, within `seamWindowMs`,
+    ///   nearest), the archive's lines before it come first, then the difference to the state
+    ///   the live lines hold just before it (empty when the match is right; F1 repeats some
+    ///   lines within seconds, so it may be an earlier copy), then the live lines from that
+    ///   change on. The archive and live timing are then one stream, whatever the snapshot's
+    ///   stamp says. Matched at the archive's first line, there is nothing before it: the live
+    ///   lines stand as they are.
     /// - Otherwise (the archive lags, or the topic hasn't changed since joining), the archive's
     ///   lines before the snapshot (or the first live change, if earlier) come first, then the
     ///   difference from their state to the snapshot's, then the live lines. The difference is
@@ -225,9 +235,16 @@ public struct LiveFeed: Sendable {
             var archivePart: [StreamLine] = []
             var patch: StreamLine?
             var from = 0
-            if let k = firstChange[topic], let j = Self.match(live[k], in: archiveLines), j > 0 {
+            if let k = firstChange[topic], let last = archiveLines.last,
+               last.offsetMs >= F1Values.sub(live[k].offsetMs, Self.seamToleranceMs),
+               let j = Self.match(live[k], in: archiveLines) {
                 archivePart = Array(archiveLines[..<j])
                 from = k
+                if !archivePart.isEmpty, let expected = expectedState(topic, before: k) {
+                    let reached = archivePart.reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
+                    patch = TopicPatch.delta(from: reached, to: expected)
+                        .map { StreamLine(offsetMs: archiveLines[j].offsetMs, json: $0) }
+                }
             } else {
                 var anchor: (state: JSONValue, offset: Int64)?
                 if let open = opening[topic] {
@@ -253,6 +270,15 @@ public struct LiveFeed: Sendable {
             }
             topped[topic] = Topped(lines: archivePart + (patch.map { [$0] } ?? []), from: from)
         }
+    }
+
+    /// What a topic's live lines merge to before its `k`th delta: its opening (or the later
+    /// snapshot that first named it) and any snapshot differences since. Nil when nothing came
+    /// before.
+    private func expectedState(_ topic: String, before k: Int) -> JSONValue? {
+        let earlier = (opening[topic].map { [$0] } ?? []) + (deltas[topic] ?? []).prefix(k)
+        guard !earlier.isEmpty else { return nil }
+        return earlier.reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
     }
 
     /// The archive line that is `line` (the same message), nearest in time within

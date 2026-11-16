@@ -373,6 +373,86 @@ struct LiveFeedTests {
         #expect(session.flags.at(t0).yellowSectors.isEmpty)
     }
 
+    /// Car 3 at a join at `seamJoin`, for the seam's edge cases: a live feed (snapshot, then
+    /// changes) topped up from an archive starting `archiveStart`, lines as (time, JSON).
+    static let seamJoin: UTCms = 1_794_157_000_000
+
+    func seamFeed(snapshot: String, changes: [(UTCms, String)], archive: [(UTCms, String)]) throws -> LiveFeed {
+        func j(_ s: String) throws -> JSONValue { try JSONValue.parse(Data(s.utf8)) }
+        let join = Self.seamJoin
+        var feed = LiveFeed()
+        feed.apply(RecordedMessage(topic: "SessionInfo", utc: join, opening: true,
+                                   json: try j(#"{"Key":11412,"Type":"Race","Name":"Race","Path":"2026/x/"}"#)))
+        feed.apply(RecordedMessage(topic: "TimingData", utc: join, opening: true, json: try j(snapshot)))
+        for (t, json) in changes { feed.apply(RecordedMessage(topic: "TimingData", utc: t, opening: false, json: try j(json))) }
+        let archiveStart = join - 100_000
+        feed.topUp(archive: ["TimingData": try archive.map { StreamLine(offsetMs: $0.0 - archiveStart, json: try j($0.1)) }],
+                   archiveStart: archiveStart)
+        return feed
+    }
+
+    func carCrossings(_ feed: LiveFeed) throws -> [UTCms] {
+        try #require(feed.session()).timing.lineCrossings(upTo: .max).filter { $0.car == "3" }.map(\.at)
+    }
+
+    func laps(_ feed: LiveFeed, at t: UTCms) throws -> Int? {
+        try #require(feed.session()).timing.state(of: "3", at: t)?.numberOfLaps
+    }
+
+    @Test func topUpFromAnArchiveEndingJustBeforeTheJoin() throws {
+        let join = Self.seamJoin
+        let first = #"{"Lines":{"3":{"NumberOfLaps":10,"Position":"3","Status":80}}}"#
+        let status64 = #"{"Lines":{"3":{"Status":64}}}"#
+        let crossed = #"{"Lines":{"3":{"NumberOfLaps":11}}}"#
+        let status80 = #"{"Lines":{"3":{"Status":80}}}"#
+        // The archive ends 10 s before the join (complete, by Backfill's 30 s), and the first
+        // live change repeats a line it has from 25 s earlier: the archive doesn't reach the
+        // change, so that line isn't it.
+        let complete = try seamFeed(
+            snapshot: #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#,
+            changes: [(join + 5_000, status64)],
+            archive: [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80)])
+        #expect(try carCrossings(complete) == [join - 15_000])
+        #expect(try laps(complete, at: join - 16_000) == 10)
+        #expect(try laps(complete, at: join + 6_000) == 11)
+        #expect(complete.lines("TimingData").count == 5)
+
+        // The archive ends 10 s short, and a lap was crossed after it: the snapshot's state
+        // brings it, once, at the join.
+        let short = try seamFeed(
+            snapshot: #"{"Lines":{"3":{"NumberOfLaps":12,"Position":"3","Status":80}}}"#,
+            changes: [(join + 5_000, status64)],
+            archive: [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80)])
+        #expect(try carCrossings(short) == [join - 15_000, join])
+        #expect(try laps(short, at: join + 6_000) == 12)
+
+        // The archive reaches past the change but lacks its copy, and holds an earlier one:
+        // the match is wrong, and the difference to the snapshot's state keeps the lap.
+        let wrong = try seamFeed(
+            snapshot: #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#,
+            changes: [(join + 5_000, status64)],
+            archive: [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80),
+                      (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
+        #expect(try carCrossings(wrong).count == 1)
+        #expect(try laps(wrong, at: join + 6_000) == 11)
+    }
+
+    @Test func topUpMatchingTheArchivesFirstLine() throws {
+        let join = Self.seamJoin
+        // The snapshot is older than its stamp: a lap comes live 2 s before it, and the archive,
+        // its clock half a second earlier, starts with that very line.
+        let crossed = #"{"Lines":{"3":{"NumberOfLaps":11}}}"#
+        let feed = try seamFeed(
+            snapshot: #"{"Lines":{"3":{"NumberOfLaps":10,"Position":"3"}}}"#,
+            changes: [(join - 2_000, crossed), (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)],
+            archive: [(join - 2_500, crossed), (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
+        // Nothing before it in the archive: the live lines stand, nothing twice, nothing back.
+        #expect(feed.lines("TimingData").count == 3)
+        #expect(try laps(feed, at: join - 2_400) == 10)
+        #expect(try laps(feed, at: join) == 11)
+        #expect(try carCrossings(feed) == [join - 2_000])
+    }
+
     @Test func topicFirstNamedLaterIsNotBackdated() throws {
         func m(_ topic: String, _ utc: UTCms, _ json: String, opening: Bool = true) throws -> RecordedMessage {
             RecordedMessage(topic: topic, utc: utc, opening: opening, json: try JSONValue.parse(Data(json.utf8)))
