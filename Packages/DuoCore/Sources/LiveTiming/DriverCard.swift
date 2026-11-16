@@ -13,12 +13,12 @@ public struct DriverCardModel: Sendable, Equatable {
     public var surname: String
     /// "RRGGBB", or "" when unknown.
     public var teamColour: String
-    /// Time into the lap, "m:ss.t". Nil in the pits, while `flash` shows, before the car's first
-    /// crossing, and once it is retired or stopped.
+    /// Time into the lap (from `lapStartedAt`: the line, or a qualifying pit exit), "m:ss.t". Nil in
+    /// the pits, while `flash` shows, before the car's first lap starts, and once it is retired or
+    /// stopped.
     public var lapClock: String?
     public var inPit: Bool
-    /// The lap just finished ("1:29.518") and its colour, for 6 s after the line; nil in the pits
-    /// and while leaving them (PitOut).
+    /// The lap just finished ("1:29.518") and its colour, for 6 s after the line; nil in the pits.
     public var flash: (text: String, pace: SectorPace)?
     /// S1…S3 of the lap in progress: grey (`.empty`) until each is set.
     public var sectors: [SectorPace]
@@ -50,12 +50,11 @@ public struct DriverCardModel: Sendable, Equatable {
         guard let s = session.timing.state(of: number, at: t) else { return nil }
         let driver = session.drivers[number]
         let name = driver?.lastName.trimmingCharacters(in: .whitespaces) ?? ""
-        let elapsed = s.lineCrossedAt.map { F1Values.sub(t, $0) }
+        let sinceLine = s.lineCrossedAt.map { F1Values.sub(t, $0) }
+        let intoLap = s.lapStartedAt.map { F1Values.sub(t, $0) }
         let out = s.inPit || s.retired || s.stopped
         var flash: (text: String, pace: SectorPace)?
-        // Not while leaving the pits: in qualifying F1 raises the lap count with PitOut, and the
-        // last lap then is the previous run's.
-        if !s.inPit, !s.pitOut, let elapsed, (0..<flashMs).contains(elapsed), let lap = s.lastLapMs {
+        if !s.inPit, let sinceLine, (0..<flashMs).contains(sinceLine), let lap = s.lastLapMs {
             flash = (Tower.lapText(lap), s.lastLapPace)
         }
         return DriverCardModel(
@@ -63,7 +62,7 @@ public struct DriverCardModel: Sendable, Equatable {
             number: number,
             surname: (name.isEmpty ? driver?.tla ?? number : name).uppercased(),
             teamColour: driver?.teamColour ?? "",
-            lapClock: out || flash != nil ? nil : elapsed.map(clockText),
+            lapClock: out || flash != nil ? nil : intoLap.map(clockText),
             inPit: s.inPit,
             flash: flash,
             sectors: s.sectors,

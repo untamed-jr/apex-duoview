@@ -33,13 +33,17 @@ public struct DriverTimingState: Sendable, Equatable {
     public var retired: Bool
     public var stopped: Bool
     public var knockedOut: Bool
-    /// When the car last crossed the line (its lap count went up).
+    /// When the car last crossed the line (its lap count went up, other than as it left the pits).
     public var lineCrossedAt: UTCms?
+    /// When the lap in progress began: the last crossing, or leaving the pits when F1 started a
+    /// lap count there (qualifying), whichever is later. The running lap clock counts from it.
+    public var lapStartedAt: UTCms?
 
     public init(position: Int? = nil, numberOfLaps: Int? = nil, lastLapMs: Int? = nil, lastLapPace: SectorPace = .empty,
                 bestLapMs: Int? = nil, gapToLeader: String = "", interval: String = "",
                 sectors: [SectorPace] = [.empty, .empty, .empty], inPit: Bool = false, pitOut: Bool = false,
-                retired: Bool = false, stopped: Bool = false, knockedOut: Bool = false, lineCrossedAt: UTCms? = nil) {
+                retired: Bool = false, stopped: Bool = false, knockedOut: Bool = false, lineCrossedAt: UTCms? = nil,
+                lapStartedAt: UTCms? = nil) {
         self.position = position
         self.numberOfLaps = numberOfLaps
         self.lastLapMs = lastLapMs
@@ -54,6 +58,7 @@ public struct DriverTimingState: Sendable, Equatable {
         self.stopped = stopped
         self.knockedOut = knockedOut
         self.lineCrossedAt = lineCrossedAt
+        self.lapStartedAt = lapStartedAt ?? lineCrossedAt
     }
 }
 
@@ -65,7 +70,11 @@ public struct DriverTimingState: Sendable, Equatable {
 /// merged flags: F1 sends PersonalFastest/OverallFastest only when they change (an emptied
 /// sector gets an explicit false), so resetting them at the line, as Android did, would turn a
 /// personal best yellow. And a car's first NumberOfLaps counts as crossing the line when the car
-/// was already known without one: 2026 sends none until lap 1 ends. Kept from Android: the
+/// was already known without one: 2026 sends none until lap 1 ends. A third: a count raised in
+/// the same delta as PitOut is no crossing. In 2026 qualifying F1 raises NumberOfLaps as each run
+/// leaves the pits (São Paulo, car 12 at offsets 815622, 6094211, 7348411, 8051554, 8871348);
+/// that starts a lap (`lapStartedAt`) but isn't the line. In races the count goes up in the pit
+/// lane while InPit is set, with PitOut later on its own, so races are unchanged. Kept from Android: the
 /// sectors go blank at the line until each is set again, and a final sector arriving up to 3 s
 /// after the line belongs to the lap just done.
 public struct TimingTimeline: Sendable {
@@ -178,6 +187,7 @@ public struct TimingTimeline: Sendable {
         /// Whether each sector has been set since the car last crossed the line.
         var fresh = [true, true, true]
         var crossedAt: UTCms?
+        var lapStart: UTCms?
         var laps: Int?
         var inPit = false
 
@@ -194,10 +204,12 @@ public struct TimingTimeline: Sendable {
             if let n = delta["NumberOfLaps"].int {
                 // A count that goes up is a crossing; so is the first count for a car already
                 // known without one (2026 sends none until lap 1 ends). A car's first line —
-                // a live feed's opening snapshot — is never one.
-                let crossed = laps.map { n > $0 } ?? (known && n > 0)
-                if crossed {
-                    crossedAt = t
+                // a live feed's opening snapshot — is never one. A count raised with PitOut
+                // (qualifying) starts the out lap at the pit exit: a new lap, not the line.
+                let rose = laps.map { n > $0 } ?? (known && n > 0)
+                if rose {
+                    if delta["PitOut"].bool != true { crossedAt = t }
+                    lapStart = t
                     fresh = [false, false, false]
                 }
                 laps = n
@@ -228,7 +240,8 @@ public struct TimingTimeline: Sendable {
                 retired: line["Retired"].bool ?? false,
                 stopped: line["Stopped"].bool ?? false,
                 knockedOut: line["KnockedOut"].bool ?? false,
-                lineCrossedAt: crossedAt
+                lineCrossedAt: crossedAt,
+                lapStartedAt: lapStart
             )
         }
 

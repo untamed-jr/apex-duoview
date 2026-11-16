@@ -3,9 +3,9 @@
 from the committed São Paulo 2026 fixtures in plain Python, independently of the Swift code.
 
 Prints `check:<name> = <value>` lines; the Swift tests cite those names. Lap states are a port
-of Android's LiveTiming.parseStates (app/src/main/java/app/apexview/LiveTiming.kt): a crossing
-is a lap count going up from an earlier count, except (LapStates' one change) a count raised in
-the same delta as leaving the pits: 2026 qualifying sends NumberOfLaps with PitOut on every run.
+of Android's LiveTiming.parseStates (app/src/main/java/app/apexview/LiveTiming.kt) with
+TimingTimeline's crossings: a lap count going up (or a first count for a car already known),
+except one raised in the same delta as PitOut, which 2026 qualifying sends on every run.
 
 Python 3 standard library only. Run from anywhere: python3 spike/tower_checks.py
 """
@@ -100,10 +100,32 @@ def pace(cell):
     return "set"
 
 
+def crossing(n, d, before, known):
+    """TimingTimeline's line crossing for car n's delta d: the count went up (or a first count
+    for a car already known), not in the same delta as PitOut."""
+    c = int(d["NumberOfLaps"])
+    rose = c > before if before is not None else (n in known and c > 0)
+    return rose and d.get("PitOut") is not True
+
+
+def line_crossings(lines):
+    laps, known, out = {}, set(), []
+    for off, j in lines:
+        for n, d in (j.get("Lines") or {}).items():
+            if not isinstance(d, dict):
+                continue
+            if "NumberOfLaps" in d:
+                if crossing(n, d, laps.get(n), known):
+                    out.append((off, n))
+                laps[n] = int(d["NumberOfLaps"])
+            known.add(n)
+    return out
+
+
 def lap_states(lines, qualifying):
     """Android's parseStates, per car: [(offset, state)] at each change. Outside qualifying,
     push and cool-down are never reported: the line ends an out lap and the car is unknown."""
-    current, laps, out = {}, {}, {}
+    current, laps, out, known = {}, {}, {}, set()
     for off, j in lines:
         for n, d in (j.get("Lines") or {}).items():
             if not isinstance(d, dict):
@@ -118,15 +140,14 @@ def lap_states(lines, qualifying):
                 c = int(d["NumberOfLaps"])
                 before = laps.get(n)
                 laps[n] = c
-                # Not Android: a count raised as the car leaves the pits (2026 qualifying sends
-                # NumberOfLaps with PitOut on every run) is no crossing.
-                if not left and before is not None and c > before:
+                if crossing(n, d, before, known):
                     if qualifying:
                         state = {"outLap": "push", "coolDown": "push", "push": "coolDown"}.get(state, state)
                     elif state == "outLap":
                         state = "unknown"
             if d.get("KnockedOut") is True:
                 state = "knockedOut"
+            known.add(n)
             if state != current.get(n):
                 current[n] = state
                 out.setdefault(n, []).append((off, state))
@@ -235,6 +256,7 @@ def race():
     pit = cars_at(lines, 3_200_000)["77"]
     check("raceCar77At3200000", (pit.get("Position"), pit.get("InPit"), pit.get("Retired"), pit.get("LastLapTime", {}).get("Value")))
 
+    check("raceLineCrossingsCount", len(line_crossings(lines)))
     # Lap states outside qualifying: never push or cool-down.
     states = lap_states(lines, qualifying=False)
     seen = sorted({s for h in states.values() for _, s in h})
@@ -255,6 +277,25 @@ def race():
                 now.add((a, b))
         pairs = now if pairs is None else pairs & now
     check("raceBattlesSteadyFor10sToLightsOutPlus10min", sorted(pairs))
+    fields = ("Position", "GapToLeader", "IntervalToPositionAhead", "LastLapTime", "NumberOfLaps",
+              "InPit", "PitOut", "Retired", "Stopped", "BestLapTime")
+    def touching(a, b):
+        out = []
+        for o, j in lines:
+            if o > t:
+                break
+            ls = j.get("Lines") or {}
+            if any(isinstance(ls.get(x), dict) and any(k in ls[x] for k in fields) for x in (a, b)):
+                out.append(o)
+        return out[-2:]
+    for a, b in sorted(pairs) + [("12", "1")]:
+        offs = touching(a, b)
+        ok = []
+        for o in offs:
+            cs = cars_at(lines, o)
+            iv = interval_s((cs[b].get("IntervalToPositionAhead") or {}).get("Value"))
+            ok.append(iv is not None and iv <= 1.0 and int(cs[b]["Position"]) == int(cs[a]["Position"]) + 1)
+        check(f"raceBattlePair{a}_{b}LastTwoTouchingLines", (offs, ok))
     for a, b in sorted(pairs):
         check(f"raceInterval{b}to{a}AtLightsOutPlus10min", cars[b]["IntervalToPositionAhead"]["Value"])
 
@@ -311,6 +352,7 @@ def quali():
     check("qualiKnockedOutAtQ1Plus10min", [n for n in ranked if cars[n].get("KnockedOut") is True])
     check("qualiBottomSixAtQ1Plus10min", ranked[-6:])
 
+    check("qualiLineCrossings", line_crossings(lines))
     states = lap_states(lines, qualifying=True)
     for probe in (QUALI_Q1_OFF + 10_000, 803_106, 900_000, 930_000):
         counts = {}

@@ -256,3 +256,55 @@ import F1TV
         #expect(wet.at(Self.t0 + 60_000).airTemp == 20.1)
     }
 }
+
+@Suite struct PitExitCrossingTests {
+    static let t0: UTCms = 1_000_000
+
+    @Test func qualifyingPitExitIsNoCrossing() throws {
+        // check:qualiLineCrossings = [] (spike/tower_checks.py): in Q1's first 12 min every lap
+        // count F1 sent came with PitOut as a run left the pits (car 12 at 815622, car 77 at
+        // 803106), so none is the line.
+        let timing = TimingTimeline.build(lines: try Fixture.lines("sp26-quali/TimingData.jsonStream"), streamStart: Fixture.qualiStart)
+        #expect(timing.lineCrossings(upTo: .max).isEmpty)
+        for (car, offset): (String, Int64) in [("12", 815_622), ("77", 803_106)] {
+            let exit = try #require(timing.state(of: car, at: Fixture.qualiStart + offset))
+            #expect(exit.numberOfLaps == 1)
+            #expect(exit.pitOut)
+            #expect(exit.lineCrossedAt == nil)
+            #expect(exit.lapStartedAt == Fixture.qualiStart + offset)
+            #expect(exit.sectors == [.empty, .empty, .empty])
+        }
+
+        // Later runs raise the count with PitOut too (raw São Paulo qualifying, car 12: 6094211
+        // count 2 with PitOut, 6204733 count 3 at the line, 6304822 count 4 with "1:40.168").
+        let runs = TimingTimeline.build(lines: lines(
+            #"01:41:00.000{"Lines":{"12":{"InPit":true,"PitOut":false,"NumberOfLaps":1,"LastLapTime":{"Value":"1:50.000"}}}}"#,
+            #"01:41:34.211{"Lines":{"12":{"NumberOfLaps":2,"InPit":false,"PitOut":true}}}"#,
+            #"01:42:02.798{"Lines":{"12":{"PitOut":false}}}"#,
+            #"01:43:24.733{"Lines":{"12":{"NumberOfLaps":3}}}"#,
+            #"01:45:04.822{"Lines":{"12":{"NumberOfLaps":4,"LastLapTime":{"Value":"1:40.168"}}}}"#
+        ), streamStart: Self.t0)
+        let exit = try #require(runs.state(of: "12", at: Self.t0 + 6_094_211))
+        #expect(exit.lineCrossedAt == nil)
+        #expect(exit.lapStartedAt == Self.t0 + 6_094_211)
+        #expect(runs.state(of: "12", at: Self.t0 + 6_204_733)?.lineCrossedAt == Self.t0 + 6_204_733)
+        #expect(runs.lineCrossings(upTo: .max).map(\.at) == [Self.t0 + 6_204_733, Self.t0 + 6_304_822])
+    }
+
+    @Test func racePitStopCrossingUnchanged() throws {
+        // Races count up in the pit lane while InPit is set, with PitOut later on its own (raw São
+        // Paulo race, car 12: InPit 4702096, count 17 at 4705225, PitOut 4726690).
+        let stop = TimingTimeline.build(lines: lines(
+            #"01:15:00.000{"Lines":{"12":{"InPit":false,"PitOut":false,"NumberOfLaps":16}}}"#,
+            #"01:18:22.096{"Lines":{"12":{"InPit":true}}}"#,
+            #"01:18:25.225{"Lines":{"12":{"NumberOfLaps":17,"LastLapTime":{"Value":"1:31.653"}}}}"#,
+            #"01:18:46.690{"Lines":{"12":{"InPit":false,"PitOut":true}}}"#
+        ), streamStart: Self.t0)
+        let out = try #require(stop.state(of: "12", at: Self.t0 + 4_726_690))
+        #expect(out.lineCrossedAt == Self.t0 + 4_705_225)
+        #expect(out.lapStartedAt == Self.t0 + 4_705_225)
+        // check:raceLineCrossingsCount = 158 on the race fixture, as before the change.
+        let race = TimingTimeline.build(lines: try Fixture.lines("sp26-race/TimingData.jsonStream"), streamStart: Fixture.raceStart)
+        #expect(race.lineCrossings(upTo: .max).count == 158)
+    }
+}
