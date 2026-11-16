@@ -76,13 +76,35 @@ struct LiveRecordingTests {
                          message("TimingData", 11, #"{"Lines":{"1":{"NumberOfLaps":1}}}"#)]
         var data = file(Self.racePath, first)
         // Reopened for the same session: appended to, with no second header.
-        #expect(LiveRecording.start(existingHead: data.prefix(4096), sessionPath: Self.racePath) == .append)
+        #expect(LiveRecording.start(existingHead: data.prefix(4096), sessionPath: Self.racePath) == .append(prefix: "\n"))
         let second = try [message("TimingData", 20, #"{"Lines":{"1":{"NumberOfLaps":2}}}"#, opening: true)]
-        data.append(Data(LiveRecording.lines(second).utf8))
+        data.append(Data(("\n" + LiveRecording.lines(second)).utf8))
         let back = LiveRecording.read(data)
         #expect(back.sessionPath == Self.racePath)
         #expect(back.messages == first + second)
         #expect(String(decoding: data, as: UTF8.self).components(separatedBy: "#session").count == 2)
+    }
+
+    @Test func appendAfterATornLine() throws {
+        let kept = try message("TimingData", 11, #"{"Lines":{"1":{"NumberOfLaps":1}}}"#)
+        let torn = try message("TimingData", 12, #"{"Lines":{"1":{"NumberOfLaps":2}}}"#)
+        // The app was killed mid-write: the last line has no line break.
+        var data = file(Self.racePath, [kept])
+        data.append(Data(LiveRecording.line(torn).prefix(25).utf8))
+        guard case .append(let prefix) = LiveRecording.start(existingHead: data, sessionPath: Self.racePath) else {
+            Issue.record("expected to append")
+            return
+        }
+        let next = try [message("TimingData", 20, #"{"Lines":{"1":{"NumberOfLaps":3}}}"#, opening: true),
+                        message("LapCount", 21, #"{"CurrentLap":3}"#)]
+        data.append(Data((prefix + LiveRecording.lines(next)).utf8))
+        let back = LiveRecording.read(data)
+        #expect(back.sessionPath == Self.racePath)
+        #expect(back.messages == [kept] + next)
+        // After a whole file it costs only an empty line.
+        var whole = file(Self.racePath, [kept])
+        whole.append(Data((prefix + LiveRecording.lines(next)).utf8))
+        #expect(LiveRecording.read(whole).messages == [kept] + next)
     }
 
     @Test func newSessionStartsFresh() throws {
@@ -92,10 +114,10 @@ struct LiveRecordingTests {
         // No file yet, an empty one, or one cut before its header ends.
         #expect(LiveRecording.start(existingHead: nil, sessionPath: sprint) == .fresh(header: LiveRecording.header(sessionPath: sprint)))
         #expect(LiveRecording.start(existingHead: Data(), sessionPath: sprint) == .fresh(header: LiveRecording.header(sessionPath: sprint)))
-        #expect(LiveRecording.start(existingHead: old.prefix(20), sessionPath: Self.racePath) != .append)
+        #expect(LiveRecording.start(existingHead: old.prefix(20), sessionPath: Self.racePath) != .append(prefix: "\n"))
         // A path that only starts the same is another session.
-        #expect(LiveRecording.start(existingHead: old, sessionPath: String(Self.racePath.dropLast())) != .append)
-        #expect(LiveRecording.start(existingHead: file(String(Self.racePath.dropLast()), []), sessionPath: Self.racePath) != .append)
+        #expect(LiveRecording.start(existingHead: old, sessionPath: String(Self.racePath.dropLast())) != .append(prefix: "\n"))
+        #expect(LiveRecording.start(existingHead: file(String(Self.racePath.dropLast()), []), sessionPath: Self.racePath) != .append(prefix: "\n"))
 
         let fresh = try [message("SessionStatus", 2, #"{"Status":"Started"}"#, opening: true)]
         let back = LiveRecording.read(file(sprint, fresh))

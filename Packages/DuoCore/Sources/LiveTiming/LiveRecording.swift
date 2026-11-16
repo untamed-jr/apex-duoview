@@ -69,8 +69,10 @@ public enum LiveRecording {
 
     /// How to open the recording for a session.
     public enum Start: Equatable, Sendable {
-        /// The file is this session's: append to it, with no second header.
-        case append
+        /// The file is this session's: append to it, with no second header, writing `prefix`
+        /// first. The prefix is a line break: the file's last line may be torn (cut mid-write),
+        /// and a new line glued onto it would be lost with it. An empty line reads as nothing.
+        case append(prefix: String)
         /// Start the file afresh (replacing whatever it held) with this header.
         case fresh(header: String)
     }
@@ -79,7 +81,7 @@ public enum LiveRecording {
     /// is no file): append when it is `sessionPath`'s recording, else start afresh.
     public static func start(existingHead: Data?, sessionPath: String) -> Start {
         let header = header(sessionPath: sessionPath)
-        if let head = existingHead, head.starts(with: Data(header.utf8)) { return .append }
+        if let head = existingHead, head.starts(with: Data(header.utf8)) { return .append(prefix: "\n") }
         return .fresh(header: header)
     }
 
