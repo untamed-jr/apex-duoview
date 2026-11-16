@@ -112,13 +112,13 @@ public struct TimingTimeline: Sendable {
         var partTimes: [UTCms] = [], parts: [Int] = []
 
         for line in lines {
-            let t = streamStart + line.offsetMs
+            let t = F1Values.add(streamStart, line.offsetMs)
             guard case .object(var members) = line.json else { continue }
             let lineDeltas = members.removeValue(forKey: "Lines") ?? .null
             var touched = Set<String>()
             if !members.isEmpty {
                 top = TopicMerge.merge(top, .object(members))
-                if let p = top["SessionPart"].int, p != part {
+                if let p = top["SessionPart"].int, (1...9).contains(p), p != part {
                     part = p
                     partTimes.append(t)
                     parts.append(p)
@@ -169,7 +169,7 @@ public struct TimingTimeline: Sendable {
             for (i, cell) in Self.sectorCells(delta["Sectors"]) where (0..<3).contains(i) {
                 guard case .object(let members) = cell, let value = members["Value"] else { continue }
                 if value.string.isEmpty { continue }
-                let late = i == 2 && !fresh[0] && crossedAt.map { (1...TimingTimeline.lateSectorMs).contains(t - $0) } == true
+                let late = i == 2 && !fresh[0] && crossedAt.map { (1...TimingTimeline.lateSectorMs).contains(F1Values.sub(t, $0)) } == true
                 if !late { fresh[i] = true }
             }
             let known = !line.isNull
@@ -264,7 +264,7 @@ public struct StintTimeline: Sendable {
         var cars: [String: History] = [:]
         for line in lines {
             guard case .object(let deltas) = line.json["Lines"] else { continue }
-            let t = streamStart + line.offsetMs
+            let t = F1Values.add(streamStart, line.offsetMs)
             for (number, delta) in deltas {
                 guard case .object = delta else { continue }
                 let state = TopicMerge.merge(merged[number] ?? .null, delta)
@@ -344,7 +344,7 @@ public struct HeaderTimeline: Sendable {
         var lapTimes: [UTCms] = [], laps: [Int] = []
         var totalTimes: [UTCms] = [], totals: [Int] = []
         for line in lapCount {
-            let t = streamStart + line.offsetMs
+            let t = F1Values.add(streamStart, line.offsetMs)
             if let lap = line.json["CurrentLap"].int { lapTimes.append(t); laps.append(lap) }
             if let total = line.json["TotalLaps"].int { totalTimes.append(t); totals.append(total) }
         }
@@ -352,13 +352,13 @@ public struct HeaderTimeline: Sendable {
         // Android's parseClock: a line can leave out any of Utc, Remaining and Extrapolating.
         var marks: [ClockMark] = []
         for line in clock {
-            let utc = F1Values.utc(line.json["Utc"].string) ?? streamStart + line.offsetMs
+            let utc = F1Values.utc(line.json["Utc"].string) ?? F1Values.add(streamStart, line.offsetMs)
             let last = marks.last
             let remaining: Int64
             if let ms = F1Values.durationMs(line.json["Remaining"].string) {
                 remaining = Int64(ms)
             } else if let last {
-                remaining = last.running ? max(last.remainingMs - (utc - last.utc), 0) : last.remainingMs
+                remaining = last.running ? max(F1Values.sub(last.remainingMs, F1Values.sub(utc, last.utc)), 0) : last.remainingMs
             } else {
                 continue
             }
@@ -374,7 +374,7 @@ public struct HeaderTimeline: Sendable {
             let reading = Weather(air: Double(state["AirTemp"].string), track: Double(state["TrackTemp"].string),
                                   raining: (Double(state["Rainfall"].string) ?? 0) > 0)
             if readings.last == reading { continue }
-            weatherTimes.append(streamStart + line.offsetMs)
+            weatherTimes.append(F1Values.add(streamStart, line.offsetMs))
             readings.append(reading)
         }
         return HeaderTimeline(lapTimes: lapTimes, laps: laps, totalTimes: totalTimes, totals: totals,
@@ -393,11 +393,11 @@ public struct HeaderTimeline: Sendable {
         )
     }
 
-    /// What the clock read at `t`: before the first mark it's run back from that mark.
+    /// What the clock read at `t`; nil before the first mark, which is from after `t`.
     func clockRemainingMs(at t: UTCms) -> Int64? {
-        guard let first = marks.first else { return nil }
-        let mark = F1Values.lastIndex(in: markTimes, atOrBefore: t).map { marks[$0] } ?? first
-        let left = mark.running ? mark.remainingMs - (t - mark.utc) : mark.remainingMs
+        guard let i = F1Values.lastIndex(in: markTimes, atOrBefore: t) else { return nil }
+        let mark = marks[i]
+        let left = mark.running ? F1Values.sub(mark.remainingMs, F1Values.sub(t, mark.utc)) : mark.remainingMs
         return max(left, 0)
     }
 }

@@ -204,6 +204,15 @@ import F1TV
         #expect(header.at(1_794_074_401_011 + 10_000).clockRemaining == 1069)
     }
 
+    @Test func headerClockIsNilBeforeTheFirstMark() {
+        // A stopped clock reading 18:00 at 18:10 says nothing about 18:00: no state from after t.
+        let header = HeaderTimeline.build(lapCount: [], clock: lines(
+            #"00:10:00.000{"Utc":"2026-11-07T18:10:00Z","Remaining":"00:18:00","Extrapolating":false}"#
+        ), weather: [], streamStart: 0)
+        #expect(header.at(SignalR.utc("2026-11-07T18:00:00Z")!).clockRemaining == nil)
+        #expect(header.at(SignalR.utc("2026-11-07T18:10:00Z")!).clockRemaining == 1080)
+    }
+
     @Test func clockLinesMayLeaveFieldsOut() {
         let header = HeaderTimeline.build(lapCount: [], clock: lines(
             #"00:00:01.000{"Utc":"2026-11-07T18:00:00Z","Remaining":"00:10:00","Extrapolating":true}"#,

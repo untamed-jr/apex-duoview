@@ -89,7 +89,7 @@ public struct TrackFlags: Sendable {
                              gmtOffsetSeconds: Int) -> TrackFlags {
         let status = trackStatus.compactMap { line -> (UTCms, Int)? in
             guard let code = line.json["Status"].int else { return nil }
-            return (streamStart + line.offsetMs, code)
+            return (F1Values.add(streamStart, line.offsetMs), code)
         }
         let messages = controlMessages(raceControl, streamStart: streamStart)
         return TrackFlags(
@@ -110,8 +110,10 @@ public struct TrackFlags: Sendable {
             if f.utc > t { break }
             if f.sector == 0 { yellow.removeAll() } else if f.level == 0 { yellow[f.sector] = nil } else { yellow[f.sector] = f.level }
         }
-        let resumption = resumptions.last { $0.announced <= t && t < $0.at && t - $0.announced < Self.announcementLifeMs }
-        let parts = [status.label, resumption.map { "\($0.what) in \(Self.countdown($0.at - t))" }].compactMap { $0 }
+        let resumption = resumptions.last {
+            $0.announced <= t && t < $0.at && F1Values.sub(t, $0.announced) < Self.announcementLifeMs
+        }
+        let parts = [status.label, resumption.map { "\($0.what) in \(Self.countdown(F1Values.sub($0.at, t)))" }].compactMap { $0 }
         return FlagState(status: status, yellowSectors: yellow,
                          caption: parts.isEmpty ? nil : parts.joined(separator: " · "), resumesAt: resumption?.at)
     }
@@ -159,7 +161,7 @@ public struct TrackFlags: Sendable {
 
     /// "4:12", or "1:04:12" from an hour; rounded up, so it reaches 0:00 as the time arrives.
     static func countdown(_ ms: Int64) -> String {
-        let s = (ms + 999) / 1000
+        let s = F1Values.add(ms, 999) / 1000
         if s >= 3600 { return String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) }
         return String(format: "%d:%02d", s / 60, s % 60)
     }
@@ -173,7 +175,7 @@ public struct TrackFlags: Sendable {
     static func controlMessages(_ lines: [StreamLine], streamStart: UTCms) -> [Message] {
         lines.flatMap { line in
             F1Values.ordered(line.json["Messages"]).map { m in
-                Message(message: m, utc: F1Values.utc(m["Utc"].string) ?? streamStart + line.offsetMs)
+                Message(message: m, utc: F1Values.utc(m["Utc"].string) ?? F1Values.add(streamStart, line.offsetMs))
             }
         }
     }
@@ -231,17 +233,19 @@ public struct TrackFlags: Sendable {
         }
         guard let h = Int(groups[2]), let m = Int(groups[3]), h < 24, m < 60 else { return nil }
         let day: Int64 = 86_400_000
-        let localSaid = said + Int64(offset) * 1000
-        let dayStart = localSaid - ((localSaid % day) + day) % day
-        var at = dayStart + Int64(h) * 3_600_000 + Int64(m) * 60_000
-        if at < localSaid - 3_600_000 { at += day }
+        guard (-F1Values.maxOffsetSeconds...F1Values.maxOffsetSeconds).contains(offset) else { return nil }
+        let zone = Int64(offset) * 1000
+        let localSaid = F1Values.add(said, zone)
+        let dayStart = F1Values.sub(localSaid, ((localSaid % day) + day) % day)
+        var at = F1Values.add(dayStart, Int64(h) * 3_600_000 + Int64(m) * 60_000)
+        if at < F1Values.sub(localSaid, 3_600_000) { at = F1Values.add(at, day) }
         var who = groups[0]
         if who.hasPrefix("THE ") { who.removeFirst(4) }
         who = who.trimmingCharacters(in: .whitespaces)
         let isPart = who.range(of: #"^S?Q\d$"#, options: .regularExpression) != nil
         let name = isPart ? who : who.prefix(1).uppercased() + who.dropFirst().lowercased()
         let action = groups[1] == "RESUME" ? "resumes" : groups[1] == "RESTART" ? "restarts" : "starts"
-        return Resumption(announced: said, at: at - Int64(offset) * 1000, what: "\(name) \(action)")
+        return Resumption(announced: said, at: F1Values.sub(at, zone), what: "\(name) \(action)")
     }
 
     /// The capture groups of the first match of `pattern` in `text`.

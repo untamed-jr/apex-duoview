@@ -8,29 +8,41 @@ enum F1Values {
         text.hasSuffix("Z") ? SignalR.utc(text) : SignalR.utc(text + "Z")
     }
 
-    /// "-03:00:00", "02:00:00" or "+05:30" as seconds east of GMT.
+    /// The widest offset from GMT a place has (UTC−12 … UTC+14, with room to spare).
+    static let maxOffsetSeconds = 18 * 3600
+
+    /// "-03:00:00", "02:00:00" or "+05:30" as seconds east of GMT; nil past ±18 h.
     static func offsetSeconds(_ text: String) -> Int? {
         var body = Substring(text.trimmingCharacters(in: .whitespaces))
         var sign = 1
         if body.hasPrefix("-") { sign = -1; body = body.dropFirst() } else if body.hasPrefix("+") { body = body.dropFirst() }
-        let parts = body.split(separator: ":", omittingEmptySubsequences: false).map { Int($0) }
+        let parts = body.split(separator: ":", omittingEmptySubsequences: false).map { smallInt($0, maxDigits: 2) }
         guard (1...3).contains(parts.count), parts.allSatisfy({ $0 != nil }) else { return nil }
         let h = parts[0]!, m = parts.count > 1 ? parts[1]! : 0, s = parts.count > 2 ? parts[2]! : 0
-        return sign * (h * 3600 + m * 60 + s)
+        guard m < 60, s < 60 else { return nil }
+        let total = h * 3600 + m * 60 + s
+        return total <= maxOffsetSeconds ? sign * total : nil
+    }
+
+    /// 1 to `maxDigits` ASCII digits as a number, so arithmetic on it can't overflow.
+    static func smallInt(_ text: Substring, maxDigits: Int) -> Int? {
+        guard (1...maxDigits).contains(text.utf8.count), text.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }) else { return nil }
+        return Int(text)
     }
 
     /// A duration as F1 writes it: "1:21.024", "21.024", "02:00:00" or "1:02:03.5", in ms.
-    /// Digits past the millisecond truncate. Nil for "" and anything else.
+    /// Digits past the millisecond truncate. Nil for "" and anything else, including a component
+    /// over 6 digits (so the result stays far inside Int64).
     static func durationMs(_ text: String) -> Int? {
         let parts = text.split(separator: ":", omittingEmptySubsequences: false)
         guard (1...3).contains(parts.count), let last = parts.last else { return nil }
         var total = 0
         for part in parts.dropLast() {
-            guard !part.isEmpty, let n = Int(part), n >= 0 else { return nil }
+            guard let n = smallInt(part, maxDigits: 6) else { return nil }
             total = total * 60 + n
         }
         let secParts = last.split(separator: ".", omittingEmptySubsequences: false)
-        guard (1...2).contains(secParts.count), !secParts[0].isEmpty, let s = Int(secParts[0]), s >= 0 else { return nil }
+        guard (1...2).contains(secParts.count), let s = smallInt(secParts[0], maxDigits: 6) else { return nil }
         var ms = 0
         if secParts.count == 2 {
             let frac = secParts[1]
@@ -39,6 +51,19 @@ enum F1Values {
             ms = Int(three) ?? 0
         }
         return (total * 60 + s) * 1000 + ms
+    }
+
+    /// `a + b`, clamped to Int64's range instead of trapping: times built from a stream start
+    /// or a query time the caller chose.
+    static func add(_ a: Int64, _ b: Int64) -> Int64 {
+        let (r, overflow) = a.addingReportingOverflow(b)
+        return overflow ? (b > 0 ? .max : .min) : r
+    }
+
+    /// `a − b`, clamped to Int64's range instead of trapping.
+    static func sub(_ a: Int64, _ b: Int64) -> Int64 {
+        let (r, overflow) = a.subtractingReportingOverflow(b)
+        return overflow ? (b < 0 ? .max : .min) : r
     }
 
     /// A number from `JSONSerialization`, which may give NSNumber or a native number.

@@ -47,7 +47,7 @@ public struct CarTrack: Sendable {
         guard hi < times.count else { return nil }
         let span = times[hi] - times[lo]
         guard span <= Self.maxGapMs else { return nil }
-        let f = Double(t - times[lo]) / Double(span)
+        let f = Double(F1Values.sub(t, times[lo])) / Double(span)
         let a = point(lo), b = point(hi)
         return TrackPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
     }

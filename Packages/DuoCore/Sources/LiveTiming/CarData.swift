@@ -62,6 +62,6 @@ public enum CarDataWindow {
         }
         guard lo > 0 else { return nil }
         let sample = samples[lo - 1]
-        return (sample, t - sample.t > staleMs)
+        return (sample, F1Values.sub(t, sample.t) > staleMs)
     }
 }
