@@ -14,11 +14,11 @@ let package = Package(
         .target(name: "F1TV"),
         .target(name: "Library"),
         .target(name: "LiveTiming", dependencies: ["F1TV", "Library"]),
-        .target(name: "Multiview", dependencies: ["F1TV", "Library"]),
+        .target(name: "Multiview", dependencies: ["F1TV", "Library", "LiveTiming"]),
         .testTarget(name: "F1TVTests", dependencies: ["F1TV"], resources: [.copy("Fixtures")]),
         .testTarget(name: "LibraryTests", dependencies: ["Library"]),
         .testTarget(name: "LiveTimingTests", dependencies: ["LiveTiming", "F1TV", "Library"], resources: [.copy("Fixtures")]),
-        .testTarget(name: "MultiviewTests", dependencies: ["Multiview"], resources: [.copy("Fixtures")]),
+        .testTarget(name: "MultiviewTests", dependencies: ["Multiview", "LiveTiming"], resources: [.copy("Fixtures")]),
     ],
     swiftLanguageModes: [.v6]
 )
