@@ -16,6 +16,9 @@ enum CircuitLoader {
         case none
     }
 
+    /// MultiViewer's answers that mean "no circuit for you", for good.
+    static let refusedStatuses: Set<Int> = [400, 403, 404]
+
     static func load(circuitKey: Int?, year: Int, session: LoadedSession, http: any HTTPClient) async -> Outcome {
         var refused = false
         if let key = circuitKey {
@@ -30,8 +33,9 @@ enum CircuitLoader {
                     write(response.body, name)
                     return .final(map)
                 }
-                // MultiViewer has no such circuit (or nothing usable): tracing is the answer.
-                refused = (400..<500).contains(response.status) || response.status == 200
+                // MultiViewer refused or has no such circuit: tracing is the answer. Anything else
+                // (a 429, a 5xx, a body that doesn't parse) may pass: MultiViewer is asked again.
+                refused = Self.refusedStatuses.contains(response.status)
             } catch {
                 // Not reached: the traced outline stands in until MultiViewer answers.
             }

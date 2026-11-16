@@ -15,8 +15,11 @@ import Observation
 /// - Picture time: the main feed's program date plus the offset (`PictureClock`); without a
 ///   program date the session start plus the player's position, flagged as estimated.
 /// - Every value it hands out is read at or before picture time: the 2 Hz `snapshot`, and
-///   `mapState(at:)`, which the map asks for at the display's frame rate. The timeline marks are
-///   the one exception the spec allows (lights out, chequered, flag bands across the session).
+///   `mapState(at:)`, which the map asks for at the display's frame rate. The timeline marks
+///   (`TimelineMark.marks`) show lights out and the chequered flag always, and flag periods only
+///   up to picture time unless "Show the whole race" is on.
+/// - The 2 Hz tick runs only while something reads it: a floating panel showing, or the
+///   multiview's timeline marks.
 /// - The circuit comes from MultiViewer (or is traced from the cars), kept in Caches.
 ///
 /// Never logs; the token goes only to F1's archive, inside `TimingArchive`.
@@ -60,6 +63,10 @@ final class TimingController {
     @ObservationIgnored private var loaded: LoadedSession?
     @ObservationIgnored private var clock: (@MainActor () -> (programDate: Date?, playerSeconds: Double))?
     @ObservationIgnored private var contentId: Int?
+    /// The player that attached (`attach(owner:)`); only it can detach.
+    @ObservationIgnored private var ownerID: ObjectIdentifier?
+    /// The attached player shows timeline marks (the multiview's scrubber).
+    @ObservationIgnored private var wantsMarks = false
     @ObservationIgnored private var circuitKey: Int?
     /// Bumped by every attach and detach, so a slow load for something superseded is dropped.
     @ObservationIgnored private var generation = 0
@@ -96,16 +103,25 @@ final class TimingController {
 
     /// Starts timing for `item` (its `timingRef` must be filled, from the video's details when the
     /// item has none), with `clock` reading the main feed's program date and position together.
-    /// Attaching the content already attached keeps its timing and takes the new clock (a feed
-    /// change in the single player).
-    func attach(item: CatalogItem, clock: @escaping @MainActor () -> (programDate: Date?, playerSeconds: Double)) {
-        self.clock = clock
+    /// `owner` is the player attaching: only it can `detach(owner:)` later. `timelineMarks`: it
+    /// shows the marks (the multiview's scrubber), so the 2 Hz tick runs for them. Attaching the
+    /// content already attached keeps its timing and takes the new clock (a feed change in the
+    /// single player).
+    func attach(item: CatalogItem, owner: AnyObject? = nil, timelineMarks: Bool = false,
+                clock: @escaping @MainActor () -> (programDate: Date?, playerSeconds: Double)) {
         if contentId == item.contentId, status != .idle {
-            startTicking()
+            self.clock = clock
+            ownerID = owner.map(ObjectIdentifier.init)
+            wantsMarks = timelineMarks
+            // The new clock may change the status (estimated or not) even with no reader ticking.
+            publish()
+            updateTicking()
             return
         }
         detach()
         self.clock = clock
+        ownerID = owner.map(ObjectIdentifier.init)
+        wantsMarks = timelineMarks
         contentId = item.contentId
         guard let ref = item.timingRef, ref.isSession else {
             status = .unavailable(Self.noTiming)
@@ -116,7 +132,13 @@ final class TimingController {
         loadTask = Task { [weak self] in
             await self?.load(ref: ref, generation: mine)
         }
-        startTicking()
+    }
+
+    /// Detaches only if `owner` is the player that attached: the single player and the multiview
+    /// share this controller, and one closing must never drop the other's timing.
+    func detach(owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner) else { return }
+        detach()
     }
 
     /// Stops and forgets everything: the session, the map, the panels.
@@ -130,6 +152,8 @@ final class TimingController {
         tickTask = nil
         clock = nil
         contentId = nil
+        ownerID = nil
+        wantsMarks = false
         circuitKey = nil
         loaded = nil
         if status != .idle { status = .idle }
@@ -238,16 +262,21 @@ final class TimingController {
     /// The "Map" control: both panels on when none shows, else both off.
     func toggleMapPanels() {
         panels = panels.isEmpty ? Set(TimingPanel.allCases) : []
+        updateTicking()
+        publish()
     }
 
     /// A panel's own ✕.
     func closePanel(_ panel: TimingPanel) {
         panels.remove(panel)
+        updateTicking()
     }
 
+    /// "Show the whole race": every flag period on the timeline (and, later, the Scrub Deck).
     func setShowWholeRace(_ on: Bool) {
         settings.showWholeRace = on
         showWholeRace = settings.showWholeRace
+        publish()
     }
 
     func setSpeedOnMobileData(_ on: Bool) {
@@ -297,6 +326,7 @@ final class TimingController {
         mapTurn = key.map { settings.mapTurn(circuitKey: $0) } ?? 0
         status = .ready
         publish()
+        updateTicking()
         let year = session.info.year ?? ref.year
         let http = http
         mapTask = Task { [weak self] in
@@ -312,8 +342,9 @@ final class TimingController {
                     self.mapMessage = nil
                     return
                 case .interim(let map):
-                    self.map = map
-                    self.mapMessage = nil
+                    // The same traced outline comes back on every try: assign it only when new.
+                    if self.map == nil || self.map?.geometry.outline != map.geometry.outline { self.map = map }
+                    if self.mapMessage != nil { self.mapMessage = nil }
                 case .none:
                     if self.mapMessage != Self.retrying { self.mapMessage = Self.retrying }
                 }
@@ -336,6 +367,21 @@ final class TimingController {
     }
 
     // MARK: The 2 Hz snapshot
+
+    /// Whether the tick has a reader: a session loaded, and a panel showing or the marks shown.
+    private var needsTicking: Bool {
+        loaded != nil && (wantsMarks || !panels.isEmpty)
+    }
+
+    /// Starts or stops the tick to match `needsTicking`.
+    private func updateTicking() {
+        if needsTicking {
+            startTicking()
+        } else {
+            tickTask?.cancel()
+            tickTask = nil
+        }
+    }
 
     private func startTicking() {
         guard tickTask == nil else { return }
@@ -368,7 +414,9 @@ final class TimingController {
             sessionStatus: loaded.sessionStatus.status(at: t),
             pictureTime: t)
         if snapshot != next { snapshot = next }
-        let marks = TimelineMark.marks(for: loaded, pictureTime: t, playerSeconds: now.playerSeconds)
+        let marks = wantsMarks
+            ? TimelineMark.marks(for: loaded, pictureTime: t, playerSeconds: now.playerSeconds, wholeRace: showWholeRace)
+            : []
         if timelineMarks != marks { timelineMarks = marks }
     }
 }

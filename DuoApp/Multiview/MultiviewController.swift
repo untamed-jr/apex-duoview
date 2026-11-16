@@ -238,7 +238,7 @@ final class MultiviewController {
         // Keep the place in anything open, then drop it.
         save()
         teardownAll()
-        timing.detach()
+        timing.detach(owner: self)
         currentItem = nil
         resetSlots()
         feedURLs = [:]
@@ -282,7 +282,7 @@ final class MultiviewController {
         // Keep the place in the session being left, then drop it.
         save()
         teardownAll()
-        timing.detach()
+        timing.detach(owner: self)
         var showing = item
         if showing.title.isEmpty { showing.title = detail.title }
         // A bookmark or resume keeps no metadata: the video's details say where its timing is.
@@ -320,7 +320,7 @@ final class MultiviewController {
             return
         }
         guard generation == mine else { return }
-        timing.attach(item: showing, clock: { [weak self] in
+        timing.attach(item: showing, owner: self, timelineMarks: true, clock: { [weak self] in
             guard let self else { return (programDate: nil, playerSeconds: .nan) }
             return self.timingClock()
         })
@@ -357,7 +357,7 @@ final class MultiviewController {
         save()
         generation += 1
         teardownAll()
-        timing.detach()
+        timing.detach(owner: self)
         currentItem = nil
         title = ""
         defaultChannelId = nil
@@ -381,7 +381,7 @@ final class MultiviewController {
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
         teardownAll()
-        timing.detach()
+        timing.detach(owner: self)
         currentItem = nil
         title = ""
         feedURLs = [:]

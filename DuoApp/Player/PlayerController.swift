@@ -118,7 +118,7 @@ final class PlayerController {
         save()
         teardownPlayback()
         // Another feed of the same session keeps its timing; other content drops it.
-        if currentItem?.contentId != item.contentId { timing.detach() }
+        if currentItem?.contentId != item.contentId { timing.detach(owner: self) }
         currentItem = item
         currentChannel = channel
         errorText = nil
@@ -143,7 +143,7 @@ final class PlayerController {
             return
         }
         guard generation == mine else { return }
-        timing.attach(item: item, clock: { [weak self] in
+        timing.attach(item: item, owner: self, clock: { [weak self] in
             guard let self else { return (programDate: nil, playerSeconds: .nan) }
             return self.timingClock()
         })
@@ -194,7 +194,7 @@ final class PlayerController {
         save()
         generation += 1
         teardownPlayback()
-        timing.detach()
+        timing.detach(owner: self)
         currentItem = nil
         currentChannel = nil
         errorText = nil
@@ -225,7 +225,7 @@ final class PlayerController {
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
         teardownPlayback()
-        timing.detach()
+        timing.detach(owner: self)
         currentItem = nil
         currentChannel = nil
         isLoading = false
