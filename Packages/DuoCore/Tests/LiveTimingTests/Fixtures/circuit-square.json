@@ -1,0 +1,3 @@
+{"x":[0,1000,1000,0],"y":[0,0,1000,1000],"rotation":90,
+ "corners":[{"number":1,"trackPosition":{"x":1000,"y":0}},{"number":2,"trackPosition":{"x":1000,"y":1000}},{"number":3,"trackPosition":{"x":0,"y":1000}},{"number":4,"letter":"A","trackPosition":{"x":0,"y":0}}],
+ "marshalSectors":[{"number":1,"trackPosition":{"x":500,"y":0}},{"number":2,"trackPosition":{"x":1000,"y":500}}]}
