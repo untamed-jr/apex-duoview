@@ -76,6 +76,8 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
         self.onClose = onClose
         self.accessory = accessory()
         self.content = content()
+        // Seeded here, so a panel shows at its saved place from its first frame (no jump).
+        _stored = State(initialValue: settings.panelFrame(panel.rawValue, posture: postureKey))
     }
 
     /// Where it rests: saved, or the default, kept on screen.
@@ -114,7 +116,6 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
                     pinch = 1
                 })
         .position(x: frame.midX, y: frame.midY)
-        .onAppear { load() }
         .onChange(of: postureKey) { _, _ in load() }
     }
 

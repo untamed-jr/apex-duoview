@@ -16,9 +16,6 @@ struct MapPanel: View {
                     MapPanelNote(text: TimingController.estimatedNote)
                 }
             }
-            .overlay(alignment: .bottom) {
-                MapCaption(timing: timing)
-            }
     }
 
     @ViewBuilder
@@ -72,17 +69,19 @@ struct MapPanelControls: View {
     }
 }
 
-/// The flags caption ("Safety car", "Red flag · Q3 resumes in 4:12"), at 2 Hz from the snapshot.
+/// The flags caption ("Safety car", "Red flag · Q3 resumes in 4:12"), from the same frame's
+/// `MapState` as the outline, so the two never disagree (after a seek, say).
 private struct MapCaption: View {
-    let timing: TimingController
+    let caption: String?
+    let red: Bool
 
     var body: some View {
-        if let caption = timing.snapshot.flags.caption {
+        if let caption {
             Text(caption)
                 .font(.caption)
                 .bold()
                 .fontWidth(.condensed)
-                .foregroundStyle(timing.snapshot.flags.status == .red ? Theme.flagRed : Theme.flagYellow)
+                .foregroundStyle(red ? Theme.flagRed : Theme.flagYellow)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -148,6 +147,9 @@ private struct MapCanvas: View {
                 let phase = context.date.timeIntervalSinceReferenceDate
                 Canvas { graphics, _ in
                     MapDrawing.draw(in: &graphics, projected: projected, state: state, transform: transform, phase: phase)
+                }
+                .overlay(alignment: .bottom) {
+                    MapCaption(caption: state.caption, red: state.flags.status == .red)
                 }
             }
             .contentShape(Rectangle())
