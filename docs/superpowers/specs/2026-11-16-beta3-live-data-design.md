@@ -111,8 +111,11 @@ New for beta.3:
   - `api.multiviewer.app` for circuit outlines, credited already in Settings.
   The README's Privacy section is updated to say so.
 - **Auth:** the F1 TV subscription token as `Authorization: Bearer`, the same token as the video
-  API, for both the hub and the archive. A 401 or 403 sends the app into the existing "sign-in
-  expired" path.
+  API, for both the hub and the archive. **Timing refusals never sign the user out (controller's
+  call):** F1's archive answers 403 for files it hasn't published yet (Android logs it and retries),
+  so a 401/403 from any timing request only marks that piece unavailable ("No timing for this
+  session", or retry where Android retries). An expired sign-in is still caught by the video side,
+  as today.
 - **Compressed topics** (`Position.z`, `CarData.z`): base64, then raw deflate with no zlib header.
   Apple's Compression framework isn't on Linux, and DuoCore must be testable there. So DuoCore
   carries its own small raw-deflate decoder (RFC 1951), tested against real archive lines.
@@ -365,7 +368,10 @@ If none is available, it shows "Tap a car to pick an onboard" over the main feed
 - **Readouts** from `CarData.z`:
   - speed (channel 2), gear (3) and revs (0);
   - throttle (4) and brake (5) bars;
-  - DRS (45), lit when open.
+  - DRS (45), lit when open. **2026 rules replace DRS with active aero and an overtake mode
+    (controller's call):** the builder reads channel 45 in the São Paulo 2026 fixture; if it holds
+    the active-aero state, the light is labelled "Aero"; if it holds nothing useful, the light is
+    left out. It is never shown with a meaning the data doesn't carry.
 
   They update with picture time and hold the last value if data pauses, greying after 5 s.
 - **A mini map** with only this car highlighted.
@@ -530,8 +536,10 @@ Each build is pushed as it lands, tested or not (owner's standing instruction).
 ## Owner checks
 
 - **T-A (before build 1, about 10 minutes on the Mac):** download the São Paulo 2026 race and
-  qualifying archives with `spike/timing_recorder.py --archive`, plus the circuit file. The script
-  gains a `--circuit 14 2026` option. Upload the zip.
+  qualifying archives with `spike/timing_recorder.py --archive`, plus the circuit file. Before the
+  owner runs it, the script gains `--circuit 14 2026`, the year's `Index.json`, WeatherData, and a
+  check of whether the archive serves `CarData.z.jsonStream` in byte ranges (it reports the file
+  size and the `Accept-Ranges` answer). Upload the zip.
 
   The cloud session can't reach these hosts, and the archive needs the F1 TV token, which stays on
   the Mac.
