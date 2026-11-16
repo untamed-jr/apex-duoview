@@ -59,6 +59,13 @@ public enum SessionLookup {
     public static func probePaths(ref: TimingRef, meetingFolder: String, gmtOffsetSeconds: Int? = nil,
                                   watched: UTCms? = nil) -> [String] {
         let folder = meetingFolder.hasSuffix("/") ? meetingFolder : meetingFolder + "/"
+        let names = namedFolders(ref.title) ?? folders
+        return probeDays(ref: ref, meetingFolder: folder, gmtOffsetSeconds: gmtOffsetSeconds, watched: watched)
+            .flatMap { day in names.map { "\(folder)\(day)_\($0)/" } }
+    }
+
+    /// The track's days `probePaths` tries ("2026-11-08"), in order.
+    static func probeDays(ref: TimingRef, meetingFolder folder: String, gmtOffsetSeconds: Int?, watched: UTCms?) -> [String] {
         let moment = (watched ?? ref.start.flatMap(utcMs)).flatMap { (-maxMomentMs...maxMomentMs).contains($0) ? $0 : nil }
         let offset = gmtOffsetSeconds.flatMap { abs($0) <= F1Values.maxOffsetSeconds ? $0 : nil }
         var days: [String] = []
@@ -71,8 +78,7 @@ public enum SessionLookup {
         } else if let last = folder.split(separator: "/").last, let raceDay = date(String(last.prefix(10))) {
             days = (0...2).map { dayString(raceDay - Int64($0) * 86_400_000) }
         }
-        let names = namedFolders(ref.title) ?? folders
-        return days.flatMap { day in names.map { "\(folder)\(day)_\($0)/" } }
+        return days
     }
 
     /// The session folders the title names, the longest only ("Sprint_Qualifying", not

@@ -76,14 +76,23 @@ public actor TimingArchive {
 
     /// The archive session an F1 TV video shows: from the season's index by `SessionLookup`'s
     /// rules; when the index doesn't list it yet, from the SessionInfo.json of the folders
-    /// `SessionLookup.probePaths` names in the meeting's folder.
+    /// `SessionLookup.probePaths` names in the meeting's folder. Folders are probed only when a
+    /// watched moment, a session named in the title or the video's start (to one day) narrows
+    /// them; otherwise the index is the only request.
     public func session(for ref: TimingRef, watched: UTCms?) async -> ArchiveSession? {
         guard let index = await index(year: ref.year) else { return nil }
         if let found = SessionLookup.match(index: index, ref: ref, watched: watched) { return found }
         guard let meeting = SessionLookup.meeting(index: index, ref: ref) else { return nil }
+        let named = SessionLookup.namedFolders(ref.title) != nil
         // A probed session matches by key, by a name in the title or by the moment: with none of
         // them, don't ask.
-        guard watched != nil || ref.sessionKey != nil || SessionLookup.namedFolders(ref.title) != nil else { return nil }
+        guard watched != nil || ref.sessionKey != nil || named else { return nil }
+        // A key alone would mean every folder on each of three days: ask only once the start
+        // pins the day.
+        guard watched != nil || named
+            || SessionLookup.probeDays(ref: ref, meetingFolder: meeting.folder, gmtOffsetSeconds: meeting.gmtOffsetSeconds,
+                                       watched: nil).count == 1
+        else { return nil }
         let listed = Set(SessionLookup.candidates(index: index, ref: ref).map(\.session.path))
         let paths = SessionLookup.probePaths(ref: ref, meetingFolder: meeting.folder,
                                              gmtOffsetSeconds: meeting.gmtOffsetSeconds, watched: watched)

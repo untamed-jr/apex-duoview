@@ -341,6 +341,42 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await Self.archive(FakeArchiveHTTP()).session(for: live, watched: Self.race.start) == nil)
     }
 
+    @Test func sessionKeyAloneProbesNothing() async throws {
+        let http = FakeArchiveHTTP()
+        await http.serve("2026/Index.json", body: try Fixture.data("Index-2026.json"))
+        // This weekend, a key the index doesn't list, no session in the title, no start, no
+        // moment: nothing narrows the folders, so after the index nothing is asked.
+        let ref = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "99999", circuitKey: 14,
+                            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix")
+        #expect(await Self.archive(http).session(for: ref, watched: nil) == nil)
+        #expect(await http.requests.map(\.url.lastPathComponent) == ["Index.json"])
+        // A start that is no moment narrows nothing either.
+        var odd = ref
+        odd.start = Date(timeIntervalSince1970: 1e15)
+        #expect(await Self.archive(http).session(for: odd, watched: nil) == nil)
+        #expect(await http.requests.count == 2)
+    }
+
+    @Test func sessionKeyWithAStartProbesThatDay() async throws {
+        let http = FakeArchiveHTTP()
+        await http.serve("2026/Index.json", body: try Fixture.data("Index-2026.json"))
+        var ref = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "99999", circuitKey: 14,
+                            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix")
+        ref.start = Date(timeIntervalSince1970: Double(Self.race.start) / 1000)
+        #expect(await Self.archive(http).session(for: ref, watched: nil) == nil)
+        let probed = await http.requests.map(\.url.path).filter { $0.hasSuffix("SessionInfo.json") }
+        // The one day's folders the index doesn't list (its race and quali are listed).
+        #expect(!probed.isEmpty && probed.count <= SessionLookup.folders.count)
+        #expect(probed.allSatisfy { $0.contains("/2026-11-08_") })
+        // A title naming the session narrows it without a start: that folder on each day it could be.
+        let named = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "99999", meetingName: "São Paulo Grand Prix",
+                              title: "2026 São Paulo GP - Sprint")
+        let before = await http.requests.count
+        _ = await Self.archive(http).session(for: named, watched: nil)
+        let more = await http.requests.dropFirst(before).map(\.url.path).filter { $0.hasSuffix("SessionInfo.json") }
+        #expect(!more.isEmpty && more.allSatisfy { $0.hasSuffix("_Sprint/SessionInfo.json") })
+    }
+
     static func plain(_ v: JSONValue) -> Any {
         switch v {
         case .null: return NSNull()
