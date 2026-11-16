@@ -1,6 +1,6 @@
 # v1.0-beta.3 — Live data: design
 
-Draft for the owner's approval (2026-11-16). The owner picked Race Engineer "C", Scrub Deck "C"
+Owner-approved on 2026-11-16 ("APPROVED"). The owner picked Race Engineer "C", Scrub Deck "C"
 and data layouts "C" in conversation, and approved the summary ("all good, if you can think of other
 features add it"). The extra features the controller added are marked **(added)**.
 
