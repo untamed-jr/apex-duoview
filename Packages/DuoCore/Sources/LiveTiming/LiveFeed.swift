@@ -8,13 +8,18 @@ import F1TV
 /// - Stream start: `headStartMs` (12 h) before the first snapshot, Android's head start: the
 ///   picture runs behind the timing, and the archive's session so far fits in front.
 /// - The first snapshot (the subscribe result, one `opening` message per topic) is each topic's
-///   first line, at offset 0, so a picture from before joining shows the state on joining.
+///   first line, at offset 0, so a picture from before joining shows the state on joining
+///   (the app labels picture times before `joinedAt` as catching up).
 ///   Changes before it are dropped: the snapshot already holds them.
 /// - Changes follow at their own times.
 /// - A later snapshot (after a reconnect, or the app reopened on the same recording) starts a
 ///   fresh `TopicState`: a topic it doesn't name is gone. Its topics are not appended again:
 ///   only the difference from what the lines already hold is, at its time, so no lap,
-///   pit stop or race control message is counted twice and the history stays.
+///   pit stop or race control message is counted twice and the history stays. A topic it
+///   names for the first time starts at its time, not before.
+/// - One session per feed: SessionInfo with another `Path` starts the feed afresh, from the
+///   snapshot naming it (or, when the new path comes as a change, from the next snapshot: the
+///   app reconnects, as Android does when live timing moves on).
 /// - `topUp` puts the archive's session before joining in place of the opening lines.
 ///
 /// CarData.z and Heartbeat (`LiveRecording.excluded`) are ignored, so a feed built live equals
@@ -26,20 +31,34 @@ public struct LiveFeed: Sendable {
     public private(set) var state = TopicState()
     /// `headStartMs` before the first snapshot; nil until there is one.
     public private(set) var streamStart: UTCms?
+    /// The session the feed holds: the latest SessionInfo `Path` it was given.
+    public private(set) var sessionPath: String?
 
     /// Each topic's first snapshot, as received, at offset 0.
     private var opening: [String: StreamLine] = [:]
-    /// The archive's lines before joining (`topUp`), in place of the opening line.
-    private var past: [String: [StreamLine]] = [:]
-    /// After `past`: what turns the archive's last state into the opening snapshot, at the join.
-    private var joinPatch: [String: StreamLine] = [:]
-    /// Changes, and the differences later snapshots brought, oldest first.
+    /// Changes, and the lines later snapshots brought, oldest first.
     private var deltas: [String: [StreamLine]] = [:]
+    /// Where in `deltas` each topic's first change is (lines before it came from snapshots).
+    private var firstChange: [String: Int] = [:]
+    /// Topics first named by a later snapshot: their `deltas` start with that snapshot whole.
+    private var lateStart: Set<String> = []
     /// What each topic's lines merge to (opening, changes and differences): the base each
     /// later snapshot is compared with. Unlike `state`, a snapshot never clears it.
     private var merged: [String: JSONValue] = [:]
     /// The topics of the snapshot being received; nil once a change has followed it.
     private var snapshotTopics: Set<String>?
+    /// That snapshot's messages, to start afresh from when it names another session.
+    private var snapshotRun: [RecordedMessage] = []
+    /// Whether the snapshot being received is the first (no change or snapshot since).
+    private var inFirstSnapshot = false
+    /// After `topUp`: each topic's archive lines and seam, and where its live lines resume.
+    private var topped: [String: Topped] = [:]
+
+    struct Topped: Sendable {
+        var lines: [StreamLine]
+        /// The first of `deltas` that follows them.
+        var from: Int
+    }
 
     public init() {}
 
@@ -48,28 +67,57 @@ public struct LiveFeed: Sendable {
         for m in messages { apply(m) }
     }
 
-    /// When the feed joined: its first snapshot's time.
+    /// When the feed joined live timing: its first snapshot's time. The timelines before it
+    /// hold the state on joining (until `topUp` puts the archive there), so the app shows a
+    /// picture time before it as catching up.
     public var joinedAt: UTCms? { streamStart.map { F1Values.add($0, Self.headStartMs) } }
 
     public mutating func apply(_ m: RecordedMessage) {
         guard LiveRecording.records(m.topic) else { return }
+        if m.topic == "SessionInfo" {
+            let path = m.json["Path"].string
+            if !path.isEmpty, let current = sessionPath, current != path {
+                startAfresh(with: m, path: path)
+                return
+            }
+            if !path.isEmpty { sessionPath = path }
+        }
         if m.opening {
             // A snapshot is a run of opening messages; one following a change, or naming a
             // topic this run already gave, is the next snapshot.
             if snapshotTopics.map({ $0.contains(m.topic) }) ?? true { beginSnapshot(at: m.utc) }
             snapshotTopics?.insert(m.topic)
+            snapshotRun.append(m)
             receiveSnapshot(m)
         } else {
             snapshotTopics = nil
+            snapshotRun = []
+            inFirstSnapshot = false
             guard let start = streamStart else { return }  // before the first snapshot
             state.apply(topic: m.topic, delta: m.json)
             merged[m.topic] = TopicMerge.merge(merged[m.topic] ?? .null, m.json)
+            if firstChange[m.topic] == nil { firstChange[m.topic] = deltas[m.topic]?.count ?? 0 }
             deltas[m.topic, default: []].append(StreamLine(offsetMs: max(F1Values.sub(m.utc, start), 0), json: m.json))
         }
     }
 
+    /// SessionInfo named another session: nothing so far belongs to it. A snapshot naming it
+    /// becomes the new feed's first, with the topics it already gave; a change waits for the
+    /// next snapshot.
+    private mutating func startAfresh(with m: RecordedMessage, path: String) {
+        let run = m.opening && snapshotTopics.map({ !$0.contains(m.topic) }) == true ? snapshotRun : []
+        self = LiveFeed()
+        guard m.opening else {
+            sessionPath = path
+            return
+        }
+        for r in run + [m] { apply(r) }
+    }
+
     private mutating func beginSnapshot(at utc: UTCms) {
         snapshotTopics = []
+        snapshotRun = []
+        inFirstSnapshot = streamStart == nil
         if streamStart == nil { streamStart = F1Values.sub(utc, Self.headStartMs) }
         state = TopicState()
     }
@@ -77,14 +125,19 @@ public struct LiveFeed: Sendable {
     private mutating func receiveSnapshot(_ m: RecordedMessage) {
         guard let start = streamStart else { return }
         let value = TopicMerge.merge(.null, m.json)
+        let offset = max(F1Values.sub(m.utc, start), 0)
         state.apply(topic: m.topic, delta: m.json)
         if let before = merged[m.topic] {
             if let patch = TopicPatch.delta(from: before, to: value) {
-                deltas[m.topic, default: []].append(StreamLine(offsetMs: max(F1Values.sub(m.utc, start), 0), json: patch))
+                deltas[m.topic, default: []].append(StreamLine(offsetMs: offset, json: patch))
             }
-        } else if opening[m.topic] == nil {
-            // The topic's first line: before any change, at the stream's start.
+        } else if inFirstSnapshot {
+            // The topic's first line, before any change: at the stream's start.
             opening[m.topic] = StreamLine(offsetMs: 0, json: m.json)
+        } else {
+            // First named by a later snapshot: from then on, not before.
+            lateStart.insert(m.topic)
+            deltas[m.topic, default: []].append(StreamLine(offsetMs: offset, json: m.json))
         }
         merged[m.topic] = value
     }
@@ -93,13 +146,13 @@ public struct LiveFeed: Sendable {
     /// session before joining), then the changes. Offsets never go back: one before the line
     /// ahead of it (F1's clock against the phone's, at a snapshot) takes that line's.
     public func lines(_ topic: String) -> [StreamLine] {
+        let live = deltas[topic] ?? []
         var out: [StreamLine]
-        if let archive = past[topic] {
-            out = archive + (joinPatch[topic].map { [$0] } ?? [])
+        if let t = topped[topic] {
+            out = t.lines + live[min(t.from, live.count)...]
         } else {
-            out = opening[topic].map { [$0] } ?? []
+            out = (opening[topic].map { [$0] } ?? []) + live
         }
-        out += deltas[topic] ?? []
         var latest: Int64 = 0
         for i in out.indices {
             if out[i].offsetMs < latest {
@@ -144,38 +197,106 @@ public struct LiveFeed: Sendable {
         )
     }
 
-    /// Tops the feed up from F1's archive (Android's backfill): each topic's archive lines
-    /// (`.jsonStream`, offsets from `archiveStart`) replace its opening line, up to the join or
-    /// the topic's first live line, whichever is earlier. The snapshot is stamped when it
-    /// arrives but holds the state from a little before, so changes between the two come live
-    /// too: cutting the archive at the first of them keeps each from counting twice.
+    /// How far apart in time a live change and its archive line may be found (the archive's
+    /// start is a heartbeat estimate; the snapshot is stamped by the phone).
+    static let seamWindowMs = Backfill.completeGapMs
+
+    /// Tops the feed up from F1's archive (Android's backfill), so nothing before the seam is
+    /// lost and nothing across it counts twice. For each topic (archive lines are offsets from
+    /// `archiveStart`):
     ///
-    /// When the topic's archive stops `Backfill.completeGapMs` or more before the join (it
-    /// lags), the difference from its last state to the opening snapshot follows at the join,
-    /// so the state on joining is right. Closer than that, as Android, there is none: the
-    /// snapshot's state may be older than the archive's last lines, and a difference back to
-    /// it would undo laps the live changes then count again.
+    /// - When the archive holds the topic's first live change (the same message, within
+    ///   `seamWindowMs` of it), the archive's lines before it come first, then the live lines
+    ///   from that change on. The archive and live timing are then one stream, whatever the
+    ///   snapshot's stamp says.
+    /// - Otherwise (the archive lags, or the topic hasn't changed since joining), the archive's
+    ///   lines before the snapshot (or the first live change, if earlier) come first, then the
+    ///   difference from their state to the snapshot's, then the live lines. The difference is
+    ///   empty when they agree.
     ///
-    /// A topic with no archive lines before the cut keeps its opening line. Called again with
-    /// a fuller archive, the newer lines replace the older.
+    /// Race control's archive messages also given live (same Utc and Message) are left out of
+    /// the archive's lines. A topic with no archive lines before the seam keeps its live lines.
+    /// Called again with a fuller archive, the newer lines replace the older.
     public mutating func topUp(archive: [String: [StreamLine]], archiveStart: UTCms) {
         guard let start = streamStart, let joined = joinedAt else { return }
         for (topic, archived) in archive where LiveRecording.records(topic) {
-            let firstLive = deltas[topic]?.first.map { F1Values.add(start, $0.offsetMs) } ?? joined
-            let before = Backfill.rebase(archived, archiveStart: archiveStart, newStart: start, until: min(joined, firstLive))
-            guard let last = before.last else { continue }
-            past[topic] = before
-            joinPatch[topic] = nil
-            guard let open = opening[topic],
-                  F1Values.sub(joined, F1Values.add(start, last.offsetMs)) >= Backfill.completeGapMs
-            else { continue }
-            let reached = before.reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
-            if let patch = TopicPatch.delta(from: reached, to: TopicMerge.merge(.null, open.json)) {
-                joinPatch[topic] = StreamLine(offsetMs: F1Values.sub(joined, start), json: patch)
+            let archiveLines = Backfill.rebase(archived, archiveStart: archiveStart, newStart: start, until: .max)
+            let live = deltas[topic] ?? []
+            var archivePart: [StreamLine] = []
+            var patch: StreamLine?
+            var from = 0
+            if let k = firstChange[topic], let j = Self.match(live[k], in: archiveLines), j > 0 {
+                archivePart = Array(archiveLines[..<j])
+                from = k
+            } else {
+                var anchor: (state: JSONValue, offset: Int64)?
+                if let open = opening[topic] {
+                    anchor = (TopicMerge.merge(.null, open.json), F1Values.sub(joined, start))
+                } else if lateStart.contains(topic), let first = live.first {
+                    anchor = (TopicMerge.merge(.null, first.json), first.offsetMs)
+                    from = 1
+                }
+                let cut = min(anchor?.offset ?? .max, from < live.count ? live[from].offsetMs : .max)
+                archivePart = Array(archiveLines.prefix { $0.offsetMs < cut })
+                if let anchor, !archivePart.isEmpty {
+                    let reached = archivePart.reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
+                    patch = TopicPatch.delta(from: reached, to: anchor.state).map { StreamLine(offsetMs: cut, json: $0) }
+                }
             }
+            guard !archivePart.isEmpty else {
+                topped[topic] = nil
+                continue
+            }
+            if topic == "RaceControlMessages" {
+                let given = Set(((patch.map { [$0] } ?? []) + live[from...]).flatMap(Self.messageKeys))
+                if !given.isEmpty { archivePart = archivePart.map { Self.dropping(given, from: $0) } }
+            }
+            topped[topic] = Topped(lines: archivePart + (patch.map { [$0] } ?? []), from: from)
         }
     }
+
+    /// The archive line that is `line` (the same message), nearest in time within
+    /// `seamWindowMs`.
+    static func match(_ line: StreamLine, in archive: [StreamLine]) -> Int? {
+        var best: (index: Int, distance: Int64)?
+        var normalized: JSONValue?
+        for (i, a) in archive.enumerated() {
+            let distance = abs(F1Values.sub(a.offsetMs, line.offsetMs))
+            guard distance <= seamWindowMs, distance < best?.distance ?? .max else { continue }
+            if a.json != line.json {
+                if normalized == nil { normalized = TopicMerge.merge(.null, line.json) }
+                guard TopicMerge.merge(.null, a.json) == normalized else { continue }
+            }
+            best = (i, distance)
+        }
+        return best?.index
+    }
+
+    /// A race control line's messages, each as its Utc and text.
+    static func messageKeys(_ line: StreamLine) -> [String] {
+        F1Values.ordered(line.json["Messages"]).map { $0["Utc"].string + "\u{1F}" + $0["Message"].string }
+    }
+
+    /// The line without the messages whose keys are in `keys`.
+    static func dropping(_ keys: Set<String>, from line: StreamLine) -> StreamLine {
+        func kept(_ m: JSONValue) -> Bool { !keys.contains(m["Utc"].string + "\u{1F}" + m["Message"].string) }
+        guard case .object(var members) = line.json else { return line }
+        switch members["Messages"] {
+        case .array(let items)?:
+            let left = items.filter(kept)
+            guard left.count != items.count else { return line }
+            members["Messages"] = .array(left)
+        case .object(let entries)?:
+            let left = entries.filter { kept($0.value) }
+            guard left.count != entries.count else { return line }
+            members["Messages"] = .object(left)
+        default:
+            return line
+        }
+        return StreamLine(offsetMs: line.offsetMs, json: .object(members))
+    }
 }
+
 
 /// The smallest F1-style delta that `TopicMerge.merge` turns one state into another with:
 /// `merge(old, delta(from: old, to: new)!) == new` for any `new` that `merge(.null, _)` leaves

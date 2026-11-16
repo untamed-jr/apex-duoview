@@ -326,6 +326,154 @@ struct LiveFeedTests {
         expectSame(live, archive)
     }
 
+    @Test func topUpWhenTheSnapshotIsNewerThanItsStamp() async throws {
+        let replay = try ArchiveReplay()
+        let archive = try await ArchiveReplay.archiveSession()
+        // The phone's clock runs 2 s behind the archive's: the snapshot is stamped 2 s before
+        // the state it holds, and a lap and a race control CLEAR fall between the two.
+        let crossing = try #require(archive.timing.lineCrossings(upTo: .max).map(\.at).filter { $0 > Self.lightsOut + 240_000 }.min())
+        // The fixture's only CLEARs are at 00:28:19, clearing the sectors' yellows.
+        let control = try #require(replay.streams["RaceControlMessages"])
+        let clear = try #require(control.first { F1Values.ordered($0.json["Messages"]).contains { $0["Flag"].string == "CLEAR" } }.map(replay.utc))
+        for joined in [crossing - 1_000, clear - 1_000] {
+            let state = joined + 2_000
+            var feed = LiveFeed()
+            for m in replay.snapshot(at: joined, through: state) + replay.changes.filter({ $0.utc > state }) { feed.apply(m) }
+            feed.topUp(archive: replay.streams, archiveStart: replay.start)
+            let live = try #require(feed.session())
+            #expect(crossings(live.timing) == crossings(archive.timing), "joined \(joined)")
+            #expect(live.flags.sectorFlags.count == archive.flags.sectorFlags.count, "joined \(joined)")
+            #expect(TrackFlags.controlMessages(feed.lines("RaceControlMessages"), streamStart: live.streamStart).count
+                    == TrackFlags.controlMessages(control, streamStart: replay.start).count, "joined \(joined)")
+            expectSame(live, archive)
+        }
+    }
+
+    @Test func topUpListsEachRaceControlMessageOnce() throws {
+        func j(_ s: String) throws -> JSONValue { try JSONValue.parse(Data(s.utf8)) }
+        let t0: UTCms = 1_794_157_000_000  // 16:56:40 UTC
+        let yellow = #"{"Utc":"2026-11-08T16:55:40","Category":"Flag","Flag":"YELLOW","Scope":"Sector","Sector":3,"Message":"YELLOW IN TRACK SECTOR 3"}"#
+        let clear = #"{"Utc":"2026-11-08T16:56:37","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":3,"Message":"CLEAR IN TRACK SECTOR 3"}"#
+        var feed = LiveFeed()
+        feed.apply(RecordedMessage(topic: "SessionInfo", utc: t0, opening: true,
+                                   json: try j(#"{"Key":11412,"Type":"Race","Name":"Race","Path":"2026/x/"}"#)))
+        feed.apply(RecordedMessage(topic: "RaceControlMessages", utc: t0, opening: true, json: try j(#"{"Messages":[\#(yellow)]}"#)))
+        // The CLEAR comes live by F1's clock, before the snapshot's stamp, under another index.
+        feed.apply(RecordedMessage(topic: "RaceControlMessages", utc: t0 - 2_000, opening: false, json: try j(#"{"Messages":{"5":\#(clear)}}"#)))
+        let start = try #require(feed.streamStart)
+        // The archive has both, and by its clock the CLEAR is earlier still.
+        let archive = [StreamLine(offsetMs: 0, json: try j(#"{"Messages":[\#(yellow)]}"#)),
+                       StreamLine(offsetMs: 57_500, json: try j(#"{"Messages":{"1":\#(clear)}}"#))]
+        let archiveStart = t0 - 60_000
+        feed.topUp(archive: ["RaceControlMessages": archive], archiveStart: archiveStart)
+        let messages = TrackFlags.controlMessages(feed.lines("RaceControlMessages"), streamStart: start)
+        #expect(messages.map { $0.message["Flag"].string }.sorted() == ["CLEAR", "YELLOW"])
+        let session = try #require(feed.session())
+        #expect(session.flags.at(t0 - 30_000).yellowSectors == [3: 1])
+        #expect(session.flags.at(t0).yellowSectors.isEmpty)
+    }
+
+    @Test func topicFirstNamedLaterIsNotBackdated() throws {
+        func m(_ topic: String, _ utc: UTCms, _ json: String, opening: Bool = true) throws -> RecordedMessage {
+            RecordedMessage(topic: topic, utc: utc, opening: opening, json: try JSONValue.parse(Data(json.utf8)))
+        }
+        let t0: UTCms = 1_794_157_000_000
+        let reconnect = t0 + 2_400_000
+        let info = #"{"Key":11412,"Type":"Race","Name":"Race","Path":"2026/x/"}"#
+        func feed() throws -> LiveFeed {
+            var feed = LiveFeed()
+            for msg in try [
+                m("SessionInfo", t0, info),
+                m("LapCount", t0, #"{"CurrentLap":1,"TotalLaps":71}"#),
+                m("LapCount", t0 + 10_000, #"{"CurrentLap":2}"#, opening: false),
+                // WeatherData named for the first time 40 minutes in.
+                m("SessionInfo", reconnect, info),
+                m("LapCount", reconnect, #"{"CurrentLap":30,"TotalLaps":71}"#),
+                m("WeatherData", reconnect, #"{"AirTemp":"20.0","TrackTemp":"35.0","Rainfall":"0"}"#),
+                m("WeatherData", reconnect + 60_000, #"{"AirTemp":"21.0"}"#, opening: false),
+            ] { feed.apply(msg) }
+            return feed
+        }
+        var live = try feed()
+        let start = try #require(live.streamStart)
+        #expect(live.lines("WeatherData").first?.offsetMs == reconnect - start)
+        let session = try #require(live.session())
+        #expect(session.header.at(t0 + 100_000).airTemp == nil)
+        #expect(session.header.at(reconnect).airTemp == 20.0)
+        #expect(session.header.at(reconnect + 60_000).airTemp == 21.0)
+        #expect(session.header.at(t0 + 100_000).lap == 2)
+
+        // Topped up from an archive that lags behind the reconnect: its readings, then the
+        // difference to the snapshot's at its own time.
+        func w(_ t: UTCms, _ json: String) throws -> StreamLine {
+            StreamLine(offsetMs: t - t0, json: try JSONValue.parse(Data(json.utf8)))
+        }
+        live.topUp(archive: ["WeatherData": [try w(t0 - 30_000, #"{"AirTemp":"18.0","TrackTemp":"30.0","Rainfall":"0"}"#),
+                                             try w(t0 + 1_200_000, #"{"AirTemp":"19.0"}"#)]], archiveStart: t0)
+        let lagging = try #require(live.session())
+        #expect(lagging.header.at(t0 + 100_000).airTemp == 18.0)
+        #expect(lagging.header.at(t0 + 1_300_000).airTemp == 19.0)
+        #expect(lagging.header.at(reconnect).airTemp == 20.0)
+        #expect(lagging.header.at(reconnect).trackTemp == 35.0)
+        #expect(lagging.header.at(reconnect + 60_000).airTemp == 21.0)
+
+        // A fuller archive, holding the live change: one stream, the snapshot's line left out.
+        var full = try feed()
+        full.topUp(archive: ["WeatherData": [try w(t0 - 30_000, #"{"AirTemp":"18.0","TrackTemp":"30.0","Rainfall":"0"}"#),
+                                             try w(reconnect - 30_000, #"{"AirTemp":"20.0","TrackTemp":"35.0"}"#),
+                                             try w(reconnect + 60_000, #"{"AirTemp":"21.0"}"#)]], archiveStart: t0)
+        #expect(full.lines("WeatherData").map(\.offsetMs) == [t0 - 30_000 - start, reconnect - 30_000 - start, reconnect + 60_000 - start])
+        #expect(try #require(full.session()).header.at(reconnect - 10_000).airTemp == 20.0)
+    }
+
+    @Test func newSessionPathStartsAfresh() throws {
+        func m(_ topic: String, _ utc: UTCms, _ json: String, opening: Bool = true) throws -> RecordedMessage {
+            RecordedMessage(topic: topic, utc: utc, opening: opening, json: try JSONValue.parse(Data(json.utf8)))
+        }
+        let sprint = #"{"Key":11410,"Type":"Race","Name":"Sprint","Path":"2026/sprint/"}"#
+        let race = #"{"Key":11412,"Type":"Race","Name":"Race","Path":"2026/race/"}"#
+        let t0: UTCms = 1_794_157_000_000
+        var feed = LiveFeed()
+        for msg in try [
+            m("DriverList", t0, #"{"1":{"RacingNumber":"1","Tla":"VER"}}"#),
+            m("LapCount", t0, #"{"CurrentLap":20,"TotalLaps":24}"#),
+            m("SessionInfo", t0, sprint),
+            m("LapCount", t0 + 60_000, #"{"CurrentLap":21}"#, opening: false),
+            // Same session, again: carried on.
+            m("SessionInfo", t0 + 70_000, sprint, opening: false),
+        ] { feed.apply(msg) }
+        #expect(feed.sessionPath == "2026/sprint/")
+        #expect(feed.lines("LapCount").count == 2)
+
+        // The app reconnects the next day to the race: its snapshot names the new path after
+        // two of its topics.
+        let t1 = t0 + 86_400_000
+        for msg in try [
+            m("DriverList", t1, #"{"4":{"RacingNumber":"4","Tla":"NOR"}}"#),
+            m("LapCount", t1, #"{"CurrentLap":1,"TotalLaps":71}"#),
+            m("SessionInfo", t1, race),
+            m("LapCount", t1 + 90_000, #"{"CurrentLap":2}"#, opening: false),
+        ] { feed.apply(msg) }
+        #expect(feed.sessionPath == "2026/race/")
+        #expect(feed.joinedAt == t1)
+        #expect(feed.lines("LapCount").map(\.offsetMs) == [0, LiveFeed.headStartMs + 90_000])
+        let session = try #require(feed.session())
+        #expect(session.info.path == "2026/race/")
+        #expect(Set(session.drivers.keys) == ["4"])
+        #expect(session.header.at(t1).totalLaps == 71)
+
+        // A new path as a change: nothing kept, and nothing until the next snapshot.
+        feed.apply(try m("SessionInfo", t1 + 100_000, #"{"Path":"2026/post/"}"#, opening: false))
+        #expect(feed.sessionPath == "2026/post/")
+        #expect(feed.streamStart == nil)
+        #expect(feed.session() == nil)
+        feed.apply(try m("LapCount", t1 + 110_000, #"{"CurrentLap":3}"#, opening: false))
+        #expect(feed.lines("LapCount").isEmpty)
+        feed.apply(try m("SessionInfo", t1 + 120_000, #"{"Key":1,"Type":"Practice","Name":"Post","Path":"2026/post/"}"#))
+        #expect(feed.joinedAt == t1 + 120_000)
+        #expect(feed.session()?.info.path == "2026/post/")
+    }
+
     @Test func topicPatchRebuildsTheNewState() throws {
         func j(_ s: String) throws -> JSONValue { try JSONValue.parse(Data(s.utf8)) }
         let cases: [(String, String)] = [
