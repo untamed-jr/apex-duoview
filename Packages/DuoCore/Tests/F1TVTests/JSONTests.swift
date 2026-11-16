@@ -48,6 +48,41 @@ import Testing
         #expect(try JSONValue.parse(Data(text.utf8))["a"]["b"][1]["c"].string == "é🏁")
     }
 
+    /// Where `parse` (JSONSerialization) and the decoder it replaced are known to differ; none of
+    /// it occurs in F1's data (JSONFastPathTests compares every committed fixture line). The exact
+    /// values were measured on Linux; Apple's Foundation may differ, so those are Linux-only.
+    @Test func knownDifferencesFromTheDecoder() throws {
+        // Duplicate keys: the last wins.
+        let duplicate = Data(#"{"a":1,"a":2}"#.utf8)
+        #expect(try JSONValue.parse(duplicate) == .object(["a": .number(2)]))
+        #if os(Linux)
+        #expect(try JSONValue.parseByDecoding(duplicate) == .object(["a": .number(1)]))  // the decoder keeps the first
+        #endif
+
+        // A literal that underflows reads as 0, where the decoder throws.
+        #if os(Linux)
+        #expect(try JSONValue.parse(Data("1e-400".utf8)) == .number(0))
+        #expect(throws: (any Error).self) { try JSONValue.parseByDecoding(Data("1e-400".utf8)) }
+        #endif
+
+        // 17 or more significant digits can come out a few ulps off; the decoder rounds
+        // correctly. Up to about 16 ulps were measured on Linux over random doubles.
+        let text = "0.30000000000000004"
+        let exact = try #require(Double(text))
+        guard case .number(let fast) = try JSONValue.parse(Data(text.utf8)),
+              case .number(let decoded) = try JSONValue.parseByDecoding(Data(text.utf8))
+        else { Issue.record("not numbers"); return }
+        #expect(decoded == exact)
+        #expect(abs(fast - exact) <= 32 * exact.ulp)
+        #if os(Linux)
+        #expect(fast == exact.nextUp)  // one ulp up
+        #endif
+        // With 16 digits or fewer they agree.
+        for short in ["0.3000000000000000", "-1234.567", "2.146183727904518e-11", "42315.23049734208"] {
+            #expect(try JSONValue.parse(Data(short.utf8)) == .number(Double(short)!), "\(short)")
+        }
+    }
+
     @Test func malformedInputThrowsBothWays() {
         for text in ["", "{", "[1 2]", "{\"a\":1} x", "tru", "{\"a\" 1}"] {
             #expect(throws: (any Error).self, "\(text)") { try JSONValue.parse(Data(text.utf8)) }

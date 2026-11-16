@@ -12,8 +12,14 @@ public enum JSONValue: Sendable, Equatable {
 
     /// Parses with `JSONSerialization`, which reads a 70 000-line timing file many times faster
     /// than the decoder below (that one tries each type in turn and catches the failures).
-    /// Top-level strings, numbers and nulls parse too. The result is the decoder's, booleans
-    /// included: JSON's `true` is `.bool`, its `1` is `.number`.
+    /// Top-level strings, numbers and nulls parse too. On F1's data the result is the decoder's
+    /// (`JSONFastPathTests` compares every committed fixture line), booleans included: JSON's
+    /// `true` is `.bool`, its `1` is `.number`. It differs only
+    /// - on numbers written with 17 or more significant digits, which can come out a few ulps
+    ///   off the decoder's correctly rounded value (up to about 16 measured on Linux);
+    /// - on duplicate keys, where the last wins;
+    /// - on literals that underflow, such as 1e-400, which read as 0 instead of throwing.
+    /// `JSONValueTests.knownDifferencesFromTheDecoder` pins these.
     public static func parse(_ data: Data) throws -> JSONValue {
         value(try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed))
     }
