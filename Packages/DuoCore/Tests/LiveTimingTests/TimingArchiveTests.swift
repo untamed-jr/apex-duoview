@@ -310,8 +310,8 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await http.requests.count == 1)
     }
 
-    @Test func sessionForRefProbesWhenTheIndexLags() async throws {
-        // The index without the race, as it is in the hours after one.
+    /// The index without the race, as it is in the hours after one.
+    static func indexWithoutRace() throws -> JSONValue {
         var index = try Fixture.json("Index-2026.json")
         if case .object(var top) = index, case .array(var meetings) = top["Meetings"],
            case .object(var sp) = meetings[1], case .array(let sessions) = sp["Sessions"] {
@@ -320,8 +320,12 @@ struct LeakyError: Error, CustomStringConvertible {
             top["Meetings"] = .array(meetings)
             index = .object(top)
         }
+        return index
+    }
+
+    @Test func sessionForRefProbesWhenTheIndexLags() async throws {
         let http = FakeArchiveHTTP()
-        await http.serve("2026/Index.json", body: try JSONSerialization.data(withJSONObject: Self.plain(index)))
+        await http.serve("2026/Index.json", body: try JSONSerialization.data(withJSONObject: Self.plain(try Self.indexWithoutRace())))
         await http.serve(Self.racePath + "SessionInfo.json", body: try Fixture.data("sp26-race/SessionInfo.json"))
         let live = TimingRef(year: 2026, meetingKey: "1299", circuitKey: 14, meetingName: "São Paulo Grand Prix",
                              title: "São Paulo Grand Prix")
@@ -339,6 +343,20 @@ struct LeakyError: Error, CustomStringConvertible {
         let elsewhere = TimingRef(year: 2026, meetingKey: "9999", meetingName: "Nowhere", title: "Race")
         #expect(await Self.archive(http).session(for: elsewhere, watched: Self.race.start) == nil)
         #expect(await Self.archive(FakeArchiveHTTP()).session(for: live, watched: Self.race.start) == nil)
+    }
+
+    /// A replay of a session the index doesn't list yet (key and start, no watched moment):
+    /// the start pins the day, so that day's folders are probed and the session is found.
+    @Test func sessionKeyWithAStartFindsTheUnlistedSession() async throws {
+        let http = FakeArchiveHTTP()
+        await http.serve("2026/Index.json", body: try JSONSerialization.data(withJSONObject: Self.plain(try Self.indexWithoutRace())))
+        await http.serve(Self.racePath + "SessionInfo.json", body: try Fixture.data("sp26-race/SessionInfo.json"))
+        let ref = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "11412", circuitKey: 14,
+                            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix",
+                            start: Date(timeIntervalSince1970: Double(Self.race.start) / 1000))
+        #expect(await Self.archive(http).session(for: ref, watched: nil) == Self.race)
+        let probed = await http.requests.map(\.url.path).filter { $0.hasSuffix("SessionInfo.json") }
+        #expect(!probed.isEmpty && probed.allSatisfy { $0.contains("/2026-11-08_") })
     }
 
     @Test func sessionKeyAloneProbesNothing() async throws {

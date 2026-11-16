@@ -52,7 +52,8 @@ import Testing
     /// it occurs in F1's data (JSONFastPathTests compares every committed fixture line). The exact
     /// values were measured on Linux; Apple's Foundation may differ, so those are Linux-only.
     @Test func knownDifferencesFromTheDecoder() throws {
-        // Duplicate keys: the last wins.
+        // Duplicate keys: the last wins (Linux, and expected of Apple's NSDictionary building;
+        // not run there).
         let duplicate = Data(#"{"a":1,"a":2}"#.utf8)
         #expect(try JSONValue.parse(duplicate) == .object(["a": .number(2)]))
         #if os(Linux)
@@ -77,7 +78,8 @@ import Testing
         #if os(Linux)
         #expect(fast == exact.nextUp)  // one ulp up
         #endif
-        // With 16 digits or fewer they agree.
+        // With 16 digits or fewer they agree (none of 100 000 random 16-digit doubles differed on
+        // Linux; Apple's is not run here).
         for short in ["0.3000000000000000", "-1234.567", "2.146183727904518e-11", "42315.23049734208"] {
             #expect(try JSONValue.parse(Data(short.utf8)) == .number(Double(short)!), "\(short)")
         }

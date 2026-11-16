@@ -103,11 +103,11 @@ import Library
         mem.set(Data(#""soon""#.utf8), forKey: TimingSettings.offsetKey)
         mem.set(Data("[1,2,3]".utf8), forKey: TimingSettings.panelFrameKey("map", posture: "landscape"))
         mem.set(Data("-5".utf8), forKey: TimingSettings.pitLossKey(14))
-        mem.set(Data("1".utf8), forKey: TimingSettings.speedOnMobileDataKey)
+        mem.set(Data("1".utf8), forKey: TimingSettings.showWholeRaceKey)
         #expect(s.offsetMs == -7000)
         #expect(s.panelFrame("map", posture: "landscape") == nil)
         #expect(s.pitLossMs(circuitKey: 14) == nil)
-        #expect(s.speedOnMobileData == true)
+        #expect(s.showWholeRace == false)  // a number is not a Bool
 
         // A value that can't be encoded (not a number) keeps the stored one.
         s.setMapTurn(30, circuitKey: 14)
