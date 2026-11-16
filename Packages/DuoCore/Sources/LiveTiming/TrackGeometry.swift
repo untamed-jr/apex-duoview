@@ -39,8 +39,9 @@ public struct TrackGeometry: Sendable {
     private let along: [Double]
     public let length: Double
 
-    /// True when the lap runs counter-clockwise in the archive's y-up orientation (the sign of the
-    /// outline's area). On screen, where y is flipped, it then runs clockwise.
+    /// True when the lap runs counter-clockwise as the track map draws it (Android's meaning). The
+    /// map keeps the archive's y-up orientation (`MapTransform` turns it and flips y into screen
+    /// coordinates, so up stays up), so the sign of the outline's area decides.
     public let counterClockwise: Bool
 
     public init(outline: [TrackPoint]) {
@@ -79,7 +80,10 @@ public struct TrackGeometry: Sendable {
         let i = nearestIndex(to: p)
         var best = along[i]
         var bestD = Double.infinity
-        for j in [(i - 1 + n) % n, i] {
+        // The segments either side of the nearest point: into it, then out of it. (No array:
+        // this runs for every car on every frame.)
+        for side in 0..<2 {
+            let j = side == 0 ? (i - 1 + n) % n : i
             let k = (j + 1) % n
             let a = outline[j], b = outline[k]
             let vx = b.x - a.x, vy = b.y - a.y

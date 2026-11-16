@@ -9,9 +9,11 @@ import F1TV
     static let strip = [TrackPoint(x: 0, y: 0), TrackPoint(x: 1000, y: 0), TrackPoint(x: 1000, y: 100), TrackPoint(x: 0, y: 100)]
 
     /// A car lapping a square of side `side` from (`ox`, `oy`) counter-clockwise, `step` units per
-    /// sample, `periodMs` apart, for `laps` laps. `cut` drops samples whose index is in it.
+    /// sample, `periodMs` apart, for `laps` laps. `cut` drops samples whose index is in it;
+    /// `zeroAt` sends (0,0) in place of those samples, as F1's feed sometimes does.
     static func car(laps: Int, side: Double = 6000, step: Double = 250, periodMs: Int64 = 250,
-                    origin: TrackPoint = TrackPoint(x: 1000, y: 1000), zeros: Int = 0, cut: Range<Int> = 0..<0) -> CarTrack {
+                    origin: TrackPoint = TrackPoint(x: 1000, y: 1000), zeros: Int = 0, cut: Range<Int> = 0..<0,
+                    zeroAt: Set<Int> = []) -> CarTrack {
         var times: [UTCms] = [], xs: [Float] = [], ys: [Float] = []
         let t0: UTCms = 1_000_000
         for z in 0..<zeros {
@@ -30,6 +32,7 @@ import F1TV
             let index = zeros + i
             if cut.contains(index) { continue }
             times.append(t0 + Int64(index) * periodMs)
+            if zeroAt.contains(index) { xs.append(0); ys.append(0); continue }
             xs.append(Float(origin.x + dx)); ys.append(Float(origin.y + dy))
         }
         return CarTrack(number: "1", times: times, xs: xs, ys: ys)
@@ -128,6 +131,20 @@ import F1TV
             #expect((x == 0 || x == 6000 || y == 0 || y == 6000) && x >= 0 && x <= 6000 && y >= 0 && y <= 6000)
         }
         // And the geometry sees one lap of it.
+        #expect(abs(TrackGeometry(outline: lap).length - 24_000) < 400)
+    }
+
+    @Test func traceSkipsAZeroInTheMiddleOfALap() throws {
+        // The quickest loops tie, so the first (from a tenth of the way in, sample 48) is kept;
+        // sample 150 is inside it, and is (0,0).
+        let car = Self.car(laps: 2, step: 100, zeroAt: [150])
+        let lap = try #require(OutlineTracer.trace(car, from: 0, to: .max))
+        #expect(!lap.contains(TrackPoint(x: 0, y: 0)))
+        #expect((237...240).contains(lap.count))  // one sample fewer than a clean lap
+        for p in lap {
+            let x = p.x - 1000, y = p.y - 1000
+            #expect((x == 0 || x == 6000 || y == 0 || y == 6000) && x >= 0 && x <= 6000 && y >= 0 && y <= 6000)
+        }
         #expect(abs(TrackGeometry(outline: lap).length - 24_000) < 400)
     }
 
