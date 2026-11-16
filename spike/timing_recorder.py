@@ -1172,21 +1172,21 @@ def run_fixtures(token, directory, ua=ANDROID_UA):
         f.write(clean_reason(json.dumps(summary, indent=2, ensure_ascii=False), work) + "\n")
     written.append("fixtures-summary.json")
     say("Step 6: zip")
-    part = zip_path + ".part"
+    part = zip_path + ".part"  # gets its final name only after the self-check below has passed
     with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as z:
         for rel in written:
             z.write(os.path.join(work, rel), FIXTURES_NAME + "/" + rel)
-    os.replace(part, zip_path)
     step("zip", "ok", "%d files" % len(written))
 
     # Self-check: the sign-in must not be anywhere in the zip.
     say("Step 7: check that the zip holds no sign-in details")
-    if zip_has_secret(zip_path, token):
-        os.remove(zip_path)
+    if zip_has_secret(part, token):
+        os.remove(part)
         shutil.rmtree(work, ignore_errors=True)
         say("  -> failed: the sign-in was found inside the zip, so the zip was DELETED. Do not upload anything;")
         say("     tell the developers (this is a bug in the script).")
         return 1
+    os.replace(part, zip_path)
     step("token check", "ok", "no sign-in details in the zip")
     shutil.rmtree(work, ignore_errors=True)  # the zip is the only thing to upload
 
@@ -1273,15 +1273,17 @@ def main(argv=None):
         say("Fixtures for the iOS app's beta.3 (São Paulo Grand Prix %d). Sign-in given as: %s" % (FIXTURES_YEAR, kind))
         say("This downloads a few hundred MB at most and takes a few minutes. Leave the window open.")
         say("")
+        part = os.path.join(directory, FIXTURES_NAME + ".zip.part")  # never an unchecked zip left behind
         try:
             return run_fixtures(token, directory)
         except KeyboardInterrupt:
-            for leftover in (os.path.join(directory, FIXTURES_NAME + ".zip.part"),):
-                if os.path.exists(leftover):
-                    os.remove(leftover)
+            if os.path.exists(part):
+                os.remove(part)
             say("\nStopped by Ctrl+C; no zip was made. Run the same command again.")
             return 1
         except Exception as e:  # never show a traceback that could hold more than it should
+            if os.path.exists(part):
+                os.remove(part)
             say("Stopped by an unexpected error: %s: %s" % (type(e).__name__, clean_reason(e)))
             say("No zip was made. Send this message (it holds no sign-in details) to the developers.")
             return 1
