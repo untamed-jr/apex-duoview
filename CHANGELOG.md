@@ -4,7 +4,30 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
-Nothing yet.
+### v1.0-beta.3, build 11 — data on replays
+
+- **Track map on replays.** On a race, sprint, qualifying or practice replay, "Map" in the
+  multiview controls (and beside Close in the single-feed player) shows the track map as a
+  floating panel: every car in its team colour with its three-letter code, dimmed in the pits,
+  the start/finish line, corner numbers, yellow sectors, and the outline in yellow under a safety
+  car or VSC (red for a red flag), with a caption. It follows the picture: the stream's clock less
+  7 s, with −1 s / +1 s on the panel and in Settings › Track map ("Reset to −7 s"). ⟲ ⟳ turn the
+  map, remembered per circuit. Panels move by their header, resize from the corner or with a
+  pinch, and remember their place per fold. The tower panel is a placeholder until build 12.
+- **Timeline marks** under the multiview scrubber: lights out (session start outside races),
+  the chequered flag, and safety car, VSC and red flag periods.
+- Shows, highlights and press conferences get no data panels ("No timing for this session").
+- Settings › Track map also has "Show the whole race on the Scrub Deck" and "Speed readouts on
+  mobile data" (used from later builds).
+
+### Untested — check later (build 11)
+
+- The zero-warnings build, and the map moving with the São Paulo replay within about a second;
+  −1 s / +1 s; how far the TRACKER tile runs ahead of the world feed (owner check T-B1).
+- The archive accepting the F1 TV token from the app; the retry line when offline.
+- Dragging, resizing and pinching the panels, and their places per fold; AVKit's own controls
+  in the single-feed player with the panels off and on.
+- The timeline marks' positions against the scrubber's track.
 
 ## v1.0-beta.2 — Multiview and fold (2026-11-14)
 
