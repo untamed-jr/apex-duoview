@@ -85,9 +85,19 @@ listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Privacy
 
-In beta.1 the app talks only to F1's servers, with your own sign-in. Later betas will also fetch
-MultiViewer's public circuit data. There are no analytics, no accounts of its own and no servers in between. Your F1 TV
-sign-in stays on your phone.
+The app talks to F1's servers with your own sign-in, and to MultiViewer for circuit maps. There
+are no analytics, no accounts of its own and no servers in between. Your F1 TV sign-in stays on
+your phone.
+
+- **F1 TV** for the catalogue and the video.
+- **F1's live timing** (`livetiming.formula1.com`) for the track map and the rest of the race
+  data, from beta.3. It takes the same F1 TV sign-in as the video; the sign-in goes to that host
+  only, never to anyone else, and is never written into a file or a log.
+- **MultiViewer's circuit data** (`api.multiviewer.app`) for each track's outline, corners and
+  marshal sectors, from beta.3. Those requests carry nothing about you or your sign-in.
+
+Circuit outlines are kept in the app's caches on your phone, so each track is fetched once; the
+timing itself is loaded when you watch and holds timing only.
 
 ## Credits
 
