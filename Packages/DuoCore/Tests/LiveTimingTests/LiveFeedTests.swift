@@ -309,6 +309,23 @@ struct LiveFeedTests {
         #expect(Backfill.isComplete(archiveLast: try #require(Backfill.archiveLast(full.positions)), joinedAt: joined))
     }
 
+    @Test func topUpWhenTheSnapshotIsOlderThanItsStamp() async throws {
+        let replay = try ArchiveReplay()
+        let archive = try await ArchiveReplay.archiveSession()
+        // A car crosses the line a second before the snapshot arrives, but the snapshot's state
+        // is from 3 s before that: the crossing comes as a change after it.
+        let crossing = try #require(archive.timing.lineCrossings(upTo: .max).map(\.at).filter { $0 > Self.lightsOut + 240_000 }.min())
+        let joined = crossing + 1_000
+        let state = joined - 3_000
+        var feed = LiveFeed()
+        for m in replay.snapshot(at: joined, through: state) + replay.changes.filter({ $0.utc > state }) { feed.apply(m) }
+        feed.topUp(archive: replay.streams, archiveStart: replay.start)
+        let live = try #require(feed.session())
+        #expect(crossings(live.timing) == crossings(archive.timing))
+        #expect(live.flags.sectorFlags.count == archive.flags.sectorFlags.count)
+        expectSame(live, archive)
+    }
+
     @Test func topicPatchRebuildsTheNewState() throws {
         func j(_ s: String) throws -> JSONValue { try JSONValue.parse(Data(s.utf8)) }
         let cases: [(String, String)] = [
@@ -332,6 +349,15 @@ struct LiveFeedTests {
             let patch = try #require(TopicPatch.delta(from: o, to: n), "\(old) -> \(new)")
             #expect(TopicMerge.merge(o, patch) == n, "\(old) -> \(new)")
         }
+        // A list whose first entries came as changes, then whole in a snapshot: only the new
+        // entry is sent, and the list stays index-keyed.
+        let indexed = try j(#"{"Messages":{"0":{"m":1}}}"#)
+        let whole = try j(#"{"Messages":[{"m":1},{"m":2}]}"#)
+        #expect(try TopicPatch.delta(from: indexed, to: whole) == j(#"{"Messages":{"1":{"m":2}}}"#))
+        #expect(try TopicMerge.merge(indexed, #require(TopicPatch.delta(from: indexed, to: whole))) == j(#"{"Messages":{"0":{"m":1},"1":{"m":2}}}"#))
+        #expect(TopicPatch.delta(from: indexed, to: try j(#"{"Messages":[{"m":1}]}"#)) == nil)
+        let shrunk = try #require(TopicPatch.delta(from: try j(#"{"L":{"0":1,"1":2,"2":3}}"#), to: try j(#"{"L":[1]}"#)))
+        #expect(try TopicMerge.merge(j(#"{"L":{"0":1,"1":2,"2":3}}"#), shrunk) == j(#"{"L":{"0":1}}"#))
         // At the top, an array becoming an object has no parent to replace it in: the whole new
         // state is the best there is (F1's topics are objects, or Position's string).
         #expect(try TopicPatch.delta(from: j("[1,2]"), to: j(#"{"x":1}"#)) == j(#"{"x":1}"#))

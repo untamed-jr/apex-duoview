@@ -145,18 +145,30 @@ public struct LiveFeed: Sendable {
     }
 
     /// Tops the feed up from F1's archive (Android's backfill): each topic's archive lines
-    /// (`.jsonStream`, offsets from `archiveStart`) before the join replace its opening line,
-    /// followed at the join by the difference to the opening snapshot (the archive can lag).
-    /// A topic with no archive lines before the join keeps its opening line. Called again with
+    /// (`.jsonStream`, offsets from `archiveStart`) replace its opening line, up to the join or
+    /// the topic's first live line, whichever is earlier. The snapshot is stamped when it
+    /// arrives but holds the state from a little before, so changes between the two come live
+    /// too: cutting the archive at the first of them keeps each from counting twice.
+    ///
+    /// When the topic's archive stops `Backfill.completeGapMs` or more before the join (it
+    /// lags), the difference from its last state to the opening snapshot follows at the join,
+    /// so the state on joining is right. Closer than that, as Android, there is none: the
+    /// snapshot's state may be older than the archive's last lines, and a difference back to
+    /// it would undo laps the live changes then count again.
+    ///
+    /// A topic with no archive lines before the cut keeps its opening line. Called again with
     /// a fuller archive, the newer lines replace the older.
     public mutating func topUp(archive: [String: [StreamLine]], archiveStart: UTCms) {
         guard let start = streamStart, let joined = joinedAt else { return }
         for (topic, archived) in archive where LiveRecording.records(topic) {
-            let before = Backfill.rebase(archived, archiveStart: archiveStart, newStart: start, until: joined)
-            guard !before.isEmpty else { continue }
+            let firstLive = deltas[topic]?.first.map { F1Values.add(start, $0.offsetMs) } ?? joined
+            let before = Backfill.rebase(archived, archiveStart: archiveStart, newStart: start, until: min(joined, firstLive))
+            guard let last = before.last else { continue }
             past[topic] = before
             joinPatch[topic] = nil
-            guard let open = opening[topic] else { continue }
+            guard let open = opening[topic],
+                  F1Values.sub(joined, F1Values.add(start, last.offsetMs)) >= Backfill.completeGapMs
+            else { continue }
             let reached = before.reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
             if let patch = TopicPatch.delta(from: reached, to: TopicMerge.merge(.null, open.json)) {
                 joinPatch[topic] = StreamLine(offsetMs: F1Values.sub(joined, start), json: patch)
@@ -167,7 +179,8 @@ public struct LiveFeed: Sendable {
 
 /// The smallest F1-style delta that `TopicMerge.merge` turns one state into another with:
 /// `merge(old, delta(from: old, to: new)!) == new` for any `new` that `merge(.null, _)` leaves
-/// as it is (a merged state), and nil when they are equal.
+/// as it is (a merged state), and nil when they are equal. One exception: a list held in its
+/// index-keyed form ({"0": …, "1": …}) stays in that form, with the new list's entries.
 enum TopicPatch {
     private enum Patch {
         case same
@@ -222,6 +235,25 @@ enum TopicPatch {
                 case .replace: return .delta(new)
                 }
             }
+            return members.isEmpty ? .same : .delta(.object(members))
+        case (.object(let o), .array(let n)) where !o.isEmpty && o.keys.allSatisfy({ Int($0).map { $0 >= 0 } ?? false }):
+            // A list whose first entries came as changes ({"0": …}) and now comes whole: compared
+            // entry by entry, so entries already there aren't sent again. The result keeps the
+            // index-keyed form, which the parsers read as the same list.
+            var members: [String: JSONValue] = [:]
+            for (i, value) in n.enumerated() {
+                guard let was = o[String(i)] else {
+                    members[String(i)] = value
+                    continue
+                }
+                switch patch(was, value) {
+                case .same: continue
+                case .delta(let d): members[String(i)] = d
+                case .replace: return .delta(new)
+                }
+            }
+            let gone = o.keys.filter { Int($0).map { $0 >= n.count } ?? true }
+            if !gone.isEmpty { members["_deleted"] = .array(gone.sorted().map { .string($0) }) }
             return members.isEmpty ? .same : .delta(.object(members))
         case (.array, .object):
             return .replace
