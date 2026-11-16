@@ -45,6 +45,107 @@ struct TimingSnapshot: Equatable, Sendable {
         sessionStatus: nil, pictureTime: nil)
 }
 
+/// The session header over the tower, at picture time: "Lap 23/71" in a race, else the session
+/// clock; the track status; the weather.
+struct SessionHeaderState: Equatable, Sendable {
+    /// "Lap 23/71", "1:04:12", or "" before either is known.
+    var progress: String
+    var status: TrackStatusKind
+    /// "Air 24° · Track 41°", or "" without weather.
+    var weather: String
+    var raining: Bool
+
+    static let empty = SessionHeaderState(progress: "", status: .clear, weather: "", raining: false)
+
+    init(progress: String, status: TrackStatusKind, weather: String, raining: Bool) {
+        self.progress = progress
+        self.status = status
+        self.weather = weather
+        self.raining = raining
+    }
+
+    /// From the header and the flags at picture time. `race`: the lap count shows (F1's LapCount
+    /// is only sent for races); otherwise the clock.
+    init(header: SessionHeader, flags: FlagState, race: Bool) {
+        self.init(
+            progress: TimingText.progress(header, race: race),
+            status: flags.status,
+            weather: TimingText.weather(air: header.airTemp, track: header.trackTemp),
+            raining: header.raining)
+    }
+}
+
+/// A driver card over an onboard at picture time: the DuoCore card and the speed readout.
+struct DriverCardState: Equatable, Sendable {
+    var card: DriverCardModel
+    /// Km/h from the car data at picture time; nil when there is none yet, it is more than 5 s
+    /// old, or F1 sent no speed channel (absent is never 0).
+    var speedKmh: Int?
+}
+
+/// Your driver's rival in a battle, for the map's Battle chip (tapping it opens their onboard).
+struct BattleRival: Equatable, Sendable {
+    var number: String
+    var tla: String
+
+    /// The car the favourite (a racing number) battles with among the tower's glowing rows: the
+    /// one ahead first, as the rows run in position order. Nil without a favourite or a battle.
+    static func from(_ rows: [TowerRow], favourite: String?) -> BattleRival? {
+        guard let favourite, rows.contains(where: { $0.number == favourite && $0.battle }),
+              let row = rows.first(where: { $0.battle && $0.number != favourite }) else { return nil }
+        return BattleRival(number: row.number, tla: row.tla)
+    }
+}
+
+/// The fixed texts the tower, header and cards show. Plain functions, no SwiftUI.
+enum TimingText {
+    /// "Lap 23/71" in a race (or "Lap 23" before the total is known), else the session clock
+    /// ("1:04:12", "18:00"); "" when neither is known.
+    static func progress(_ header: SessionHeader, race: Bool) -> String {
+        if race, let lap = header.lap {
+            return header.totalLaps.map { "Lap \(lap)/\($0)" } ?? "Lap \(lap)"
+        }
+        guard let seconds = header.clockRemaining else { return "" }
+        return clock(seconds)
+    }
+
+    /// Whole seconds as "h:mm:ss", or "m:ss" under an hour.
+    static func clock(_ seconds: Int) -> String {
+        let s = max(seconds, 0)
+        let h = s / 3600, m = s / 60 % 60, r = s % 60
+        func two(_ n: Int) -> String { n < 10 ? "0\(n)" : "\(n)" }
+        return h > 0 ? "\(h):\(two(m)):\(two(r))" : "\(m):\(two(r))"
+    }
+
+    /// The track status as the header words it: "Green", "Yellow", or the flag's own label.
+    static func status(_ kind: TrackStatusKind) -> String {
+        switch kind {
+        case .clear: return "Green"
+        case .yellow: return "Yellow"
+        default: return kind.label ?? ""
+        }
+    }
+
+    /// "Air 24° · Track 41°", either part alone, or "" with neither.
+    static func weather(air: Double?, track: Double?) -> String {
+        func degrees(_ value: Double) -> String { "\(Int(value.rounded()))°" }
+        var parts: [String] = []
+        if let air, air.isFinite { parts.append("Air " + degrees(air)) }
+        if let track, track.isFinite { parts.append("Track " + degrees(track)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Km/h in the phone's units: km/h with the metric system, mph with the US and UK ones.
+    static func speed(kmh: Int, metric: Bool) -> String {
+        metric ? "\(kmh) km/h" : "\(Int((Double(kmh) * 0.621_371).rounded())) mph"
+    }
+
+    /// Whether this measurement system shows km/h (only the metric one: the UK's roads are mph).
+    static func usesKilometres(_ system: Locale.MeasurementSystem) -> Bool {
+        system == .metric
+    }
+}
+
 /// One car dot on the map.
 struct MapCar: Equatable, Sendable {
     var number: String
@@ -55,7 +156,7 @@ struct MapCar: Equatable, Sendable {
     var point: TrackPoint
     /// In the pits, knocked out or stopped: drawn dimmer and smaller.
     var dimmed: Bool
-    /// A flying lap in qualifying. Always false until the lap states arrive (Task 8 / build 12).
+    /// A flying lap in qualifying (`LapStates`).
     var flyingRing: Bool
 }
 
@@ -235,7 +336,8 @@ enum PanelLayout {
             let size = CGSize(width: 320, height: 230)
             return clamped(CGRect(x: bounds.maxX - size.width - 12, y: top, width: size.width, height: size.height), in: bounds)
         case .tower:
-            let size = CGSize(width: 240, height: 300)
+            // Room for every column (position, code, last lap, gap, interval, tyre) and the header.
+            let size = CGSize(width: 300, height: 360)
             return clamped(CGRect(x: bounds.minX + 12, y: top, width: size.width, height: size.height), in: bounds)
         }
     }

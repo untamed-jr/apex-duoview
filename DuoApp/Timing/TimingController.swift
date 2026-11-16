@@ -18,8 +18,14 @@ import Observation
 ///   `mapState(at:)`, which the map asks for at the display's frame rate. The timeline marks
 ///   (`TimelineMark.marks`) show lights out and the chequered flag always, and flag periods only
 ///   up to picture time unless "Show the whole race" is on.
-/// - The 2 Hz tick runs only while something reads it: a floating panel showing, or the
-///   multiview's timeline marks.
+/// - The 2 Hz tick runs only while something reads it: a floating panel showing, the multiview's
+///   timeline marks, or a driver card over an onboard (`setCardFeeds`).
+/// - The tower (`tower`), its header (`header`), the battle (`battleRival`) and the cards (`cards`)
+///   are published at 2 Hz as separate values, each assigned only when it changed, so a view reads
+///   only what it shows.
+/// - Lap states (`LapStates`) are built once per loaded session, never per frame: the map's flying
+///   ring and tap-a-car's ranking read them.
+/// - The speed readouts come from `CarDataLoader`, started once a card shows.
 /// - The circuit comes from MultiViewer (or is traced from the cars), kept in Caches.
 ///
 /// Never logs; the token goes only to F1's archive, inside `TimingArchive`.
@@ -55,6 +61,20 @@ final class TimingController {
     /// Settings › Track map switches (mirrors of the store, which isn't observed).
     private(set) var showWholeRace: Bool
     private(set) var speedOnMobileData: Bool
+    /// The timing tower at picture time, in running order; empty while the tower and the map are
+    /// both hidden.
+    private(set) var tower: [TowerRow] = []
+    /// The tower's gap column title: "Leader" in a race, "Fastest" otherwise.
+    private(set) var gapHeader = "Leader"
+    /// The session header over the tower.
+    private(set) var header: SessionHeaderState = .empty
+    /// Your driver's rival in a battle (within 1.0 s for two updates, races only), for the map's
+    /// Battle chip; nil otherwise.
+    private(set) var battleRival: BattleRival?
+    /// The driver cards at picture time, by racing number, for the onboards showing.
+    private(set) var cards: [String: DriverCardState] = [:]
+    /// Channel ids whose cards the viewer hid (mirrors `TimingSettings.hiddenCards`).
+    private(set) var hiddenCards: Set<Int>
 
     @ObservationIgnored let settings: TimingSettings
     @ObservationIgnored private let archive: TimingArchive
@@ -73,6 +93,16 @@ final class TimingController {
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var mapTask: Task<Void, Never>?
     @ObservationIgnored private var tickTask: Task<Void, Never>?
+    /// The loaded session's lap states, built once when it loads.
+    @ObservationIgnored private var lapStates: LapStates?
+    /// The archive folder and key of the loaded session, for its car data.
+    @ObservationIgnored private var archiveSession: ArchiveSession?
+    /// The onboards showing, channel id → racing number, from the attached player.
+    @ObservationIgnored private var cardFeeds: [Int: String] = [:]
+    /// The speed readouts' car data, once a card has shown.
+    @ObservationIgnored private var carData: CarDataLoader?
+    /// Your driver's last name (Settings › Multiview › My driver), for the battle highlight.
+    @ObservationIgnored private var favouriteDriver: String?
 
     init(archive: TimingArchive, settings: TimingSettings, http: any HTTPClient) {
         self.archive = archive
@@ -81,12 +111,14 @@ final class TimingController {
         offsetMs = settings.offsetMs
         showWholeRace = settings.showWholeRace
         speedOnMobileData = settings.speedOnMobileData
+        hiddenCards = settings.hiddenCards
     }
 
     isolated deinit {
         loadTask?.cancel()
         mapTask?.cancel()
         tickTask?.cancel()
+        carData?.cancel()
     }
 
     /// Whether the data views (the Map button, the panels) show: while loading, when loaded, and
@@ -111,7 +143,13 @@ final class TimingController {
                 clock: @escaping @MainActor () -> (programDate: Date?, playerSeconds: Double)) {
         if contentId == item.contentId, status != .idle {
             self.clock = clock
-            ownerID = owner.map(ObjectIdentifier.init)
+            let newOwner = owner.map(ObjectIdentifier.init)
+            // Another player took over: its own cards come with its next `setCardFeeds`.
+            if ownerID != newOwner, !cardFeeds.isEmpty {
+                cardFeeds = [:]
+                if !cards.isEmpty { cards = [:] }
+            }
+            ownerID = newOwner
             wantsMarks = timelineMarks
             // The new clock may change the status (estimated or not) even with no reader ticking.
             publish()
@@ -156,8 +194,17 @@ final class TimingController {
         wantsMarks = false
         circuitKey = nil
         loaded = nil
+        lapStates = nil
+        archiveSession = nil
+        cardFeeds = [:]
+        carData?.cancel()
+        carData = nil
         if status != .idle { status = .idle }
         if snapshot != .empty { snapshot = .empty }
+        if !tower.isEmpty { tower = [] }
+        if header != .empty { header = .empty }
+        if battleRival != nil { battleRival = nil }
+        if !cards.isEmpty { cards = [:] }
         if !timelineMarks.isEmpty { timelineMarks = [] }
         map = nil
         mapMessage = nil
@@ -190,30 +237,13 @@ final class TimingController {
     /// stopped, and left out once retired; the flags at `t`; the safety car's dot just ahead of
     /// the leader while it is out. Cheap enough for every frame.
     func mapState(at t: UTCms) -> MapState {
-        guard let loaded else { return .empty }
-        let timing = loaded.timing.at(t)
-        var cars: [MapCar] = []
-        cars.reserveCapacity(loaded.positions.cars.count)
-        var leader: TrackPoint?
-        for (number, track) in loaded.positions.cars {
-            let state = timing[number]
-            if state?.retired == true { continue }
-            guard let point = track.mapPoint(at: t) else { continue }
-            if state?.position == 1 { leader = point }
-            let driver = loaded.drivers[number]
-            cars.append(MapCar(
-                number: number,
-                tla: driver?.tla ?? number,
-                colour: driver?.teamColour ?? "",
-                point: point,
-                dimmed: state.map { $0.inPit || $0.knockedOut || $0.stopped } ?? false,
-                flyingRing: false))
-        }
+        guard let loaded, let lapStates else { return .empty }
         // Dimmed cars underneath, then from the back up, so the leader is drawn on top.
-        cars.sort { a, b in
-            if a.dimmed != b.dimmed { return a.dimmed }
-            let pa = timing[a.number]?.position ?? Int.max, pb = timing[b.number]?.position ?? Int.max
-            return pa != pb ? pa > pb : a.number < b.number
+        let visible = MapCars.visible(at: t, session: loaded, lapStates: lapStates)
+        let leader = visible.first { $0.position == 1 }?.point
+        let cars = visible.map {
+            MapCar(number: $0.number, tla: $0.tla, colour: $0.teamColour, point: $0.point, dimmed: $0.dimmed,
+                   flyingRing: $0.flying)
         }
         let flags = loaded.flags.at(t)
         var safetyCar: TrackPoint?
@@ -282,6 +312,63 @@ final class TimingController {
     func setSpeedOnMobileData(_ on: Bool) {
         settings.speedOnMobileData = on
         speedOnMobileData = settings.speedOnMobileData
+        carData?.setAllowsExpensive(speedOnMobileData)
+    }
+
+    /// Settings › Multiview › My driver (a last name), for the battle highlight; nil turns it off.
+    func setFavouriteDriver(_ lastName: String?) {
+        guard favouriteDriver != lastName else { return }
+        favouriteDriver = lastName
+        publish()
+    }
+
+    // MARK: Driver cards and tap-a-car
+
+    /// The onboards the attached player shows (`owner`), channel id → racing number: each gets a
+    /// card unless hidden, and while one does the tick runs and the car data downloads. Ignored
+    /// from a player that isn't attached.
+    func setCardFeeds(_ feeds: [Int: String], owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner), cardFeeds != feeds else { return }
+        cardFeeds = feeds
+        cardsChanged()
+    }
+
+    /// "Hide card" / "Show card" on a tile: per channel, remembered.
+    func toggleCard(channelId: Int) {
+        _ = settings.toggleHiddenCard(channelId)
+        hiddenCards = settings.hiddenCards
+        cardsChanged()
+    }
+
+    /// The racing numbers whose cards show.
+    private var cardCars: Set<String> {
+        Set(cardFeeds.filter { !hiddenCards.contains($0.key) }.map(\.value))
+    }
+
+    private func cardsChanged() {
+        updateTicking()
+        startCarDataIfShown()
+        publish()
+    }
+
+    /// Each car's lap state at picture time, for tap-a-car's ranking; empty before anything loads.
+    func lapStatesNow() -> [String: LapState] {
+        guard let lapStates, let t = pictureTime else { return [:] }
+        return lapStates.at(t)
+    }
+
+    /// The car data downloads once a card shows (spec: as soon as an onboard is showing), and
+    /// goes on to the end of the file once started.
+    private func startCarDataIfShown() {
+        guard carData == nil, loaded != nil, !cardCars.isEmpty, let archiveSession, let loaded else { return }
+        let loader = CarDataLoader(
+            archive: archive,
+            sessionPath: archiveSession.path,
+            cacheName: CarDataLoader.cacheName(key: archiveSession.key, path: archiveSession.path),
+            streamStart: loaded.streamStart,
+            allowsExpensive: speedOnMobileData)
+        carData = loader
+        loader.start()
     }
 
     // MARK: Loading
@@ -292,8 +379,8 @@ final class TimingController {
             let outcome = await fetch(ref: ref)
             guard generation == mine, !Task.isCancelled else { return }
             switch outcome {
-            case .found(let session):
-                adopt(session, ref: ref, generation: mine)
+            case .found(let found):
+                adopt(found.loaded, archiveSession: found.session, ref: ref, generation: mine)
                 return
             case .unavailable:
                 status = .unavailable(Self.noTiming)
@@ -308,10 +395,14 @@ final class TimingController {
     }
 
     /// The session (by the archive's index), then its files: off the main actor.
-    private func fetch(ref: TimingRef) async -> ArchiveOutcome<LoadedSession> {
+    private func fetch(ref: TimingRef) async -> ArchiveOutcome<FoundSession> {
         switch await archive.lookup(for: ref, watched: nil) {
         case .found(let session):
-            return await TimingArchive.loadOutcome(session, using: archive)
+            switch await TimingArchive.loadOutcome(session, using: archive) {
+            case .found(let loaded): return .found(FoundSession(session: session, loaded: loaded))
+            case .unavailable: return .unavailable
+            case .failed: return .failed
+            }
         case .unavailable:
             return .unavailable
         case .failed:
@@ -319,14 +410,19 @@ final class TimingController {
         }
     }
 
-    private func adopt(_ session: LoadedSession, ref: TimingRef, generation mine: Int) {
+    private func adopt(_ session: LoadedSession, archiveSession: ArchiveSession, ref: TimingRef, generation mine: Int) {
         loaded = session
+        self.archiveSession = archiveSession
+        // A snapshot of this session's timing: built once here, never per frame.
+        lapStates = LapStates(session: session)
+        gapHeader = Tower.gapHeader(session: session)
         let key = session.info.circuitKey ?? ref.circuitKey
         circuitKey = key
         mapTurn = key.map { settings.mapTurn(circuitKey: $0) } ?? 0
         status = .ready
         publish()
         updateTicking()
+        startCarDataIfShown()
         let year = session.info.year ?? ref.year
         let http = http
         mapTask = Task { [weak self] in
@@ -368,9 +464,10 @@ final class TimingController {
 
     // MARK: The 2 Hz snapshot
 
-    /// Whether the tick has a reader: a session loaded, and a panel showing or the marks shown.
+    /// Whether the tick has a reader: a session loaded, and a panel showing, the marks shown or a
+    /// driver card showing.
     private var needsTicking: Bool {
-        loaded != nil && (wantsMarks || !panels.isEmpty)
+        loaded != nil && (wantsMarks || !panels.isEmpty || !cardCars.isEmpty)
     }
 
     /// Starts or stops the tick to match `needsTicking`.
@@ -399,7 +496,8 @@ final class TimingController {
     }
 
     /// Reads picture time once and publishes what changed: the status (estimated or not), the
-    /// snapshot and the timeline marks.
+    /// snapshot, the timeline marks, and the tower, header, battle and cards when something shows
+    /// them.
     private func publish() {
         guard let loaded, let now = reading() else { return }
         let state: TimingStatus = now.estimated ? .estimated : .ready
@@ -418,5 +516,45 @@ final class TimingController {
             ? TimelineMark.marks(for: loaded, pictureTime: t, playerSeconds: now.playerSeconds, wholeRace: showWholeRace)
             : []
         if timelineMarks != marks { timelineMarks = marks }
+        publishPanels(loaded, at: t)
+        publishCards(loaded, at: t)
     }
+
+    /// The tower, its header and the battle, while a panel shows (the tower, or the map with its
+    /// Battle chip).
+    private func publishPanels(_ loaded: LoadedSession, at t: UTCms) {
+        guard !panels.isEmpty else {
+            if !tower.isEmpty { tower = [] }
+            if battleRival != nil { battleRival = nil }
+            return
+        }
+        let favourite = favouriteDriver.flatMap { Tower.carNumber(forDriver: $0, in: loaded) }
+        let rows = Tower.rows(at: t, session: loaded, favourite: favourite)
+        if tower != rows { tower = rows }
+        let rival = BattleRival.from(rows, favourite: favourite)
+        if battleRival != rival { battleRival = rival }
+        let next = SessionHeaderState(header: loaded.header.at(t), flags: loaded.flags.at(t), race: loaded.info.isRace)
+        if header != next { header = next }
+    }
+
+    /// The cards of the onboards showing, with their speed readouts.
+    private func publishCards(_ loaded: LoadedSession, at t: UTCms) {
+        var next: [String: DriverCardState] = [:]
+        for number in cardCars {
+            guard let card = DriverCardModel.at(t, number: number, session: loaded) else { continue }
+            var speed: Int?
+            if let samples = carData?.samples(car: number, around: t),
+               let readout = CarDataWindow.readout(samples, at: t), !readout.stale {
+                speed = readout.sample.speedKmh
+            }
+            next[number] = DriverCardState(card: card, speedKmh: speed)
+        }
+        if cards != next { cards = next }
+    }
+}
+
+/// A session found in the archive and loaded: its folder and key (for the car data) and its timing.
+private struct FoundSession: Sendable {
+    var session: ArchiveSession
+    var loaded: LoadedSession
 }
