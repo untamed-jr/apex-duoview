@@ -31,6 +31,29 @@ Replay data from a finished session (the same files the Android app reads for re
         pbpaste | python3 timing_recorder.py --archive 2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/
     downloads that session's static archive topics into a folder  archive_<session>/  next to this
     script. Also needs the sign-in (the archive wants the same token as a Bearer header).
+
+Fixtures for the iOS app's beta.3 (owner check T-A; one run, about 10 minutes):
+    1. Copy the login-session cookie exactly as in step 1 above (sign in at account.formula1.com,
+       copy the cookie's value so it is on the clipboard).
+    2. In Terminal, run these two lines:
+           cd ~/apexview-duo && git pull
+           pbpaste | python3 spike/timing_recorder.py --fixtures
+    3. It fetches, for the São Paulo Grand Prix 2026: the year's Index.json; the Race and
+       Qualifying archive files (and Sprint / Sprint Qualifying if the weekend had them), with
+       WeatherData where F1 has it; for each session a check of the car-data file
+       (CarData.z.jsonStream) that records its size and whether F1 serves it in byte ranges and
+       keeps only its first 1 MB; and the Interlagos circuit file from MultiViewer (sent without
+       your sign-in). It prints one ok / failed line per step and then the path and size of
+       ONE file:
+           ~/apexview-duo/spike/beta3-fixtures.zip
+    4. Upload that zip (only that file) for the developers. It holds public timing data only:
+       the script checks the finished zip for your sign-in and deletes it if it were ever there.
+       If a step says failed, upload the zip anyway; fixtures-summary.json inside says what happened.
+       If no zip is made, the message says why (usually: sign in again and copy a fresh cookie).
+
+Circuit file only (no sign-in needed):
+        python3 timing_recorder.py --circuit 14 2026
+    saves MultiViewer's circuit file as  circuit-14-2026.json  next to this script (14 is Interlagos).
 """
 
 import argparse
@@ -41,18 +64,23 @@ import http.client
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
 import struct
 import sys
 import time
+import unicodedata
 import urllib.parse
+import zipfile
 from datetime import datetime, timezone
 
 # --- Mirrors of LiveFeed.kt / LiveTiming.kt --------------------------------------------------
 
 HUB = "https://livetiming.formula1.com/signalrcore"
 ARCHIVE_BASE = "https://livetiming.formula1.com/static/"
+# LiveTiming.kt fetchCircuit(): MultiViewer's public circuit data, fetched WITHOUT the F1 token.
+CIRCUITS_BASE = "https://api.multiviewer.app/api/v1/circuits/"
 RS = "\x1e"
 HANDSHAKE = '{"protocol":"json","version":1}'
 TOPICS = [
@@ -133,14 +161,14 @@ def decode_signin(raw):
     return value, "bare subscription token"
 
 
-def read_signin():
+def read_signin(command="pbpaste | python3 timing_recorder.py"):
     if not sys.stdin.isatty():
         raw = sys.stdin.read()
     else:
         print("Paste your F1 TV login-session cookie value (or a bare subscription token).")
         print("Input is hidden and is not stored or printed.")
         print("(If the terminal beeps or flashes, the value is too long to paste: press Ctrl+C,")
-        print(" copy the cookie, and run:  pbpaste | python3 timing_recorder.py)")
+        print(" copy the cookie, and run:  %s)" % command)
         raw = getpass.getpass("login-session / token: ")
     token, kind = decode_signin(raw)
     add_secret(token)
@@ -623,12 +651,20 @@ def archive_folder_name(path):
     return "archive_" + re.sub(r"[^\w.-]+", "_", "_".join(parts[-2:]))
 
 
-def download_one(token, url_path, dest, ua):
-    """Streams one archive file to dest. Returns (status, bytes). Status 'ok', 'missing' or an error text."""
-    url = ARCHIVE_BASE + urllib.parse.quote(url_path, safe="/")
+def archive_url(url_path):
+    return ARCHIVE_BASE + urllib.parse.quote(url_path, safe="/")
+
+
+def download_one(token, url_path, dest, ua, refused_fatal=True):
+    """Streams one archive file to dest. Returns (status, bytes). Status 'ok', 'missing' or an error text.
+    With refused_fatal=False a 401/403 is returned as 'refused (HTTP 403)' instead of stopping the run
+    (the archive answers 403 for files it hasn't published)."""
+    url = archive_url(url_path)
     conn, resp = https_request("GET", url, {"Authorization": "Bearer " + token, "User-Agent": ua})
     try:
         if resp.status in (401, 403):
+            if not refused_fatal:
+                return "refused (HTTP %d)" % resp.status, 0
             raise FatalError("F1's timing archive refused the login (HTTP %d). Sign in again and copy a fresh cookie." % resp.status)
         if resp.status == 404:
             return "missing", 0
@@ -682,24 +718,573 @@ def download_archive(token, arg, directory, ua=ANDROID_UA):
     return 0 if got else 1
 
 
+# --- Fixtures for the iOS app's beta.3 (owner check T-A) ------------------------------------
+
+FIXTURES_NAME = "beta3-fixtures"         # the work folder and the zip next to this script
+FIXTURES_YEAR = 2026
+# The weekend's sessions to fetch, in this order; each with the names F1 has used for it.
+FIXTURES_SESSIONS = [
+    ("Race", ["race"]),
+    ("Qualifying", ["qualifying"]),
+    ("Sprint", ["sprint"]),
+    ("Sprint Qualifying", ["sprint qualifying", "sprint shootout"]),
+]
+# Used only if the index can't be read or doesn't list the session (the index can lag).
+GUESSED_SESSION_PATHS = {
+    "Race": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/",
+    "Qualifying": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-07_Qualifying/",
+}
+CARDATA_FILE = "CarData.z.jsonStream"
+CARDATA_HEAD_FILE = "CarData.z.head.jsonStream"
+CARDATA_HEAD_BYTES = 1 << 20             # 1 MiB
+FIXTURE_FILES = [n for n in ARCHIVE_FILES if n != CARDATA_FILE]  # CarData is probed, not downloaded
+OPTIONAL_FILES = ["WeatherData.jsonStream", "WeatherData.json"]
+DEFAULT_CIRCUIT_KEY = 14                 # Interlagos
+PROBE_HEADERS = ["Content-Length", "Content-Range", "Accept-Ranges", "Content-Type", "Content-Encoding",
+                 "Last-Modified", "ETag"]
+
+
+def fold(text):
+    """Lower case without accents, for matching names: 'São Paulo' and 'Sao Paulo' both give 'sao paulo'."""
+    text = unicodedata.normalize("NFKD", str(text or ""))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", text.casefold()).strip()
+
+
+def parse_json_bytes(data):
+    """F1's archive JSON starts with a byte-order mark; strip it (utf-8-sig) before parsing."""
+    return json.loads(data.decode("utf-8-sig"))
+
+
+def find_meeting(index):
+    """The São Paulo meeting in a year's Index.json. Returns (meeting, how it matched) or (None, reason)."""
+    meetings = index.get("Meetings") if isinstance(index, dict) else None
+    if not isinstance(meetings, list):
+        return None, "the index has no Meetings list"
+    meetings = [m for m in meetings if isinstance(m, dict) and "test" not in fold(m.get("Name"))]
+
+    def names(m):
+        country = m.get("Country") if isinstance(m.get("Country"), dict) else {}
+        return [fold(m.get("Name")), fold(m.get("OfficialName")), fold(m.get("Location")), fold(country.get("Name"))]
+
+    tiers = [
+        ("name contains São Paulo", lambda m: any("sao paulo" in n for n in names(m)[:2])),
+        ("location is São Paulo", lambda m: "sao paulo" in names(m)[2]),
+        ("Brazil", lambda m: any(("brazil" in n or "brasil" in n) for n in names(m))),
+    ]
+    for how, test in tiers:
+        found = [m for m in meetings if test(m)]
+        if found:
+            with_race = [m for m in found if any(fold(s.get("Name")) == "race" for s in m.get("Sessions") or []
+                                                 if isinstance(s, dict))]
+            return (with_race or found)[0], how
+    return None, "no meeting named São Paulo / Sao Paulo / Brazil in the index"
+
+
+def pick_sessions(meeting):
+    """[(label, session dict)] for Race, Qualifying and, on a sprint weekend, Sprint and Sprint
+    Qualifying. Names must match exactly, so 'Sprint Qualifying' never counts as 'Qualifying'."""
+    sessions = [s for s in (meeting.get("Sessions") or []) if isinstance(s, dict)] if meeting else []
+    picked = []
+    for label, aliases in FIXTURES_SESSIONS:
+        for s in sessions:
+            if fold(s.get("Name")) in aliases:
+                picked.append((label, s))
+                break
+    return picked
+
+
+def session_folder(path):
+    """'2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/' -> '2026-11-08_Race'."""
+    last = [x for x in path.strip("/").split("/") if x][-1]
+    return re.sub(r"[^\w.-]+", "_", last)
+
+
+def fetch_bytes(url, headers, max_redirects=0):
+    """GET a small file. Returns (status, {lower-case header: value}, body). Follows up to
+    max_redirects redirects (only used for MultiViewer, which gets no sign-in)."""
+    for _ in range(max_redirects + 1):
+        conn, resp = https_request("GET", url, headers)
+        try:
+            body = resp.read()
+            hdrs = {k.lower(): v for k, v in resp.getheaders()}
+        except (OSError, http.client.HTTPException) as e:
+            raise ConnectionError("Network error: %s" % e)
+        finally:
+            conn.close()
+        if resp.status in (301, 302, 303, 307, 308) and hdrs.get("location"):
+            nxt = urllib.parse.urljoin(url, hdrs["location"])
+            if urllib.parse.urlsplit(nxt).scheme not in ("https", urllib.parse.urlsplit(url).scheme):
+                return resp.status, hdrs, body
+            url = nxt
+            continue
+        return resp.status, hdrs, body
+    return resp.status, hdrs, body
+
+
+def clean_reason(text, folder=None):
+    """An error text safe for the zip: no sign-in, no path on this Mac (it holds the user name)."""
+    text = str(text)
+    for d in [folder, os.path.dirname(os.path.abspath(__file__)), os.path.expanduser("~")]:
+        if not d or len(d) < 2:
+            continue
+        text = text.replace(d, "<folder>")
+    return scrub(text)
+
+
+def fetch_circuit(key, year, directory, ua=ANDROID_UA):
+    """Saves MultiViewer's circuits/{key}/{year} as circuit-{key}-{year}.json in directory.
+    NO Authorization header: MultiViewer is a third party. Returns (ok, detail, file name)."""
+    name = "circuit-%s-%s.json" % (key, year)
+    url = CIRCUITS_BASE + "%s/%s" % (key, year)
+    try:
+        status, hdrs, body = fetch_bytes(url, {"User-Agent": ua, "Accept": "application/json"}, max_redirects=3)
+    except ConnectionError as e:
+        return False, clean_reason(e), name
+    if status != 200:
+        return False, "HTTP %d" % status, name
+    try:
+        j = parse_json_bytes(body)
+    except ValueError:
+        return False, "the answer isn't JSON (%s)" % human_size(len(body)), name
+    with open(os.path.join(directory, name), "wb") as f:
+        f.write(body)
+    facts = []
+    if isinstance(j, dict):
+        if isinstance(j.get("x"), list):
+            facts.append("%d outline points" % len(j["x"]))
+        for k, label in (("corners", "corners"), ("marshalSectors", "marshal sectors")):
+            if isinstance(j.get(k), list):
+                facts.append("%d %s" % (len(j[k]), label))
+        if j.get("circuitName"):
+            facts.append(str(j["circuitName"]))
+    return True, "%s%s" % (human_size(len(body)), ("; " + ", ".join(facts)) if facts else ""), name
+
+
+def probe_cardata(token, session_path, folder, ua=ANDROID_UA):
+    """Size and byte-range support of the session's CarData.z.jsonStream, WITHOUT downloading it:
+    a HEAD, then a GET for the first 1 MiB with a Range header (also proves whether ranges really
+    work: 206 = yes, 200 = the server ignored the Range). Saves those first bytes, cut to whole
+    lines, as CarData.z.head.jsonStream. Writes cardata-probe.json. Returns (ok, one-line detail)."""
+    url = archive_url(session_path + CARDATA_FILE)
+    probe = {"file": CARDATA_FILE, "session_path": session_path, "probed_at_utc": utc_iso_ms()}
+
+    def facts(resp):
+        d = {"status": resp.status}
+        for h in PROBE_HEADERS:
+            v = resp.getheader(h)
+            if v is not None:
+                d[h] = v
+        return d
+
+    # 1. HEAD
+    try:
+        conn, resp = https_request("HEAD", url, {"Authorization": "Bearer " + token, "User-Agent": ua})
+        try:
+            probe["head"] = facts(resp)
+        finally:
+            conn.close()
+    except ConnectionError as e:
+        probe["head"] = {"error": clean_reason(e, folder)}
+
+    # 2. Ranged GET for the first 1 MiB; never reads more than that, even if the Range is ignored.
+    saved = 0
+    try:
+        conn, resp = https_request("GET", url, {"Authorization": "Bearer " + token, "User-Agent": ua,
+                                                "Range": "bytes=0-%d" % (CARDATA_HEAD_BYTES - 1)})
+        try:
+            probe["range_get"] = g = facts(resp)
+            g["range_sent"] = "bytes=0-%d" % (CARDATA_HEAD_BYTES - 1)
+            if resp.status in (200, 206):
+                chunks, got = [], 0
+                while got < CARDATA_HEAD_BYTES:
+                    chunk = resp.read(min(65536, CARDATA_HEAD_BYTES - got))
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    got += len(chunk)
+                data = b"".join(chunks)
+                g["bytes_read"] = got
+                cut = data.rfind(b"\n")
+                if got >= CARDATA_HEAD_BYTES and cut >= 0:
+                    data = data[:cut + 1]  # whole lines only
+                with open(os.path.join(folder, CARDATA_HEAD_FILE), "wb") as f:
+                    f.write(data)
+                saved = len(data)
+                g["bytes_saved_as_" + CARDATA_HEAD_FILE] = saved
+                g["lines_saved"] = data.count(b"\n")
+        except (OSError, http.client.HTTPException) as e:
+            probe["range_get"] = {"error": clean_reason(e, folder)}
+        finally:
+            conn.close()  # closes mid-body when the server sent the whole file
+    except ConnectionError as e:
+        probe["range_get"] = {"error": clean_reason(e, folder)}
+
+    # 3. Conclusions
+    head, rng = probe.get("head", {}), probe.get("range_get", {})
+    total = None
+    m = re.search(r"/(\d+)\s*$", rng.get("Content-Range", ""))
+    if m:
+        total = int(m.group(1))
+    elif head.get("status") == 200 and str(head.get("Content-Length", "")).isdigit():
+        total = int(head["Content-Length"])
+    elif rng.get("status") == 200 and str(rng.get("Content-Length", "")).isdigit():
+        total = int(rng["Content-Length"])
+    if rng.get("status") == 206:
+        ranges = "yes"
+    elif rng.get("status") == 200:
+        ranges = "no (the server ignored the Range and sent the whole file)"
+    elif "status" in rng:
+        ranges = "unknown (ranged GET answered HTTP %d)" % rng["status"]
+    else:
+        ranges = "unknown (ranged GET failed)"
+    probe["total_bytes"] = total
+    probe["byte_ranges_work"] = ranges
+    probe["accept_ranges_header"] = rng.get("Accept-Ranges", head.get("Accept-Ranges"))
+    with open(os.path.join(folder, "cardata-probe.json"), "w", encoding="utf-8") as f:
+        f.write(scrub(json.dumps(probe, indent=2, ensure_ascii=False)) + "\n")
+
+    ok = rng.get("status") in (200, 206) and saved > 0
+    if ok:
+        detail = "%s in total; byte ranges: %s; first %s saved" % (
+            human_size(total) if total is not None else "size unknown", ranges, human_size(saved))
+    else:
+        bits = []
+        for label, d in (("HEAD", head), ("ranged GET", rng)):
+            bits.append("%s %s" % (label, ("HTTP %d" % d["status"]) if "status" in d else d.get("error", "?")))
+        detail = "; ".join(bits)
+    return ok, detail
+
+
+def download_session(token, label, session_path, folder, ua=ANDROID_UA):
+    """The archive files --archive downloads (minus CarData) plus WeatherData if present.
+    Nothing here stops the run. Returns (status, detail, {file: result}, SessionInfo or None)."""
+    os.makedirs(folder, exist_ok=True)
+    results, got, total = {}, 0, 0
+    missing, refused, failed, optional_absent = [], [], [], []
+    for name in FIXTURE_FILES + OPTIONAL_FILES:
+        try:
+            status, size = download_one(token, session_path + name, os.path.join(folder, name), ua,
+                                        refused_fatal=False)
+        except ConnectionError as e:
+            status, size = clean_reason(e, folder), 0
+        status = clean_reason(status, folder)
+        results[name] = {"status": status, "bytes": size}
+        if status == "ok":
+            got += 1
+            total += size
+            say("    %-30s %s" % (name, human_size(size)))
+            continue
+        if name in OPTIONAL_FILES:
+            optional_absent.append("%s (%s)" % (name, "404" if status == "missing" else status))
+            say("    %-30s not available: %s (optional, fine)" % (name, "404" if status == "missing" else status))
+        elif status == "missing":
+            missing.append(name)
+            say("    %-30s not in the archive (404)" % name)
+        elif status.startswith("refused"):
+            refused.append(name)
+            say("    %-30s %s" % (name, status))
+        else:
+            failed.append(name)
+            say("    %-30s FAILED: %s" % (name, status))
+    info = None
+    if results["SessionInfo.json"]["status"] == "ok":
+        try:
+            with open(os.path.join(folder, "SessionInfo.json"), "rb") as f:
+                info = parse_json_bytes(f.read())
+        except (OSError, ValueError):
+            info = None
+    detail = "%d files, %s" % (got, human_size(total))
+    if missing:
+        detail += "; not in the archive: %s" % ", ".join(missing)
+    if refused:
+        detail += "; refused: %s" % ", ".join(refused)
+    if failed:
+        detail += "; failed: %s" % ", ".join(failed)
+    if optional_absent:
+        detail += "; optional not available: %s" % ", ".join(optional_absent)
+    if got == 0:
+        status = "failed"
+    elif refused or failed or info is None:
+        status = "partial"
+    else:
+        status = "ok"
+    return status, detail, results, info
+
+
+def circuit_key_from(info):
+    try:
+        key = info["Meeting"]["Circuit"]["Key"]
+    except (KeyError, TypeError):
+        return None
+    return key if isinstance(key, int) or (isinstance(key, str) and key.isdigit()) else None
+
+
+def zip_has_secret(zip_path, token):
+    """True if any member name or member content holds the sign-in in any form we know of."""
+    needles = sorted({s.encode("utf-8") for s in SECRETS + [token] if s}, key=len, reverse=True)
+    if not needles:
+        return False
+    overlap = len(needles[0]) - 1
+    with zipfile.ZipFile(zip_path) as z:
+        for info in z.infolist():
+            name = info.filename.encode("utf-8")
+            if any(n in name for n in needles):
+                return True
+            tail = b""
+            with z.open(info) as f:
+                while True:
+                    chunk = f.read(1 << 20)
+                    if not chunk:
+                        break
+                    buf = tail + chunk
+                    if any(n in buf for n in needles):
+                        return True
+                    tail = buf[-overlap:] if overlap else b""
+    return False
+
+
+def run_fixtures(token, directory, ua=ANDROID_UA):
+    """One command for owner check T-A: the 2026 index, the São Paulo sessions' archive files,
+    a CarData probe per session and the circuit, zipped into beta3-fixtures.zip next to this
+    script. Prints one ok/partial/failed line per step. Returns the exit code."""
+    work = os.path.join(directory, FIXTURES_NAME)
+    zip_path = os.path.join(directory, FIXTURES_NAME + ".zip")
+    for old in (zip_path, zip_path + ".part"):
+        if os.path.exists(old):
+            os.remove(old)
+    if os.path.isdir(work):
+        shutil.rmtree(work)
+    os.makedirs(work)
+    steps = []          # (step, status, detail)
+    written = []        # files this run wrote, relative to work
+    summary = {"made_by": "spike/timing_recorder.py --fixtures", "made_at_utc": utc_iso_ms(),
+               "year": FIXTURES_YEAR, "meeting": None, "sessions": [], "circuit": None}
+
+    def step(name, status, detail):
+        steps.append((name, status, detail))
+        say("  -> %s: %s" % (status, detail))
+        say("")
+
+    # a. The year's index.
+    index_name = "Index_%d.json" % FIXTURES_YEAR
+    say("Step 1: %d/Index.json (the list of the year's sessions)" % FIXTURES_YEAR)
+    index = None
+    try:
+        status, _, body = fetch_bytes(archive_url("%d/Index.json" % FIXTURES_YEAR),
+                                      {"Authorization": "Bearer " + token, "User-Agent": ua})
+        if status == 200:
+            with open(os.path.join(work, index_name), "wb") as f:
+                f.write(body)  # saved exactly as served (BOM included); the BOM is stripped only to read it
+            written.append(index_name)
+            try:
+                index = parse_json_bytes(body)
+                step("index", "ok", "%s, %s" % (index_name, human_size(len(body))))
+            except ValueError:
+                step("index", "failed", "%s was saved but isn't JSON" % index_name)
+        elif status in (401, 403):
+            step("index", "failed", "refused (HTTP %d); the sign-in may be stale. Trying the usual paths." % status)
+        else:
+            step("index", "failed", "HTTP %d. Trying the usual paths." % status)
+    except ConnectionError as e:
+        step("index", "failed", "%s. Trying the usual paths." % clean_reason(e, work))
+
+    # b. The meeting and its sessions.
+    say("Step 2: find the São Paulo Grand Prix and its sessions")
+    meeting, how = (find_meeting(index) if index is not None else (None, "no index"))
+    picked = pick_sessions(meeting) if meeting else []
+    sessions = []   # (label, path, source)
+    for label, s in picked:
+        path = s.get("Path")
+        try:
+            sessions.append((label, normalise_archive_path(path), "index"))
+        except (ValueError, AttributeError):
+            say("  %s is in the index without a usable Path" % label)
+    for label, path in GUESSED_SESSION_PATHS.items():
+        if not any(l == label for l, _, _ in sessions):
+            sessions.append((label, path, "guessed (not in the index)"))
+    if meeting:
+        summary["meeting"] = {k: meeting.get(k) for k in ("Key", "Name", "OfficialName", "Location") if k in meeting}
+        summary["meeting"]["matched_by"] = how
+        say("  Meeting: %s (matched by %s)" % (meeting.get("Name") or meeting.get("OfficialName"), how))
+    for label, path, source in sessions:
+        say("  %-18s %s  [%s]" % (label, path, source))
+    if meeting and picked:
+        step("sessions", "ok", "%s: %s" % (meeting.get("Name") or "meeting", ", ".join(l for l, _ in picked)))
+    else:
+        step("sessions", "failed", "%s; using the usual paths for Race and Qualifying" % (
+            how if not meeting else "the meeting lists no Race/Qualifying"))
+
+    # c + d. Each session's files and its CarData probe.
+    circuit_key, key_source = None, None
+    any_session_file = False
+    for label, path, source in sessions:
+        folder_name = session_folder(path)
+        folder = os.path.join(work, folder_name)
+        say("Step 3: %s files (%s)" % (label, folder_name))
+        status, detail, results, info = download_session(token, label, path, folder, ua)
+        if source != "index":
+            detail += " [path %s]" % source
+        step("%s files" % label, status, detail)
+        for name, r in results.items():
+            if r["status"] == "ok":
+                written.append(folder_name + "/" + name)
+                any_session_file = True
+        entry = {"label": label, "path": path, "folder": folder_name, "path_source": source, "files": results}
+        if circuit_key is None and circuit_key_from(info) is not None:
+            circuit_key, key_source = int(circuit_key_from(info)), "%s SessionInfo.json" % label
+        if status == "failed" and source != "index":
+            summary["sessions"].append(entry)
+            continue  # a guessed path that isn't there: no probe
+        say("Step 4: %s CarData probe (size and byte ranges; not the whole file)" % label)
+        ok, pdetail = probe_cardata(token, path, folder, ua)
+        written.append(folder_name + "/cardata-probe.json")
+        if os.path.exists(os.path.join(folder, CARDATA_HEAD_FILE)):
+            written.append(folder_name + "/" + CARDATA_HEAD_FILE)
+        step("%s CarData probe" % label, "ok" if ok else "failed", pdetail)
+        with open(os.path.join(folder, "cardata-probe.json"), encoding="utf-8") as f:
+            entry["cardata_probe"] = json.load(f)
+        summary["sessions"].append(entry)
+
+    # e. The circuit (no sign-in sent).
+    if circuit_key is None and meeting and isinstance(meeting.get("Circuit"), dict):
+        k = meeting["Circuit"].get("Key")
+        if isinstance(k, int):
+            circuit_key, key_source = k, "the index"
+    if circuit_key is None:
+        circuit_key, key_source = DEFAULT_CIRCUIT_KEY, "fallback (Interlagos)"
+    say("Step 5: circuit %d/%d from MultiViewer (key from %s; no sign-in sent)" % (circuit_key, FIXTURES_YEAR, key_source))
+    ok, cdetail, cname = fetch_circuit(circuit_key, FIXTURES_YEAR, work, ua)
+    if ok:
+        written.append(cname)
+    summary["circuit"] = {"key": circuit_key, "key_from": key_source, "year": FIXTURES_YEAR, "file": cname if ok else None}
+    step("circuit", "ok" if ok else "failed", "%s: %s" % (cname, cdetail))
+
+    if not any_session_file:
+        say("Nothing was downloaded from F1's archive, so no zip was made.")
+        say("Sign in again at https://account.formula1.com, copy a fresh login-session cookie, and run it again.")
+        shutil.rmtree(work, ignore_errors=True)
+        return 1
+
+    # f. The zip: only files this run wrote, under beta3-fixtures/<session folder>/.
+    summary["steps"] = [{"step": n, "status": s, "detail": d} for n, s, d in steps]
+    with open(os.path.join(work, "fixtures-summary.json"), "w", encoding="utf-8") as f:
+        f.write(clean_reason(json.dumps(summary, indent=2, ensure_ascii=False), work) + "\n")
+    written.append("fixtures-summary.json")
+    say("Step 6: zip")
+    part = zip_path + ".part"
+    with zipfile.ZipFile(part, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel in written:
+            z.write(os.path.join(work, rel), FIXTURES_NAME + "/" + rel)
+    os.replace(part, zip_path)
+    step("zip", "ok", "%d files" % len(written))
+
+    # Self-check: the sign-in must not be anywhere in the zip.
+    say("Step 7: check that the zip holds no sign-in details")
+    if zip_has_secret(zip_path, token):
+        os.remove(zip_path)
+        shutil.rmtree(work, ignore_errors=True)
+        say("  -> failed: the sign-in was found inside the zip, so the zip was DELETED. Do not upload anything;")
+        say("     tell the developers (this is a bug in the script).")
+        return 1
+    step("token check", "ok", "no sign-in details in the zip")
+    shutil.rmtree(work, ignore_errors=True)  # the zip is the only thing to upload
+
+    say("Summary")
+    for n, s, d in steps:
+        say("  %-8s %-26s %s" % ("[" + s + "]", n, d))
+    say("")
+    say("Upload this one file:  %s" % zip_path)
+    say("Size: %s. It holds public timing data only (checked: no sign-in details inside)." % human_size(os.path.getsize(zip_path)))
+    if any(s != "ok" for _, s, _ in steps):
+        say("Some steps did not fully work; upload the zip anyway, its fixtures-summary.json says what happened.")
+    return 0
+
+
+def save_circuit(key, year, directory):
+    """--circuit KEY YEAR: no sign-in needed."""
+    if not re.fullmatch(r"\d{1,4}", key or "") or not re.fullmatch(r"\d{4}", year or ""):
+        say("Error: use  --circuit KEY YEAR, e.g.  --circuit 14 2026  (14 is Interlagos)")
+        return 1
+    ok, detail, name = fetch_circuit(int(key), int(year), directory)
+    if not ok:
+        say("Circuit %s/%s: FAILED: %s" % (key, year, detail))
+        return 1
+    say("Saved %s (%s)" % (os.path.join(directory, name), detail))
+    return 0
+
+
+def set_test_base_url(base):
+    """--base-url (hidden, for local tests only): send archive and circuit requests to a stub
+    server on this machine. Refuses any other host, so the sign-in can't go anywhere else."""
+    global ARCHIVE_BASE, CIRCUITS_BASE
+    p = urllib.parse.urlsplit(base)
+    if p.scheme not in ("http", "https") or p.hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise ValueError("--base-url is for local tests and only accepts http://127.0.0.1:<port>")
+    root = base.rstrip("/")
+    ARCHIVE_BASE = root + "/static/"
+    CIRCUITS_BASE = root + "/api/v1/circuits/"
+
+
 # --- Main -----------------------------------------------------------------------------------
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Throwaway spike: record a live F1 session's raw live-timing messages to a .jsonl file, "
-                    "or (--archive) download a finished session's static archive files.",
-        usage="pbpaste | python3 timing_recorder.py [--archive <year/meeting/session/>]")
-    parser.add_argument("--archive", metavar="PATH",
-                        help="instead of recording, download a finished session's archive files, e.g. "
-                             "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/")
+                    "or (--archive) download a finished session's static archive files, or (--fixtures) "
+                    "make beta3-fixtures.zip for the iOS app, or (--circuit) save a MultiViewer circuit.",
+        usage="pbpaste | python3 timing_recorder.py [--archive <year/meeting/session/> | --fixtures]\n"
+              "       python3 timing_recorder.py --circuit KEY YEAR")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--archive", metavar="PATH",
+                      help="instead of recording, download a finished session's archive files, e.g. "
+                           "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/")
+    mode.add_argument("--fixtures", action="store_true",
+                      help="download the São Paulo Grand Prix 2026 timing fixtures for the iOS app's beta.3 "
+                           "and zip them into beta3-fixtures.zip next to this script")
+    mode.add_argument("--circuit", nargs=2, metavar=("KEY", "YEAR"),
+                      help="save MultiViewer's circuit file (no sign-in needed), e.g. --circuit 14 2026")
+    parser.add_argument("--base-url", help=argparse.SUPPRESS)  # local tests only (127.0.0.1)
     args = parser.parse_args(argv)
     directory = os.path.dirname(os.path.abspath(__file__))
 
+    if args.base_url:
+        try:
+            set_test_base_url(args.base_url)
+        except ValueError as e:
+            print("Error: %s" % e)
+            return 2
+
+    if args.circuit:
+        try:
+            return save_circuit(args.circuit[0], args.circuit[1], directory)
+        except KeyboardInterrupt:
+            say("\nStopped by Ctrl+C.")
+            return 1
+
     try:
-        token, kind = read_signin()
+        token, kind = read_signin("pbpaste | python3 spike/timing_recorder.py --fixtures" if args.fixtures
+                                  else "pbpaste | python3 timing_recorder.py")
     except (ValueError, EOFError, KeyboardInterrupt) as e:
         print("Error: %s" % (e if str(e) else "cancelled"))
         return 1
+
+    if args.fixtures:
+        say("Fixtures for the iOS app's beta.3 (São Paulo Grand Prix %d). Sign-in given as: %s" % (FIXTURES_YEAR, kind))
+        say("This downloads a few hundred MB at most and takes a few minutes. Leave the window open.")
+        say("")
+        try:
+            return run_fixtures(token, directory)
+        except KeyboardInterrupt:
+            for leftover in (os.path.join(directory, FIXTURES_NAME + ".zip.part"),):
+                if os.path.exists(leftover):
+                    os.remove(leftover)
+            say("\nStopped by Ctrl+C; no zip was made. Run the same command again.")
+            return 1
+        except Exception as e:  # never show a traceback that could hold more than it should
+            say("Stopped by an unexpected error: %s: %s" % (type(e).__name__, clean_reason(e)))
+            say("No zip was made. Send this message (it holds no sign-in details) to the developers.")
+            return 1
 
     if args.archive:
         try:

@@ -10,3 +10,7 @@ layout_search_results.json
 multiview-fixtures/
 multiview-fixtures.zip
 multiview-probe.json
+beta3-fixtures/
+beta3-fixtures.zip
+beta3-fixtures.zip.part
+circuit-*.json
