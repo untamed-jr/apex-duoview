@@ -62,6 +62,28 @@ public struct DriverTimingState: Sendable, Equatable {
     }
 }
 
+/// A lap a car finished at the line, as its timing showed it from some moment on.
+public struct CompletedLap: Sendable, Equatable {
+    /// F1's lap count after the crossing: the lap finished.
+    public var lap: Int
+    public var crossedAt: UTCms
+    /// F1's LastLapTime for this lap, once sent; nil before then, and for a race's first lap
+    /// (F1 sends none).
+    public var lapMs: Int?
+    public var pace: SectorPace
+    /// S1…S3 of this lap: those set since the crossing before, and a final sector arriving up
+    /// to 3 s after the line.
+    public var sectors: [SectorPace]
+
+    public init(lap: Int, crossedAt: UTCms, lapMs: Int?, pace: SectorPace, sectors: [SectorPace]) {
+        self.lap = lap
+        self.crossedAt = crossedAt
+        self.lapMs = lapMs
+        self.pace = pace
+        self.sectors = sectors
+    }
+}
+
 /// Every car's timing through a session. Each TimingData line is merged into the car's state
 /// (TopicMerge); a car's derived state is kept only when it changes (most lines only move
 /// mini-sector segments), so `at` is a binary search per car rather than a replay.
@@ -88,8 +110,28 @@ public struct TimingTimeline: Sendable {
     public let updateTimes: [UTCms]
     let partTimes: [UTCms]
     let parts: [Int]
+    /// Each car's finished laps, kept apart from its states so a lap's details arriving after
+    /// the line (the final sector, the lap time) add no timing update: each entry is one lap as
+    /// it stood from that time on.
+    let completed: [String: LapHistory]
+
+    struct LapHistory: Sendable {
+        var times: [UTCms] = []
+        var laps: [CompletedLap] = []
+    }
 
     static let lateSectorMs: Int64 = 3_000
+
+    /// The laps `number` finished, as known at `t`: each as it stood at or before `t` (a final
+    /// sector or lap time sent after `t` is not there yet), oldest first.
+    public func completedLaps(of number: String, upTo t: UTCms) -> [CompletedLap] {
+        guard let history = completed[number], let last = F1Values.lastIndex(in: history.times, atOrBefore: t) else { return [] }
+        var out: [CompletedLap] = []
+        for lap in history.laps[...last] {
+            if out.last?.crossedAt == lap.crossedAt { out[out.count - 1] = lap } else { out.append(lap) }
+        }
+        return out
+    }
 
     /// Each car's state at `t`: the latest at or before it. Cars with nothing yet are absent.
     public func at(_ t: UTCms) -> [String: DriverTimingState] {
@@ -136,6 +178,7 @@ public struct TimingTimeline: Sendable {
         var top: JSONValue = .null
         var part: Int?
         var partTimes: [UTCms] = [], parts: [Int] = []
+        var completed: [String: LapHistory] = [:]
 
         for line in lines {
             let t = F1Values.add(streamStart, line.offsetMs)
@@ -161,6 +204,16 @@ public struct TimingTimeline: Sendable {
             var changed = false
             for number in touched {
                 guard let car = live[number] else { continue }
+                if let lap = car.lap, completed[number]?.laps.last != lap {
+                    var history = completed[number] ?? LapHistory()
+                    if history.times.last == t {
+                        history.laps[history.laps.count - 1] = lap
+                    } else {
+                        history.times.append(t)
+                        history.laps.append(lap)
+                    }
+                    completed[number] = history
+                }
                 var state = car.state(part: part)
                 var history = cars[number] ?? History()
                 if let last = history.states.last {
@@ -178,7 +231,7 @@ public struct TimingTimeline: Sendable {
             }
             if changed, updates.last != t { updates.append(t) }
         }
-        return TimingTimeline(cars: cars, updateTimes: updates, partTimes: partTimes, parts: parts)
+        return TimingTimeline(cars: cars, updateTimes: updates, partTimes: partTimes, parts: parts, completed: completed)
     }
 
     /// One car while building: its merged TimingData line plus what F1's state doesn't keep.
@@ -190,14 +243,17 @@ public struct TimingTimeline: Sendable {
         var lapStart: UTCms?
         var laps: Int?
         var inPit = false
+        /// The lap last finished at the line, as known so far.
+        var lap: CompletedLap?
 
         mutating func apply(_ delta: JSONValue, at t: UTCms) {
             // Sectors first, so a final sector sent with the crossing counts for the lap it ends.
+            var lateFinal = false
             for (i, cell) in Self.sectorCells(delta["Sectors"]) where (0..<3).contains(i) {
                 guard case .object(let members) = cell, let value = members["Value"] else { continue }
                 if value.string.isEmpty { continue }
                 let late = i == 2 && !fresh[0] && crossedAt.map { (1...TimingTimeline.lateSectorMs).contains(F1Values.sub(t, $0)) } == true
-                if !late { fresh[i] = true }
+                if late { lateFinal = true } else { fresh[i] = true }
             }
             let known = !line.isNull
             line = TopicMerge.merge(line, delta)
@@ -208,7 +264,13 @@ public struct TimingTimeline: Sendable {
                 // (qualifying) starts the out lap at the pit exit: a new lap, not the line.
                 let rose = laps.map { n > $0 } ?? (known && n > 0)
                 if rose {
-                    if delta["PitOut"].bool != true { crossedAt = t }
+                    if delta["PitOut"].bool != true {
+                        crossedAt = t
+                        // The lap just finished: the sectors set since the last crossing.
+                        let sectors = line["Sectors"]
+                        lap = CompletedLap(lap: n, crossedAt: t, lapMs: nil, pace: .empty,
+                                           sectors: (0..<3).map { fresh[$0] ? SectorPace.of(Self.element(sectors, $0)) : .empty })
+                    }
                     lapStart = t
                     fresh = [false, false, false]
                 }
@@ -216,6 +278,19 @@ public struct TimingTimeline: Sendable {
             }
             if let inPit = delta["InPit"].bool { self.inPit = inPit }
             if delta["PitOut"].bool == true { inPit = false }
+            if var finished = lap, finished.crossedAt == crossedAt {
+                // A final sector up to 3 s after the line, and the lap time (sent with the
+                // crossing, or after it; F1 sends none for a race's first lap), belong to it.
+                if lateFinal { finished.sectors[2] = SectorPace.of(Self.element(line["Sectors"], 2)) }
+                let time = delta["LastLapTime"]
+                if !time["Value"].isNull {
+                    finished.lapMs = F1Values.durationMs(line["LastLapTime"]["Value"].string)
+                    finished.pace = finished.lapMs == nil ? .empty : SectorPace.of(line["LastLapTime"])
+                } else if case .object = time, finished.lapMs != nil {
+                    finished.pace = SectorPace.of(line["LastLapTime"])
+                }
+                lap = finished
+            }
         }
 
         func state(part: Int?) -> DriverTimingState {

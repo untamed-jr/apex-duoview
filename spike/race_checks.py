@@ -19,7 +19,7 @@ import zlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 with contextlib.redirect_stdout(io.StringIO()):  # tower_checks prints its own checks on import
     from tower_checks import (FIX, PREFIX, RACE_START, RACE_LIGHTS_OUT_OFF, QUALI_START, check,  # noqa: E402
-                              crossing, merge, read_stream, utc_ms)
+                              crossing, element, merge, pace, read_stream, stints_at, utc_ms)
 
 RACE = os.path.join(FIX, "sp26-race")
 QUALI = os.path.join(FIX, "sp26-quali")
@@ -200,6 +200,68 @@ def pit_circle_checks(states, hist, t10):
     check("raceTlas11_16_44", [drivers[n]["Tla"] for n in ("11", "16", "44")])
 
 
+def completed_laps(lines, car):
+    """Car's finished laps: (lap, crossing offset, LastLapTime sent for it, its three sector paces),
+    where a sector counts if its Value was set since the crossing before (a final sector sent
+    with the crossing included), or is the final sector arriving within 3 s after the line while
+    S1 of the new lap isn't set yet."""
+    merged, laps, known, out = None, None, False, []
+    since = [True, True, True]
+    crossed_at = None
+    for off, j in lines:
+        d = (j.get("Lines") or {}).get(car)
+        if not isinstance(d, dict):
+            continue
+        sectors = d.get("Sectors")
+        cells = enumerate(sectors) if isinstance(sectors, list) else ((int(k), v) for k, v in (sectors or {}).items())
+        late_final = False
+        for i, cell in cells:
+            if i > 2 or not isinstance(cell, dict) or not cell.get("Value"):
+                continue
+            if i == 2 and not since[0] and crossed_at is not None and 0 < off - crossed_at <= 3000:
+                late_final = True
+            else:
+                since[i] = True
+        merged = merge(merged, d)
+        if "NumberOfLaps" in d:
+            n = int(d["NumberOfLaps"])
+            rose = n > laps if laps is not None else (known and n > 0)
+            if rose:
+                if d.get("PitOut") is not True:
+                    crossed_at = off
+                    paces = [pace(element(merged.get("Sectors"), i)) if since[i] else "empty" for i in range(3)]
+                    out.append([n, off, None, paces])
+                since = [False, False, False]
+            laps = n
+        known = True
+        if out and out[-1][1] == crossed_at:
+            if late_final:
+                out[-1][3][2] = pace(element(merged.get("Sectors"), 2))
+            cell = d.get("LastLapTime")
+            if isinstance(cell, dict) and "Value" in cell:
+                out[-1][2] = merged["LastLapTime"]["Value"]
+    return out
+
+
+def race_lines_checks(lines, states, hist, t10, car):
+    at = {n: state_at([(o, m, False) for o, m in h], t10) for n, h in states.items()}
+    me = at[car]
+    p = pos(me)
+    ahead = next(n for n, m in at.items() if pos(m) == p - 1)
+    behind = next(n for n, m in at.items() if pos(m) == p + 1)
+    check(f"raceLines{car}AtLightsOutPlus10min",
+          (p, ahead, me["IntervalToPositionAhead"]["Value"], behind, at[behind]["IntervalToPositionAhead"]["Value"]))
+    crossings = [o for o, _, c in hist[car] if c and o <= t10]
+    then = t10 - (crossings[-1] - crossings[-4])
+    was = {n: state_at([(o, m, False) for o, m in h], then) for n, h in states.items()}
+    def g(states_at, n):
+        return 0 if pos(states_at[n]) == 1 else gap_ms(states_at[n].get("GapToLeader"))
+    check(f"raceLines{car}TrendAhead", (then, g(at, car) - g(at, ahead), g(was, car) - g(was, ahead)))
+    check(f"raceLines{car}TrendBehind", (then, g(at, behind) - g(at, car), g(was, behind) - g(was, car)))
+    laps = [x for x in completed_laps(lines, car) if x[1] <= t10]
+    check(f"raceLines{car}LastFiveLaps", list(reversed(laps[-5:])))
+
+
 def car_data_checks():
     """Channel 45 in the qualifying CarData slice: present in how many samples, and in how many
     taken on a straight (150 km/h or more, throttle 95 % or more)."""
@@ -265,6 +327,18 @@ def main():
     check("raceEventsWholeFixture", [(o, k, n, race_lap(states, o, 71)) for o, k, n in ev])
 
     pit_circle_checks(states, hist, t10)
+    race_lines_checks(timing, states, hist, t10, "44")
+    race_lines_checks(timing, states, hist, t10, "1")
+    app = read_stream(os.path.join(RACE, "TimingAppData.jsonStream"))
+    check("raceTyres44And1AtLightsOutPlus10min", [stints_at(app, t10).get(n) for n in ("44", "1")])
+    tyres = {}
+    for o, j in app:
+        if o <= t10 and isinstance((j.get("Lines") or {}).get("44"), dict):
+            tyres = merge(tyres, j["Lines"]["44"])
+    st = tyres["Stints"]
+    st = st if isinstance(st, list) else [v for _, v in sorted((int(k), v) for k, v in st.items())]
+    check("raceTyre44CompoundAtLightsOutPlus10min", st[-1]["Compound"])
+    check("raceCar12LastFiveLapsWholeFixture", list(reversed(completed_laps(timing, "12")[-5:])))
 
     # Qualifying's red flag: race control's RED FLAG (TrackFlags' red runs from it until a GREEN
     # or CHEQUERED flag, and none comes in the fixture), earlier than TrackStatus's 5.
