@@ -96,6 +96,23 @@ public struct TimingTimeline: Sendable {
         return history.states[i]
     }
 
+    /// Every time a car crossed the line (its lap count went up), up to and including `t`, by
+    /// car, oldest first per car. For geometry (where the line is on the map), which may read the
+    /// whole session; anything shown as data must pass picture time as `t`, never later.
+    public func lineCrossings(upTo t: UTCms) -> [(car: String, at: UTCms)] {
+        var out: [(car: String, at: UTCms)] = []
+        for number in cars.keys.sorted() {
+            guard let history = cars[number] else { continue }
+            var last: UTCms?
+            for (i, state) in history.states.enumerated() where history.times[i] <= t {
+                guard let crossed = state.lineCrossedAt, crossed != last, crossed <= t else { continue }
+                out.append((car: number, at: crossed))
+                last = crossed
+            }
+        }
+        return out
+    }
+
     /// The part of qualifying running at `t` (TimingData's SessionPart), if the session has them.
     public func sessionPart(at t: UTCms) -> Int? {
         F1Values.lastIndex(in: partTimes, atOrBefore: t).map { parts[$0] }

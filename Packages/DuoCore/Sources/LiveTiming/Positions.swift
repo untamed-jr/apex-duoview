@@ -57,6 +57,30 @@ public struct CarTrack: Sendable {
         if let first = times.first, t < first { return point(0) }
         return at(t)
     }
+
+    /// Where the map draws the car at `t`: as `at`, but a (0,0) sample doesn't count (F1's first
+    /// samples put every car at the origin), so the car is interpolated between the real samples
+    /// either side of `t`. Nil before the first real sample at or before `t` (nothing later than
+    /// `t` is used to place it), after the last, and when those samples are more than 5 s apart.
+    public func mapPoint(at t: UTCms) -> TrackPoint? {
+        guard let found = F1Values.lastIndex(in: times, atOrBefore: t) else { return nil }
+        var lo = found
+        while lo >= 0, isOrigin(lo) { lo -= 1 }
+        guard lo >= 0 else { return nil }
+        if times[lo] == t { return point(lo) }
+        var hi = found + 1
+        while hi < times.count, isOrigin(hi) { hi += 1 }
+        guard hi < times.count else { return nil }
+        let span = F1Values.sub(times[hi], times[lo])
+        guard span <= Self.maxGapMs else { return nil }
+        let f = Double(F1Values.sub(t, times[lo])) / Double(span)
+        let a = point(lo), b = point(hi)
+        return TrackPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+    }
+
+    private func isOrigin(_ index: Int) -> Bool {
+        xs[index] == 0 && ys[index] == 0
+    }
 }
 
 /// Every car's positions from the Position.z topic.

@@ -100,6 +100,27 @@ public struct TrackGeometry: Sendable {
         return f < 0 ? f + 1 : f
     }
 
+    /// The point `fraction` of the way round the lap from the outline's first point (any value:
+    /// it wraps), on the straight between outline points. The outline's first point when the
+    /// outline has no length.
+    public func point(atProgress fraction: Double) -> TrackPoint {
+        let n = outline.count
+        guard n >= 2, length > 0, fraction.isFinite else { return outline.first ?? TrackPoint(x: 0, y: 0) }
+        var f = fraction.truncatingRemainder(dividingBy: 1)
+        if f < 0 { f += 1 }
+        let target = f * length
+        // The last outline point at or before the target distance (binary search on `along`).
+        var low = 0, high = n - 1
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if along[mid] <= target { low = mid } else { high = mid - 1 }
+        }
+        let a = outline[low], b = outline[(low + 1) % n]
+        let segment = (low == n - 1 ? length : along[low + 1]) - along[low]
+        let t = segment > 0 ? min(max((target - along[low]) / segment, 0), 1) : 0
+        return TrackPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+    }
+
     /// The transform for a `size` box with `inset` kept clear all round. The outline is turned to
     /// whichever whole degree (0..<180) lets it fill the box most, then, if `userTurnDegrees` is
     /// not 0, turned that much further and fitted again. y is flipped.

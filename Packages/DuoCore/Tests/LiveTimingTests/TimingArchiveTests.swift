@@ -258,6 +258,37 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await TimingArchive.load(Self.race, using: Self.archive(http)) == nil)
     }
 
+    /// Why there is no session: refused (no timing; a retry can't help) or failed (try again).
+    /// A refusal wins over a failure: a retry would fetch everything again for nothing.
+    @Test func loadOutcomeTellsRefusedFromFailed() async throws {
+        func outcome(_ setup: (FakeArchiveHTTP) async -> Void) async throws -> ArchiveOutcome<LoadedSession> {
+            let http = try await Self.raceHTTP()
+            await setup(http)
+            return await TimingArchive.loadOutcome(Self.race, using: Self.archive(http))
+        }
+        #expect(try await outcome { _ in }.value?.missing == [])
+        if case .unavailable = try await outcome({ await $0.serve(Self.racePath + "DriverList.json", status: 403) }) {} else {
+            Issue.record("a refused DriverList is unavailable")
+        }
+        if case .failed = try await outcome({ await $0.fail(Self.racePath + "Position.z.jsonStream", with: URLError(.timedOut)) }) {} else {
+            Issue.record("a Position that failed to download is failed")
+        }
+        if case .failed = try await outcome({ await $0.serve(Self.racePath + "SessionInfo.json", status: 503) }) {} else {
+            Issue.record("a 503 SessionInfo is failed")
+        }
+        let mixed = try await outcome {
+            await $0.serve(Self.racePath + "Position.z.jsonStream", status: 404)
+            await $0.fail(Self.racePath + "DriverList.json", with: URLError(.networkConnectionLost))
+        }
+        if case .unavailable = mixed {} else { Issue.record("a refusal wins over a failure") }
+        // An optional topic that fails still loads, listed as missing.
+        let optional = try await outcome { await $0.fail(Self.racePath + "WeatherData.jsonStream", with: URLError(.timedOut)) }
+        #expect(optional.value?.missing == ["WeatherData"])
+        // Files that came but hold nothing usable: unavailable.
+        let empty = try await outcome { await $0.serve(Self.racePath + "DriverList.json", body: Data("[]".utf8)) }
+        if case .unavailable = empty {} else { Issue.record("a DriverList that isn't an object is unavailable") }
+    }
+
     @Test func missingPositionGivesNil() async throws {
         let http = try await Self.raceHTTP()
         await http.serve(Self.racePath + "Position.z.jsonStream", status: 403)
@@ -373,6 +404,36 @@ struct LeakyError: Error, CustomStringConvertible {
         odd.start = Date(timeIntervalSince1970: 1e15)
         #expect(await Self.archive(http).session(for: odd, watched: nil) == nil)
         #expect(await http.requests.count == 2)
+    }
+
+    /// Index.json refused or missing (a season the archive doesn't have) is no timing; one that
+    /// failed to download or came back unreadable is worth trying again.
+    @Test func lookupTellsNoMatchFromFailed() async throws {
+        let ref = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "11412", circuitKey: 14,
+                            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix")
+        let http = FakeArchiveHTTP()
+        await http.serve("2026/Index.json", body: try Fixture.data("Index-2026.json"))
+        #expect(await Self.archive(http).lookup(for: ref, watched: nil).value == Self.race)
+        let elsewhere = TimingRef(year: 2026, meetingKey: "9999", meetingName: "Nowhere", title: "2026 Nowhere Grand Prix")
+        if case .unavailable = await Self.archive(http).lookup(for: elsewhere, watched: nil) {} else {
+            Issue.record("no match is unavailable")
+        }
+        for status in [403, 404] {
+            let refused = FakeArchiveHTTP()
+            await refused.serve("2026/Index.json", status: status)
+            if case .unavailable = await Self.archive(refused).lookup(for: ref, watched: nil) {} else {
+                Issue.record("a \(status) index is unavailable")
+            }
+        }
+        let failed = FakeArchiveHTTP()
+        await failed.fail("2026/Index.json", with: URLError(.notConnectedToInternet))
+        if case .failed = await Self.archive(failed).lookup(for: ref, watched: nil) {} else { Issue.record("network: failed") }
+        await failed.serve("2026/Index.json", status: 502)
+        if case .failed = await Self.archive(failed).lookup(for: ref, watched: nil) {} else { Issue.record("502: failed") }
+        await failed.serve("2026/Index.json", body: Data("<html>".utf8))
+        if case .failed = await Self.archive(failed).lookup(for: ref, watched: nil) {} else { Issue.record("garbled: failed") }
+        // `session(for:)` is the same answer without the reason.
+        #expect(await Self.archive(failed).session(for: ref, watched: nil) == nil)
     }
 
     @Test func sessionKeyWithAStartProbesThatDay() async throws {

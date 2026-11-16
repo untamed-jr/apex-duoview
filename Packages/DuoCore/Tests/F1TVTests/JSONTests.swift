@@ -74,10 +74,9 @@ import Testing
               case .number(let decoded) = try JSONValue.parseByDecoding(Data(text.utf8))
         else { Issue.record("not numbers"); return }
         #expect(decoded == exact)
+        // Only the bound: the exact ulp (one up on today's Linux) is the parser's rounding, and a
+        // toolchain that fixes it mustn't turn this red.
         #expect(abs(fast - exact) <= 32 * exact.ulp)
-        #if os(Linux)
-        #expect(fast == exact.nextUp)  // one ulp up
-        #endif
         // With 16 digits or fewer they agree (none of 100 000 random 16-digit doubles differed on
         // Linux; Apple's is not run here).
         for short in ["0.3000000000000000", "-1234.567", "2.146183727904518e-11", "42315.23049734208"] {

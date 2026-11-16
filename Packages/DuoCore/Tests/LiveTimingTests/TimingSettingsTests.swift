@@ -28,14 +28,73 @@ import Library
         s.resetOffset()
         #expect(s.offsetMs == -7000)
         #expect(TimingSettings(store: mem).offsetMs == -7000)
-        // Set directly; huge nudges saturate instead of trapping.
+        // Set directly; huge nudges stop at the limit instead of trapping.
         s.offsetMs = 1500
         #expect(TimingSettings(store: mem).offsetMs == 1500)
         s.nudge(by: .max)
-        #expect(s.offsetMs == .max)
+        #expect(s.offsetMs == 60_000)
         s.nudge(by: .min)
         s.nudge(by: .min)
-        #expect(s.offsetMs == .min)
+        #expect(s.offsetMs == -60_000)
+        s.nudge(by: 1)
+        #expect(s.offsetMs == -59_000)
+    }
+
+    /// ±60 s either way, when set, nudged and read back (a stored value from elsewhere).
+    @Test func offsetStaysWithinAMinute() throws {
+        let mem = MemoryStore()
+        let s = TimingSettings(store: mem)
+        s.offsetMs = 61_000
+        #expect(s.offsetMs == 60_000)
+        s.offsetMs = -3_600_000
+        #expect(s.offsetMs == -60_000)
+        s.offsetMs = 60_000
+        s.nudge(by: 1)
+        #expect(s.offsetMs == 60_000)
+        mem.set(try JSONEncoder().encode(Int64.max), forKey: TimingSettings.offsetKey)
+        #expect(s.offsetMs == 60_000)
+        mem.set(try JSONEncoder().encode(Int64(-90_000)), forKey: TimingSettings.offsetKey)
+        #expect(s.offsetMs == -60_000)
+        s.nudge(by: 2)
+        #expect(s.offsetMs == -58_000)
+    }
+
+    @Test func trackerDelayNudgesWithinItsRange() {
+        let mem = MemoryStore()
+        let s = TimingSettings(store: mem)
+        #expect(s.nudgeTrackerDelay(by: 3) == 3)
+        #expect(s.nudgeTrackerDelay(by: -1) == 2)
+        #expect(TimingSettings(store: mem).trackerDelayHalfSeconds == 2)
+        #expect(s.nudgeTrackerDelay(by: -5) == 0)
+        #expect(s.nudgeTrackerDelay(by: .max) == 40)
+        #expect(s.nudgeTrackerDelay(by: 1) == 40)
+        #expect(s.nudgeTrackerDelay(by: .min) == 0)
+        #expect(s.trackerDelayHalfSeconds == 0)
+    }
+
+    @Test func hiddenCardToggles() {
+        let mem = MemoryStore()
+        let s = TimingSettings(store: mem)
+        #expect(s.toggleHiddenCard(1033))
+        #expect(s.toggleHiddenCard(1016))
+        #expect(TimingSettings(store: mem).hiddenCards == [1016, 1033])
+        #expect(!s.toggleHiddenCard(1033))
+        #expect(s.hiddenCards == [1016])
+        #expect(!s.toggleHiddenCard(1016))
+        #expect(s.hiddenCards.isEmpty)
+    }
+
+    /// Many threads at once: each atomic change lands once (a get then a set would lose some).
+    @Test func atomicChangesDontLoseUpdates() async {
+        let s = TimingSettings(store: MemoryStore())
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<20 {
+                group.addTask { s.toggleHiddenCard(i) }
+                group.addTask { s.nudgeTrackerDelay(by: 1) }
+            }
+        }
+        #expect(s.hiddenCards == Set(0..<20))
+        #expect(s.trackerDelayHalfSeconds == 20)
     }
 
     @Test func perCircuitTurnAndPitLossPersist() {
@@ -140,9 +199,11 @@ import Library
 
     @Test func concurrentNudgesAllCount() async {
         let s = TimingSettings(store: MemoryStore())
+        s.offsetMs = -60_000
+        // 120 one-second nudges take it exactly from one limit to the other.
         await withTaskGroup(of: Void.self) { group in
-            for _ in 0..<200 { group.addTask { s.nudge(by: 1) } }
+            for _ in 0..<120 { group.addTask { s.nudge(by: 1) } }
         }
-        #expect(s.offsetMs == -7000 + 200_000)
+        #expect(s.offsetMs == 60_000)
     }
 }

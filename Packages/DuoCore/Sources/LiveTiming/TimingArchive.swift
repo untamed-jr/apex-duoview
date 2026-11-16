@@ -11,6 +11,22 @@ public enum ArchiveFile: Sendable, Equatable {
     case failed
 }
 
+/// What finding or loading a session in the archive came to.
+public enum ArchiveOutcome<Value: Sendable>: Sendable {
+    case found(Value)
+    /// Not there, or not for this sign-in (a refusal, a 404, nothing that matches): trying again
+    /// won't help, so the session has no timing.
+    case unavailable
+    /// The network failed or F1 answered with some other error: trying again may work.
+    case failed
+
+    /// The value when found.
+    public var value: Value? {
+        if case .found(let value) = self { return value }
+        return nil
+    }
+}
+
 /// A replay's timing, everything the timing views read, built from F1's archive.
 public struct LoadedSession: Sendable {
     public var info: TimingSessionInfo
@@ -80,19 +96,36 @@ public actor TimingArchive {
     /// watched moment, a session named in the title or the video's start (to one day) narrows
     /// them; otherwise the index is the only request.
     public func session(for ref: TimingRef, watched: UTCms?) async -> ArchiveSession? {
-        guard let index = await index(year: ref.year) else { return nil }
-        if let found = SessionLookup.match(index: index, ref: ref, watched: watched) { return found }
-        guard let meeting = SessionLookup.meeting(index: index, ref: ref) else { return nil }
+        await lookup(for: ref, watched: watched).value
+    }
+
+    /// As `session(for:watched:)`, telling a session that isn't there (a refused or missing
+    /// index, no match: `.unavailable`) from one that couldn't be looked for (the index failed
+    /// to download, or came back unreadable: `.failed`, worth trying again). A probe that fails
+    /// counts as no match.
+    public func lookup(for ref: TimingRef, watched: UTCms?) async -> ArchiveOutcome<ArchiveSession> {
+        let index: JSONValue
+        switch await get("\(ref.year)/Index.json", range: nil) {
+        case .data(let body):
+            guard let parsed = try? JSONValue.parse(Self.withoutBOM(body)) else { return .failed }
+            index = parsed
+        case .unavailable:
+            return .unavailable
+        case .failed:
+            return .failed
+        }
+        if let found = SessionLookup.match(index: index, ref: ref, watched: watched) { return .found(found) }
+        guard let meeting = SessionLookup.meeting(index: index, ref: ref) else { return .unavailable }
         let named = SessionLookup.namedFolders(ref.title) != nil
         // A probed session matches by key, by a name in the title or by the moment: with none of
         // them, don't ask.
-        guard watched != nil || ref.sessionKey != nil || named else { return nil }
+        guard watched != nil || ref.sessionKey != nil || named else { return .unavailable }
         // A key alone would mean every folder on each of three days: ask only once the start
         // pins the day.
         guard watched != nil || named
             || SessionLookup.probeDays(ref: ref, meetingFolder: meeting.folder, gmtOffsetSeconds: meeting.gmtOffsetSeconds,
                                        watched: nil).count == 1
-        else { return nil }
+        else { return .unavailable }
         let listed = Set(SessionLookup.candidates(index: index, ref: ref).map(\.session.path))
         let paths = SessionLookup.probePaths(ref: ref, meetingFolder: meeting.folder,
                                              gmtOffsetSeconds: meeting.gmtOffsetSeconds, watched: watched)
@@ -114,7 +147,9 @@ public actor TimingArchive {
         // In the order the paths were asked for, so a tie goes the same way every time.
         let ordered = paths.compactMap { path in probed.first { $0.path == path } }
             + probed.filter { found in !paths.contains(found.path) }
-        return SessionLookup.pick(ordered.map { .init(sameMeeting: true, session: $0) }, ref: ref, watched: watched)
+        guard let picked = SessionLookup.pick(ordered.map { .init(sameMeeting: true, session: $0) }, ref: ref, watched: watched)
+        else { return .unavailable }
+        return .found(picked)
     }
 
     // MARK: Loading
@@ -131,28 +166,51 @@ public actor TimingArchive {
     private enum Fetched: Sendable {
         case json(JSONValue)
         case lines([StreamLine])
+        /// Refused, not there, or (for a .json file) unreadable.
         case missing
+        /// The network failed or F1 answered with another error.
+        case failed
     }
+
+    /// The files without which there is no replay timing.
+    static let required = ["DriverList", "SessionInfo", "Position.z"]
 
     /// Fetches the session's files concurrently and parses them off the caller's actor
     /// (`@concurrent`, whatever the caller's isolation). Nil only when DriverList, SessionInfo or
     /// Position (or every car position in it) is missing.
     @concurrent
     public static func load(_ session: ArchiveSession, using archive: TimingArchive) async -> LoadedSession? {
+        await loadOutcome(session, using: archive).value
+    }
+
+    /// As `load`, telling why there is no session: `.unavailable` when a required file
+    /// (DriverList, SessionInfo, Position) was refused or missing, or holds nothing usable;
+    /// `.failed` when none was refused but one failed to download, so trying again may work. A
+    /// refusal wins over a failure: a retry fetches everything again and can't cure it.
+    @concurrent
+    public static func loadOutcome(_ session: ArchiveSession, using archive: TimingArchive) async -> ArchiveOutcome<LoadedSession> {
         let topics = topics(for: session)
         let files: [String: Fetched] = await withTaskGroup(of: (String, Fetched).self) { group in
             for name in ["DriverList", "SessionInfo"] {
                 group.addTask {
-                    guard case .data(let body) = await archive.file(sessionPath: session.path, name: name + ".json"),
-                          let json = try? JSONValue.parse(withoutBOM(body)) else { return (name, .missing) }
-                    return (name, .json(json))
+                    switch await archive.file(sessionPath: session.path, name: name + ".json") {
+                    case .data(let body):
+                        guard let json = try? JSONValue.parse(withoutBOM(body)) else { return (name, .missing) }
+                        return (name, .json(json))
+                    case .unavailable:
+                        return (name, .missing)
+                    case .failed:
+                        return (name, .failed)
+                    }
                 }
             }
             for name in ["Position.z"] + topics {
                 group.addTask {
-                    guard case .data(let body) = await archive.file(sessionPath: session.path, name: name + ".jsonStream")
-                    else { return (name, .missing) }
-                    return (name, .lines(StreamLine.parseFile(body)))
+                    switch await archive.file(sessionPath: session.path, name: name + ".jsonStream") {
+                    case .data(let body): return (name, .lines(StreamLine.parseFile(body)))
+                    case .unavailable: return (name, .missing)
+                    case .failed: return (name, .failed)
+                    }
                 }
             }
             var out: [String: Fetched] = [:]
@@ -163,13 +221,23 @@ public actor TimingArchive {
             if case .lines(let l)? = files[name] { return l }
             return nil
         }
+        func isMissing(_ name: String) -> Bool {
+            if case .missing? = files[name] { return true }
+            return false
+        }
+        func isFailed(_ name: String) -> Bool {
+            if case .failed? = files[name] { return true }
+            return false
+        }
+        if required.contains(where: isMissing) { return .unavailable }
+        if required.contains(where: isFailed) { return .failed }
         guard case .json(let driverJSON)? = files["DriverList"], case .object = driverJSON,
               case .json(let infoJSON)? = files["SessionInfo"], let info = TimingSessionInfo.parse(infoJSON),
               let positionLines = lines("Position.z")
-        else { return nil }
+        else { return .unavailable }
 
         guard let streamStart = ArchiveClock.streamStart(heartbeat: lines("Heartbeat") ?? [], positions: positionLines)
-        else { return nil }
+        else { return .unavailable }
         async let positions = PositionSeries.parse(lines: positionLines)
         async let timing = TimingTimeline.build(lines: lines("TimingData") ?? [], streamStart: streamStart)
         async let stints = StintTimeline.build(lines: lines("TimingAppData") ?? [], streamStart: streamStart)
@@ -178,8 +246,8 @@ public actor TimingArchive {
         async let flags = TrackFlags.build(trackStatus: lines("TrackStatus") ?? [], raceControl: lines("RaceControlMessages") ?? [],
                                            streamStart: streamStart, gmtOffsetSeconds: info.gmtOffsetSeconds)
         let cars = await positions
-        guard !cars.cars.isEmpty else { return nil }
-        return LoadedSession(
+        guard !cars.cars.isEmpty else { return .unavailable }
+        return .found(LoadedSession(
             info: info,
             drivers: Drivers.parse(driverJSON),
             streamStart: streamStart,
@@ -190,7 +258,7 @@ public actor TimingArchive {
             flags: await flags,
             sessionStatus: SessionStatusTimeline.build(lines: lines("SessionStatus") ?? [], streamStart: streamStart),
             missing: topics.filter { lines($0) == nil }
-        )
+        ))
     }
 
     // MARK: Requests

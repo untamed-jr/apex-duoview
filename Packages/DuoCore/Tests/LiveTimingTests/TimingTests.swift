@@ -66,6 +66,23 @@ import F1TV
         #expect(joined.state(of: "3", at: Self.t0 + 30_000)?.lineCrossedAt == nil)
     }
 
+    @Test func lineCrossingsStopAtT() throws {
+        let timing = try Self.race()
+        let all = timing.lineCrossings(upTo: .max)
+        // Car 44's first two lines (check:car44Lap1CrossingOffset, check:car44Lap2CrossingOffset).
+        let car44 = all.filter { $0.car == "44" }.map(\.at)
+        #expect(Array(car44.prefix(2)) == [Fixture.raceStart + 3_323_236, Fixture.raceStart + 3_412_677])
+        #expect(zip(car44, car44.dropFirst()).allSatisfy { $0 < $1 })
+        #expect(Set(all.map(\.car)).count >= 20)
+        // Nothing after t, and the crossing at exactly t counts.
+        let cut = Fixture.raceStart + 3_412_677
+        let early = timing.lineCrossings(upTo: cut)
+        #expect(early.allSatisfy { $0.at <= cut })
+        #expect(early.contains { $0.car == "44" && $0.at == cut })
+        #expect(early.count < all.count)
+        #expect(timing.lineCrossings(upTo: Fixture.raceLightsOut).isEmpty)
+    }
+
     @Test func timingRetiredCarFlagged() {
         let timing = TimingTimeline.build(lines: lines(
             #"00:00:01.000{"Lines":{"4":{"Position":"7","Retired":false,"Stopped":false,"NumberOfLaps":10}}}"#,

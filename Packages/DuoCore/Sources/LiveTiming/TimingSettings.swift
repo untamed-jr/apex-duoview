@@ -9,7 +9,13 @@ import CoreGraphics
 /// turn and pit loss, where panels sit, and a few switches. Stored as JSON under keys that start
 /// with "timing.". As `MultiviewStore` does: each call is atomic for this instance, a value that
 /// can't be read gives the starting value, and a value that can't be encoded (not a number)
-/// leaves the stored one as it was.
+/// leaves the stored one as it was. Changes that read the stored value first (`nudge`,
+/// `nudgeTrackerDelay`, `toggleHiddenCard`) are one atomic call each: use them rather than a get
+/// then a set.
+///
+/// Panel and posture names become part of a key ("timing.panelFrame.<posture>.<panel>"): they
+/// must not contain "." (or "book" + "a.map" and "book.a" + "map" would share a key). Callers
+/// use fixed names such as "map" and "book-wide".
 public final class TimingSettings: @unchecked Sendable {
     static let offsetKey = "timing.offsetMs"
     static let showWholeRaceKey = "timing.showWholeRace"
@@ -25,6 +31,9 @@ public final class TimingSettings: @unchecked Sendable {
 
     /// The tracker delay's range, in half-seconds (0 to 20 s).
     public static let trackerDelayRange = 0...40
+    /// How far the picture offset may go either way, in ms: further than any broadcast delay, and
+    /// a value read back from a bad store can't put timing hours away.
+    public static let offsetLimitMs: Int64 = 60_000
 
     private let lock = NSLock()
     private let store: any KeyValueStore
@@ -35,18 +44,19 @@ public final class TimingSettings: @unchecked Sendable {
 
     // MARK: Picture offset
 
-    /// `PictureClock`'s offset; `PictureClock.defaultOffsetMs` until changed.
+    /// `PictureClock`'s offset; `PictureClock.defaultOffsetMs` until changed. Kept within
+    /// ±`offsetLimitMs` when set and when read.
     public var offsetMs: Int64 {
         get { lock.lock(); defer { lock.unlock() }; return loadOffset() }
-        set { lock.lock(); defer { lock.unlock() }; write(newValue, Self.offsetKey) }
+        set { lock.lock(); defer { lock.unlock() }; write(Self.clampedOffset(newValue), Self.offsetKey) }
     }
 
-    /// Moves the offset by whole seconds (positive is later), saturating at Int64's ends.
+    /// Moves the offset by whole seconds (positive is later), within ±`offsetLimitMs`.
     public func nudge(by seconds: Int) {
         lock.lock(); defer { lock.unlock() }
         let (ms, overflow) = Int64(seconds).multipliedReportingOverflow(by: 1000)
         let step = overflow ? (seconds > 0 ? Int64.max : .min) : ms
-        write(F1Values.add(loadOffset(), step), Self.offsetKey)
+        write(Self.clampedOffset(F1Values.add(loadOffset(), step)), Self.offsetKey)
     }
 
     public func resetOffset() {
@@ -121,11 +131,34 @@ public final class TimingSettings: @unchecked Sendable {
         set { lock.lock(); defer { lock.unlock() }; write(Self.clampedDelay(newValue), Self.trackerDelayKey) }
     }
 
+    /// Moves the tracker delay by `halfSeconds` (positive is longer), within `trackerDelayRange`.
+    /// Returns the new value.
+    @discardableResult
+    public func nudgeTrackerDelay(by halfSeconds: Int) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let current = Self.clampedDelay(read(Int.self, Self.trackerDelayKey) ?? 0)
+        let (sum, overflow) = current.addingReportingOverflow(halfSeconds)
+        let value = Self.clampedDelay(overflow ? (halfSeconds > 0 ? Int.max : Int.min) : sum)
+        write(value, Self.trackerDelayKey)
+        return value
+    }
+
     /// Channel ids whose driver cards the viewer hid.
     public var hiddenCards: Set<Int> {
         get { lock.lock(); defer { lock.unlock() }; return Set(read([Int].self, Self.hiddenCardsKey) ?? []) }
         // Sorted, so the same set is always stored the same way.
         set { lock.lock(); defer { lock.unlock() }; write(newValue.sorted(), Self.hiddenCardsKey) }
+    }
+
+    /// Hides this channel's card if it shows, shows it if hidden. Returns whether it is now hidden.
+    @discardableResult
+    public func toggleHiddenCard(_ channelId: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        var cards = Set(read([Int].self, Self.hiddenCardsKey) ?? [])
+        let hidden = cards.remove(channelId) == nil
+        if hidden { cards.insert(channelId) }
+        write(cards.sorted(), Self.hiddenCardsKey)
+        return hidden
     }
 
     /// "Speed readouts on mobile data": the car data behind the speed readouts may download on
@@ -141,7 +174,11 @@ public final class TimingSettings: @unchecked Sendable {
         min(max(value, trackerDelayRange.lowerBound), trackerDelayRange.upperBound)
     }
 
-    private func loadOffset() -> Int64 { read(Int64.self, Self.offsetKey) ?? PictureClock.defaultOffsetMs }
+    private static func clampedOffset(_ ms: Int64) -> Int64 {
+        min(max(ms, -offsetLimitMs), offsetLimitMs)
+    }
+
+    private func loadOffset() -> Int64 { Self.clampedOffset(read(Int64.self, Self.offsetKey) ?? PictureClock.defaultOffsetMs) }
 
     private func read<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
         guard let data = store.data(forKey: key) else { return nil }

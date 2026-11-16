@@ -54,6 +54,23 @@ import F1TV
         #expect(g.progress(of: TrackPoint(x: 0, y: 1000)) < 1)
     }
 
+    @Test func pointAtProgressWalksTheLoop() {
+        let g = TrackGeometry(outline: Self.square)
+        #expect(g.point(atProgress: 0) == TrackPoint(x: 0, y: 0))
+        #expect(g.point(atProgress: 0.25) == TrackPoint(x: 1000, y: 0))
+        #expect(g.point(atProgress: 0.125) == TrackPoint(x: 500, y: 0))
+        #expect(g.point(atProgress: 0.875) == TrackPoint(x: 0, y: 500))  // the closing segment
+        #expect(g.point(atProgress: 1.125) == TrackPoint(x: 500, y: 0))  // wraps
+        #expect(g.point(atProgress: -0.125) == TrackPoint(x: 0, y: 500))
+        // It round-trips with progress.
+        for f in stride(from: 0.0, to: 1.0, by: 0.05) {
+            #expect(abs(g.progress(of: g.point(atProgress: f)) - f) < 1e-9)
+        }
+        #expect(g.point(atProgress: .nan) == TrackPoint(x: 0, y: 0))
+        #expect(TrackGeometry(outline: []).point(atProgress: 0.5) == TrackPoint(x: 0, y: 0))
+        #expect(TrackGeometry(outline: [TrackPoint(x: 5, y: 5)]).point(atProgress: 0.5) == TrackPoint(x: 5, y: 5))
+    }
+
     @Test func progressOfDegenerateOutlinesIsZero() {
         #expect(TrackGeometry(outline: []).progress(of: TrackPoint(x: 1, y: 1)) == 0)
         #expect(TrackGeometry(outline: [TrackPoint(x: 5, y: 5)]).progress(of: TrackPoint(x: 1, y: 1)) == 0)
