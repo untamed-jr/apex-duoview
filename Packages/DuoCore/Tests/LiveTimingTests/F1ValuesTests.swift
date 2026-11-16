@@ -82,7 +82,7 @@ import F1TV
                 _ = timing.at(t)
                 _ = header.at(t)
                 _ = flags.at(t)
-                _ = CarDataWindow.readout([CarSample(t: 0, rpm: 0, speedKmh: 0, gear: 0, throttle: 0, brake: 0, ch45: 0)], at: t)
+                _ = CarDataWindow.readout([CarSample(t: 0, speedKmh: 0)], at: t)
             }
         }
         for offset in [Int.min, -64_801, 64_801, Int.max] {

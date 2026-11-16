@@ -11,6 +11,19 @@ public enum ArchiveFile: Sendable, Equatable {
     case failed
 }
 
+/// One byte range of an archive file, telling a range the server honoured from one it ignored.
+public enum ArchiveRange: Sendable, Equatable {
+    /// The server honoured the range (206): these bytes, fewer than asked for at the file's end.
+    case partial(Data)
+    /// The server ignored the range and sent the whole file (a 200, so no Content-Range): the
+    /// caller has the file and stops asking for ranges.
+    case whole(Data)
+    /// Refused (401/403), no such file (404), or the range starts past the end (416).
+    case unavailable(status: Int)
+    /// The network failed or F1 answered with some other error; trying again may work.
+    case failed
+}
+
 /// What finding or loading a session in the archive came to.
 public enum ArchiveOutcome<Value: Sendable>: Sendable {
     case found(Value)
@@ -94,6 +107,24 @@ public actor TimingArchive {
     /// file; only the asked-for bytes come back.
     public func range(sessionPath: String, name: String, bytes: ClosedRange<Int>) async -> ArchiveFile {
         await get(sessionPath + name, range: bytes)
+    }
+
+    /// As `range`, but says whether the server honoured the range (`.partial`) or sent the whole
+    /// file (`.whole`), so a caller fetching a large file piece by piece (CarData) can fall back
+    /// to that one whole download instead of fetching the file again for every piece.
+    public func byteRange(sessionPath: String, name: String, bytes: ClosedRange<Int>) async -> ArchiveRange {
+        guard bytes.lowerBound >= 0 else { return .unavailable(status: 416) }
+        guard let response = await send(sessionPath + name, range: bytes) else { return .failed }
+        switch response.status {
+        case 206:
+            return .partial(response.body)
+        case 200..<300:
+            return .whole(response.body)
+        case 401, 403, 404, 416:
+            return .unavailable(status: response.status)
+        default:
+            return .failed
+        }
     }
 
     /// The archive session an F1 TV video shows: from the season's index by `SessionLookup`'s
@@ -286,17 +317,7 @@ public actor TimingArchive {
     private func get(_ path: String, range: ClosedRange<Int>?) async -> ArchiveFile {
         // A negative start would go out as a suffix range ("the last n bytes").
         if let range, range.lowerBound < 0 { return .unavailable(status: 416) }
-        guard let url = url(path) else { return .failed }
-        var headers = ["User-Agent": Endpoints.userAgent]
-        if let token = await token(), !token.isEmpty { headers["Authorization"] = "Bearer " + token }
-        if let range { headers["Range"] = "bytes=\(range.lowerBound)-\(range.upperBound)" }
-        let response: HTTPResponse
-        do {
-            response = try await http.send(HTTPRequest(method: "GET", url: url, headers: headers))
-        } catch {
-            // The error's text is never passed on: a transport could have put the header in it.
-            return .failed
-        }
+        guard let response = await send(path, range: range) else { return .failed }
         switch response.status {
         case 206:
             return .data(response.body)
@@ -313,6 +334,21 @@ public actor TimingArchive {
             return .unavailable(status: response.status)
         default:
             return .failed
+        }
+    }
+
+    /// One GET under the base, with the token and the range; nil for a path that could leave the
+    /// archive, or when the network failed.
+    private func send(_ path: String, range: ClosedRange<Int>?) async -> HTTPResponse? {
+        guard let url = url(path) else { return nil }
+        var headers = ["User-Agent": Endpoints.userAgent]
+        if let token = await token(), !token.isEmpty { headers["Authorization"] = "Bearer " + token }
+        if let range { headers["Range"] = "bytes=\(range.lowerBound)-\(range.upperBound)" }
+        do {
+            return try await http.send(HTTPRequest(method: "GET", url: url, headers: headers))
+        } catch {
+            // The error's text is never passed on: a transport could have put the header in it.
+            return nil
         }
     }
 

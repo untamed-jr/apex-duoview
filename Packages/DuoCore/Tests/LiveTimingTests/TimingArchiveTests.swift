@@ -169,6 +169,33 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await http.requests.count == sent)
     }
 
+    @Test func byteRangeTellsAHonouredRangeFromAnIgnoredOne() async throws {
+        let http = FakeArchiveHTTP()
+        let archive = Self.archive(http)
+        let body = Data((0..<200).map { UInt8($0) })
+        await http.serve("x/partial.z", status: 206, body: body.subdata(in: 0..<100))
+        #expect(await archive.byteRange(sessionPath: "x/", name: "partial.z", bytes: 0...99) == .partial(body.subdata(in: 0..<100)))
+        #expect(await http.requests.last?.headers["Range"] == "bytes=0-99")
+        #expect(await http.requests.last?.headers["Authorization"] == "Bearer \(Self.token)")
+        // A 200 is the whole file, kept whole: the caller stops asking for ranges.
+        await http.serve("x/whole.z", body: body)
+        #expect(await archive.byteRange(sessionPath: "x/", name: "whole.z", bytes: 100...199) == .whole(body))
+        // Past the end, refused, missing: unavailable with the status; other errors failed.
+        for status in [416, 401, 403, 404] {
+            await http.serve("x/s.z", status: status)
+            #expect(await archive.byteRange(sessionPath: "x/", name: "s.z", bytes: 0...9) == .unavailable(status: status))
+        }
+        await http.serve("x/s.z", status: 503)
+        #expect(await archive.byteRange(sessionPath: "x/", name: "s.z", bytes: 0...9) == .failed)
+        await http.fail("x/s.z", with: URLError(.timedOut))
+        #expect(await archive.byteRange(sessionPath: "x/", name: "s.z", bytes: 0...9) == .failed)
+        // A negative start is refused unsent; a path that leaves the archive fails unsent.
+        let sent = await http.requests.count
+        #expect(await archive.byteRange(sessionPath: "x/", name: "s.z", bytes: -10...5) == .unavailable(status: 416))
+        #expect(await archive.byteRange(sessionPath: "../", name: "s.z", bytes: 0...9) == .failed)
+        #expect(await http.requests.count == sent)
+    }
+
     @Test func indexStripsTheBOM() async throws {
         let http = FakeArchiveHTTP()
         await http.serve("2026/Index.json", body: Data([0xEF, 0xBB, 0xBF]) + (try Fixture.data("Index-2026.json")))

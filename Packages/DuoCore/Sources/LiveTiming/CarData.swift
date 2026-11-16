@@ -2,18 +2,20 @@ import Foundation
 import F1TV
 
 /// One car's telemetry at one moment, from CarData.z. Channels: 0 rpm, 2 speed (km/h),
-/// 3 gear, 4 throttle (%), 5 brake, 45 DRS on older cars. A channel F1 leaves out reads 0;
-/// the São Paulo 2026 data has no channel 45 at all.
+/// 3 gear, 4 throttle (%), 5 brake, 45 DRS on older cars. A channel F1 leaves out is nil
+/// (absent), never 0: the São Paulo 2026 data has no channel 45 at all, and a readout must not
+/// show a missing speed as standing still.
 public struct CarSample: Sendable, Equatable {
     public var t: UTCms
-    public var rpm: Int
-    public var speedKmh: Int
-    public var gear: Int
-    public var throttle: Int
-    public var brake: Int
-    public var ch45: Int
+    public var rpm: Int?
+    public var speedKmh: Int?
+    public var gear: Int?
+    public var throttle: Int?
+    public var brake: Int?
+    public var ch45: Int?
 
-    public init(t: UTCms, rpm: Int, speedKmh: Int, gear: Int, throttle: Int, brake: Int, ch45: Int) {
+    public init(t: UTCms, rpm: Int? = nil, speedKmh: Int? = nil, gear: Int? = nil, throttle: Int? = nil,
+                brake: Int? = nil, ch45: Int? = nil) {
         self.t = t
         self.rpm = rpm
         self.speedKmh = speedKmh
@@ -42,7 +44,7 @@ public enum CarDataWindow {
                 for (number, value) in list {
                     guard let channels = (value as? [String: Any])?["Channels"] as? [String: Any] else { continue }
                     if let last = cars[number]?.last, t <= last.t { continue }
-                    func channel(_ key: String) -> Int { F1Values.int(channels[key]) ?? 0 }
+                    func channel(_ key: String) -> Int? { F1Values.int(channels[key]) }
                     cars[number, default: []].append(CarSample(
                         t: t, rpm: channel("0"), speedKmh: channel("2"), gear: channel("3"),
                         throttle: channel("4"), brake: channel("5"), ch45: channel("45")))
