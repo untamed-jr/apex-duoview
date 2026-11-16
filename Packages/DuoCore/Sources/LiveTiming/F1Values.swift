@@ -66,15 +66,19 @@ enum F1Values {
         return overflow ? (b < 0 ? .max : .min) : r
     }
 
-    /// A number from `JSONSerialization`, which may give NSNumber or a native number.
+    /// A number from `JSONSerialization`, which may give NSNumber or a native number, or a
+    /// string holding one. Nil for NaN and infinities ("nan" and "inf" read as Double's own).
     static func number(_ value: Any?) -> Double? {
+        let d: Double?
         switch value {
-        case let d as Double: return d.isFinite ? d : nil
-        case let i as Int: return Double(i)
-        case let n as NSNumber: return n.doubleValue.isFinite ? n.doubleValue : nil
-        case let s as String: return Double(s)
-        default: return nil
+        case let v as Double: d = v
+        case let i as Int: d = Double(i)
+        case let n as NSNumber: d = n.doubleValue
+        case let s as String: d = Double(s)
+        default: d = nil
         }
+        guard let d, d.isFinite else { return nil }
+        return d
     }
 
     /// A whole number (truncated toward zero) from `JSONSerialization`; nil when out of range.

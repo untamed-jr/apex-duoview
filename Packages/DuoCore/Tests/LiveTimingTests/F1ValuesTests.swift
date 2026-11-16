@@ -34,6 +34,16 @@ import F1TV
         #expect(info.start == SignalR.utc("2026-11-08T14:00:00Z"))
     }
 
+    /// "nan" and "inf" are Double's own spellings, not F1 numbers: they'd store NaN positions.
+    @Test func nonFiniteNumbersAreNil() {
+        for value: Any in ["nan", "NaN", "inf", "-infinity", Double.nan, Double.infinity, NSNumber(value: Double.nan)] {
+            #expect(F1Values.number(value) == nil)
+        }
+        #expect(F1Values.number("12.5") == 12.5)
+        #expect(F1Values.number(NSNumber(value: -3)) == -3)
+        #expect(F1Values.int("nan") == nil)
+    }
+
     @Test func saturatingArithmetic() {
         #expect(F1Values.add(.max, 1) == .max)
         #expect(F1Values.add(.min, -1) == .min)

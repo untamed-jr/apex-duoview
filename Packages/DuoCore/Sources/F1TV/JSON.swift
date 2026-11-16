@@ -10,8 +10,37 @@ public enum JSONValue: Sendable, Equatable {
     case array([JSONValue])
     case object([String: JSONValue])
 
+    /// Parses with `JSONSerialization`, which reads a 70 000-line timing file many times faster
+    /// than the decoder below (that one tries each type in turn and catches the failures).
+    /// Top-level strings, numbers and nulls parse too. The result is the decoder's, booleans
+    /// included: JSON's `true` is `.bool`, its `1` is `.number`.
     public static func parse(_ data: Data) throws -> JSONValue {
+        value(try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed))
+    }
+
+    /// The `JSONDecoder` path `parse` replaced; kept to prove they agree.
+    package static func parseByDecoding(_ data: Data) throws -> JSONValue {
         try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    /// The class of JSONSerialization's booleans (`__NSCFBoolean`, on Apple and Linux alike).
+    /// Checked by class because a boolean NSNumber and the number 1 both cast to Bool.
+    private static let booleanClass = ObjectIdentifier(type(of: NSNumber(value: true)))
+
+    private static func value(_ any: Any) -> JSONValue {
+        switch any {
+        case let s as String:
+            return .string(s)
+        case let n as NSNumber:
+            if ObjectIdentifier(type(of: n)) == booleanClass { return .bool(n.boolValue) }
+            return .number(n.doubleValue)
+        case let a as [Any]:
+            return .array(a.map(value))
+        case let o as [String: Any]:
+            return .object(o.mapValues(value))
+        default:
+            return .null
+        }
     }
 
     /// The member for `key`, or `.null` when this isn't an object or the key is missing.

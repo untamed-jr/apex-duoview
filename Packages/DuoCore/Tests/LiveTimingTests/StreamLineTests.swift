@@ -46,4 +46,23 @@ import F1TV
         #expect(line.offsetMs == 3_600_000)
         #expect(line.json == .string("eJw="))
     }
+
+    /// Past a day F1's recorder writes "d.HH:MM:SS.mmm" (the 2026 Mexico race's radio was all
+    /// "1.02:32:50.914"); those lines and the plain ones around them all parse.
+    @Test func dayPrefixedOffsets() throws {
+        let text = "23:59:59.999{\"a\":1}\n1.00:00:00.000{\"a\":2}\n1.02:32:50.914{\"a\":3}\n12.01:00:00.001\"eJw=\"\n"
+        let lines = StreamLine.parseFile(Data(text.utf8))
+        #expect(lines.map(\.offsetMs) == [86_399_999, 86_400_000, 95_570_914, 1_040_400_001])
+        #expect(lines.map { $0.json["a"].int } == [1, 2, 3, nil])
+        #expect(lines.last?.json == .string("eJw="))
+    }
+
+    @Test func badDayPrefixesAreSkipped() {
+        #expect(StreamLine.parse(".00:00:01.000{\"a\":1}") == nil)
+        #expect(StreamLine.parse("x.00:00:01.000{\"a\":1}") == nil)
+        #expect(StreamLine.parse("1x00:00:01.000{\"a\":1}") == nil)
+        // More day digits than any recording could need: skipped, never an overflow trap.
+        #expect(StreamLine.parse("99999999999999999999.00:00:01.000{\"a\":1}") == nil)
+        #expect(StreamLine.parse("1.0:00:01.000{\"a\":1}") == nil)
+    }
 }
