@@ -4,13 +4,18 @@ import F1TV
 @testable import LiveTiming
 
 /// Stands in for F1's archive host: answers by the path under /static/, records every request,
-/// and can hold each answer briefly to show fetches overlap.
+/// and can hold every answer until a number of requests are in flight at once, to prove fetches
+/// overlap.
 actor FakeArchiveHTTP: HTTPClient {
     private var answers: [String: Result<HTTPResponse, Error>] = [:]
     private(set) var requests: [HTTPRequest] = []
     private var inFlight = 0
     private(set) var maxInFlight = 0
-    var delay: Duration = .zero
+    private var holdUntil = 0
+    private var held: [CheckedContinuation<Void, Never>] = []
+    private var holdTimer: Task<Void, Never>?
+    /// The hold ran out before enough requests were in flight: they were not all concurrent.
+    private(set) var holdTimedOut = false
 
     func serve(_ path: String, status: Int = 200, body: Data = Data()) {
         answers[path] = .success(HTTPResponse(status: status, body: body))
@@ -18,7 +23,28 @@ actor FakeArchiveHTTP: HTTPClient {
 
     func fail(_ path: String, with error: Error) { answers[path] = .failure(error) }
 
-    func setDelay(_ d: Duration) { delay = d }
+    /// Holds each request until `count` are in flight together. After `timeout` every held
+    /// request is let go and `holdTimedOut` is set, so a test fails instead of hanging.
+    func hold(until count: Int, timeout: Duration) {
+        holdUntil = count
+        holdTimer = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            await self?.release(timedOut: true)
+        }
+    }
+
+    /// Lets every held request go (once each) and stops holding.
+    private func release(timedOut: Bool) {
+        guard holdUntil > 0 else { return }
+        if timedOut { holdTimedOut = true }
+        holdUntil = 0
+        holdTimer?.cancel()
+        holdTimer = nil
+        let waiting = held
+        held = []
+        for continuation in waiting { continuation.resume() }
+    }
 
     /// Every committed fixture file of a session, under its archive folder.
     func serveSession(fixture dir: String, at sessionPath: String) throws {
@@ -33,7 +59,13 @@ actor FakeArchiveHTTP: HTTPClient {
         inFlight += 1
         maxInFlight = max(maxInFlight, inFlight)
         defer { inFlight -= 1 }
-        if delay > .zero { try? await Task.sleep(for: delay) }
+        if holdUntil > 0 {
+            if inFlight >= holdUntil {
+                release(timedOut: false)
+            } else {
+                await withCheckedContinuation { held.append($0) }
+            }
+        }
         let path = request.url.path.hasPrefix("/static/") ? String(request.url.path.dropFirst(8)) : request.url.path
         guard let answer = answers[path] else { return HTTPResponse(status: 404, body: Data()) }
         return try answer.get()
@@ -235,11 +267,17 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(await TimingArchive.load(Self.race, using: Self.archive(http)) == nil)
     }
 
+    /// Every file is asked for before any answer comes back: the fake holds each request until
+    /// all of them are in flight together (failing, not hanging, if they never are).
     @Test func loadFetchesConcurrently() async throws {
         let http = try await Self.raceHTTP()
-        await http.setDelay(.milliseconds(50))
-        _ = await TimingArchive.load(Self.race, using: Self.archive(http))
-        #expect(await http.maxInFlight >= 5)
+        let files = 3 + TimingArchive.topics(for: Self.race).count  // DriverList, SessionInfo, Position.z
+        await http.hold(until: files, timeout: .seconds(30))
+        let loaded = await TimingArchive.load(Self.race, using: Self.archive(http))
+        #expect(await !http.holdTimedOut)
+        #expect(await http.maxInFlight == files)
+        #expect(await http.requests.count == files)
+        #expect(loaded?.missing == [])
     }
 
     @Test func tokenNeverInResult() async throws {
