@@ -71,7 +71,7 @@ listed in [CHANGELOG.md](CHANGELOG.md).
 ## Build it yourself
 
 1. Install XcodeGen: `brew install xcodegen`
-2. Clone the repository and check out the `ios` branch.
+2. Clone the repository (the `main` branch is the iPhone app).
 3. Copy `Config/Signing.local.xcconfig.example` to `Config/Signing.local.xcconfig` and set your
    own bundle ID and team in it. This file is never committed.
 4. Run `xcodegen generate`.
@@ -79,7 +79,7 @@ listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Branches
 
-- **`ios`:** this app, Apex DuoView. All iOS work happens here.
+- **`main`:** this app, Apex DuoView. All iOS work happens here (called `ios` until 2026-11-16).
 - **`og-android`:** a copy of the original Android app, kept in step with its author's repository.
   It's the reference for porting and isn't changed here. The two branches are never merged.
 

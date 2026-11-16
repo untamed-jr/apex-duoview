@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [ios]
+    branches: [main]
 jobs:
   duocore:
     runs-on: ubuntu-24.04

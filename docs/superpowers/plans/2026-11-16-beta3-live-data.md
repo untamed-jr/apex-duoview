@@ -102,7 +102,7 @@
 - `Config/Version.xcconfig`: `BETA_LABEL = beta.3`. `CURRENT_PROJECT_VERSION` goes to 11, 12, 13, 14, 15 at the five owner builds (Tasks 7, 9, 11, 13, 15).
 - Tokens, cookies and signed URLs are never logged, printed, put in errors or files, or committed.
 - Fixtures are timing data trimmed from the owner's T-A download (`beta3-fixtures.zip`).
-- Commits end with the session's attribution lines. Push to `ios` only.
+- Commits end with the session's attribution lines. Push to `main` only (the branch was called `ios` until 2026-11-16).
 - The app can't be compiled in the cloud. App tasks are written to compile first time, and each owner build checks them.
 
 ## Review Focus
