@@ -119,6 +119,8 @@ struct DetailView: View {
     private func startFeed(_ detail: VideoDetail, _ channel: Channel, fromStart: Bool) {
         var playing = item
         if playing.title.isEmpty { playing.title = detail.title }
+        // A bookmark's tile keeps no metadata: the video's details say where its timing is.
+        if playing.timingRef == nil { playing.timingRef = detail.timingRef }
         context.onPlay(playing, channel, fromStart)
     }
 
