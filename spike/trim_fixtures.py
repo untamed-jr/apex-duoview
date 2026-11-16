@@ -325,6 +325,9 @@ def report(race_dir, quali_dir, race_lo, quali_q1):
     raw_td = read_stream(os.path.join(RAW, "2026-11-08_Race", "TimingData.jsonStream"))
     ws = race_lo - 2 * MINUTE
     check("trimmedStateAtWindowStartEqualsRaw", merged_until(td, ws - 1) == merged_until(raw_td, ws - 1))
+    qtd_trim = read_stream(os.path.join(quali_dir, "TimingData.jsonStream"))
+    qtd_raw = read_stream(os.path.join(RAW, "2026-11-07_Qualifying", "TimingData.jsonStream"))
+    check("qualiTrimmedStateAtWindowStartEqualsRaw", merged_until(qtd_trim, quali_q1 - 1) == merged_until(qtd_raw, quali_q1 - 1))
     t5 = race_lo + 5 * MINUTE
     state = merged_until(td, t5)
     laps = {n: d.get("NumberOfLaps") for n, d in state["Lines"].items()}
@@ -338,6 +341,10 @@ def report(race_dir, quali_dir, race_lo, quali_q1):
     s44 = merged_until(td, 3_435_379)["Lines"]["44"]
     check("car44AtOffset3435379", (s44["NumberOfLaps"], [(s.get("Value"), s.get("PersonalFastest"), s.get("OverallFastest")) for s in s44["Sectors"]],
                                    s44["LastLapTime"]["Value"], s44["LastLapTime"].get("PersonalFastest")))
+    # Lap 1 ends with car 44's first NumberOfLaps: the keyframe and every earlier line have none.
+    lap1 = [off for off, text in td if json.loads(text).get("Lines", {}).get("44", {}).get("NumberOfLaps") == 1]
+    before = merged_until(td, lap1[0] - 1)["Lines"]["44"]
+    check("car44Lap1CrossingOffset", (lap1[0], "NumberOfLaps" in before, json.loads(dict(td)[lap1[0]])["Lines"]["44"].get("Sectors")))
     crossing = [off for off, text in td if json.loads(text).get("Lines", {}).get("44", {}).get("NumberOfLaps") == 2]
     check("car44Lap2CrossingOffset", crossing[0])
     check("car44Lap2CrossingDelta", json.loads(dict(td)[crossing[0]])["Lines"]["44"])

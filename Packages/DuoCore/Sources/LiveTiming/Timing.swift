@@ -61,11 +61,13 @@ public struct DriverTimingState: Sendable, Equatable {
 /// (TopicMerge); a car's derived state is kept only when it changes (most lines only move
 /// mini-sector segments), so `at` is a binary search per car rather than a replay.
 ///
-/// Rules ported from Android's DriverTiming, with one change: sector colours come from F1's
-/// merged flags. F1 sends PersonalFastest/OverallFastest only when they change (an emptied
+/// Rules ported from Android's DriverTiming, with two changes. Sector colours come from F1's
+/// merged flags: F1 sends PersonalFastest/OverallFastest only when they change (an emptied
 /// sector gets an explicit false), so resetting them at the line, as Android did, would turn a
-/// personal best yellow. Kept from Android: the sectors go blank at the line until each is set
-/// again, and a final sector arriving up to 3 s after the line belongs to the lap just done.
+/// personal best yellow. And a car's first NumberOfLaps counts as crossing the line when the car
+/// was already known without one: 2026 sends none until lap 1 ends. Kept from Android: the
+/// sectors go blank at the line until each is set again, and a final sector arriving up to 3 s
+/// after the line belongs to the lap just done.
 public struct TimingTimeline: Sendable {
     struct History: Sendable {
         var times: [UTCms] = []
@@ -170,9 +172,14 @@ public struct TimingTimeline: Sendable {
                 let late = i == 2 && !fresh[0] && crossedAt.map { (1...TimingTimeline.lateSectorMs).contains(t - $0) } == true
                 if !late { fresh[i] = true }
             }
+            let known = !line.isNull
             line = TopicMerge.merge(line, delta)
             if let n = delta["NumberOfLaps"].int {
-                if let before = laps, n > before {
+                // A count that goes up is a crossing; so is the first count for a car already
+                // known without one (2026 sends none until lap 1 ends). A car's first line —
+                // a live feed's opening snapshot — is never one.
+                let crossed = laps.map { n > $0 } ?? (known && n > 0)
+                if crossed {
                     crossedAt = t
                     fresh = [false, false, false]
                 }

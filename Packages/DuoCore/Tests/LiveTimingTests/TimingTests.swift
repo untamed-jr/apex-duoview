@@ -45,6 +45,27 @@ import F1TV
         #expect(s1.lineCrossedAt == crossing)
     }
 
+    @Test func lapOneEndsWithF1sFirstCount() throws {
+        // check:car44Lap1CrossingOffset = (3323236, False, S3 "19.723"): no count before lap 1
+        // ends, so the first count is the line; S3 came with it and belongs to lap 1.
+        let timing = try Self.race()
+        let crossing = Fixture.raceStart + 3_323_236
+        #expect(timing.state(of: "44", at: crossing - 1)?.lineCrossedAt == nil)
+        let s = try #require(timing.state(of: "44", at: crossing))
+        #expect(s.numberOfLaps == 1)
+        #expect(s.lineCrossedAt == crossing)
+        #expect(s.sectors == [.empty, .empty, .empty])
+
+        // A car's first line (a live feed's opening snapshot) is never a crossing, nor is a 0.
+        let joined = TimingTimeline.build(lines: lines(
+            #"00:00:01.000{"Lines":{"1":{"NumberOfLaps":14},"2":{"Position":"2"},"3":{"Position":"3"}}}"#,
+            #"00:00:30.000{"Lines":{"2":{"NumberOfLaps":1},"3":{"NumberOfLaps":0}}}"#
+        ), streamStart: Self.t0)
+        #expect(joined.state(of: "1", at: Self.t0 + 1000)?.lineCrossedAt == nil)
+        #expect(joined.state(of: "2", at: Self.t0 + 30_000)?.lineCrossedAt == Self.t0 + 30_000)
+        #expect(joined.state(of: "3", at: Self.t0 + 30_000)?.lineCrossedAt == nil)
+    }
+
     @Test func timingRetiredCarFlagged() {
         let timing = TimingTimeline.build(lines: lines(
             #"00:00:01.000{"Lines":{"4":{"Position":"7","Retired":false,"Stopped":false,"NumberOfLaps":10}}}"#,
