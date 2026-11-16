@@ -179,8 +179,12 @@ There was one sensible way: port the Android app's approach. The others were rul
   - Position.z, Heartbeat, TimingData, TimingAppData, SessionStatus, RaceControlMessages,
     TrackStatus, LapCount (races), ExtrapolatedClock;
   - WeatherData, only if the archive has it (added).
-  - `CarData.z` is read only when Race Engineer or an onboard's speed readout needs it, and then
-    only a window around picture time, never the whole file in memory.
+  - `CarData.z` (owner, option A, 2026-11-16): fetched in the background, like Android, as soon
+    as an onboard or Race Engineer is showing; readouts appear once the data reaches picture time.
+    The download is kept on the phone for that session (byte ranges used if F1 serves them), so
+    scrubbing back never fetches it again, and deleted after 7 days. Only a window around picture
+    time is held in memory. Settings › Track map › "Speed readouts on mobile data", on by default;
+    off pauses the download until Wi-Fi.
 - **Live:** SignalR Core at `/signalrcore`, the same 13 topics as Android plus WeatherData.
   - Negotiate, then the WebSocket, then the handshake; ping every 15 s; reconnect after 5 s.
   - One shared connection per app, released when nothing uses it.
@@ -554,9 +558,8 @@ Each build is pushed as it lands, tested or not (owner's standing instruction).
 - **Whether the archive accepts the token from the iPhone app** as it does from Android and the
   spike. Checked at build 1. If it doesn't, the same request is tried with the Android user agent
   that multiview already uses.
-- **CarData archive size per race:** it may be hundreds of MB. Windowed streaming is the plan; if
-  F1 serves it only as one file without byte ranges, Race Engineer's replay readouts may need a
-  one-time download with a progress bar. Measured with T-A.
+- **CarData archive size per race:** it may be hundreds of MB; the owner chose the background
+  download (option A). T-A measures the size and whether byte ranges work.
 - **MultiViewer has no published terms.** Fetch per user, keep on the phone, credit in Settings,
   as decided in the research notes.
 - **The tracker delay default:** from T-B.
