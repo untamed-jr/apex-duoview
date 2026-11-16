@@ -34,8 +34,11 @@ public extension TimingSessionInfo {
 /// sessions the line ends an out lap and the car is `.unknown` from then on, so `.push` and
 /// `.coolDown` never appear there.
 ///
-/// A crossing is Android's, not `TimingTimeline`'s first-count rule: in qualifying F1 sends a
-/// car's first NumberOfLaps (1) with PitOut as it leaves the pits, which is no crossing.
+/// One change from Android: a lap count that goes up as the car leaves the pits is no crossing.
+/// In 2026 qualifying F1 raises NumberOfLaps in the same delta as PitOut on every run (São Paulo:
+/// car 12 at 1, 2, 11, 18 and 20), which on Android's rules made each out lap a push lap and
+/// every lap after it the wrong way round. A first count is never a crossing either (Android's
+/// rule, not `TimingTimeline`'s first-count one).
 ///
 /// Built once (one pass over the timing history); `at` is a binary search per car, cheap enough
 /// for every frame. Each state depends only on the history at or before its own time.
@@ -59,7 +62,7 @@ public struct LapStates: Sendable {
                 let pitOut = s.pitOut && previous?.pitOut != true
                 let leftPits = !s.inPit && previous?.inPit == true && state == .pit
                 if pitOut || leftPits { state = .outLap }
-                if let laps = s.numberOfLaps, let before = previous?.numberOfLaps, laps > before {
+                if !(pitOut || leftPits), let laps = s.numberOfLaps, let before = previous?.numberOfLaps, laps > before {
                     switch state {
                     case .outLap, .coolDown: state = qualifying ? .push : .unknown
                     case .push: state = qualifying ? .coolDown : .unknown

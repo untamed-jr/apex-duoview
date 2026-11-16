@@ -199,7 +199,7 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
         #expect(!early.flying)
         // Dimmed cars are drawn first, then from the back up, so the leader is on top.
         let order = MapCars.visible(at: TowerTests.raceT, session: race)
-        #expect(order.last?.number == "12")
+        #expect(order.last?.number == "12")  // check:raceTowerOrderAtLightsOutPlus10min (12 leads)
     }
 
     @Test func towerUsesNothingAfterT() throws {
@@ -226,7 +226,14 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
             timingLine("00:04:00.000", [("4", #""NumberOfLaps":3"#)]),
             timingLine("00:05:30.000", [("4", #""NumberOfLaps":4"#)]),
             timingLine("00:06:00.000", [("4", #""InPit":true"#)]),
-            timingLine("00:07:00.000", [("4", #""InPit":false"#)]),
+            // Every later run raises the count with PitOut too (raw São Paulo qualifying, car 12 at
+            // offsets 6094211, 7348411, 8051554, 8871348): still an out lap, and the line after it
+            // starts the flying lap.
+            timingLine("00:07:00.000", [("4", #""InPit":false,"PitOut":true,"NumberOfLaps":5"#)]),
+            timingLine("00:07:30.000", [("4", #""PitOut":false"#)]),
+            timingLine("00:08:30.000", [("4", #""NumberOfLaps":6"#)]),
+            timingLine("00:09:00.000", [("4", #""InPit":true"#)]),
+            timingLine("00:09:30.000", [("4", #""InPit":false"#)]),
             timingLine("00:10:00.000", [("4", #""KnockedOut":true"#)]),
         ]
         let timing = TimingTimeline.build(lines: lines, streamStart: 0)
@@ -239,6 +246,10 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
         #expect(q.state(of: "4", at: 330_000) == .push)
         #expect(q.state(of: "4", at: 360_000) == .pit)
         #expect(q.state(of: "4", at: 420_000) == .outLap)
+        #expect(q.state(of: "4", at: 450_000) == .outLap)
+        #expect(q.state(of: "4", at: 510_000) == .push)
+        #expect(q.state(of: "4", at: 540_000) == .pit)
+        #expect(q.state(of: "4", at: 570_000) == .outLap)  // InPit going false alone
         #expect(q.state(of: "4", at: 600_000) == .knockedOut)
         #expect(q.at(600_000) == ["4": .knockedOut])
         #expect(LapStates.at(150_000, timing: timing, qualifying: true) == ["4": .push])

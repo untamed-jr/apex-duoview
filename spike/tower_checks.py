@@ -4,8 +4,8 @@ from the committed São Paulo 2026 fixtures in plain Python, independently of th
 
 Prints `check:<name> = <value>` lines; the Swift tests cite those names. Lap states are a port
 of Android's LiveTiming.parseStates (app/src/main/java/app/apexview/LiveTiming.kt): a crossing
-is a lap count going up from an earlier count. (Not TimingTimeline's first-count rule: in
-qualifying F1 sends a car's first NumberOfLaps, 1, with PitOut as it leaves the pits.)
+is a lap count going up from an earlier count, except (LapStates' one change) a count raised in
+the same delta as leaving the pits: 2026 qualifying sends NumberOfLaps with PitOut on every run.
 
 Python 3 standard library only. Run from anywhere: python3 spike/tower_checks.py
 """
@@ -111,13 +111,16 @@ def lap_states(lines, qualifying):
             state = current.get(n, "unknown")
             if d.get("InPit") is True:
                 state = "pit"
-            if d.get("PitOut") is True or ("InPit" in d and d.get("InPit") is False and state == "pit"):
+            left = d.get("PitOut") is True or ("InPit" in d and d.get("InPit") is False and state == "pit")
+            if left:
                 state = "outLap"
             if "NumberOfLaps" in d:
                 c = int(d["NumberOfLaps"])
                 before = laps.get(n)
                 laps[n] = c
-                if before is not None and c > before:
+                # Not Android: a count raised as the car leaves the pits (2026 qualifying sends
+                # NumberOfLaps with PitOut on every run) is no crossing.
+                if not left and before is not None and c > before:
                     if qualifying:
                         state = {"outLap": "push", "coolDown": "push", "push": "coolDown"}.get(state, state)
                     elif state == "outLap":

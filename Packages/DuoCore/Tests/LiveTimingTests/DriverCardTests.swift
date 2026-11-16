@@ -57,6 +57,23 @@ import F1TV
         #expect(DriverCardModel.at(Fixture.raceStart + 3_200_000, number: "99", session: try FixtureSession.race()) == nil)
     }
 
+    @Test func cardShowsNoStaleLapLeavingThePits() {
+        // In qualifying F1 raises the lap count with PitOut (raw São Paulo qualifying, car 12 at
+        // 7348411, holding its last run's 1:32.229): no flash then, the clock runs from the exit.
+        let session = FixtureSession.synthetic(type: "Qualifying", timing: [
+            timingLine("00:00:01.000", [("12", #""InPit":false,"PitOut":false,"NumberOfLaps":9"#)]),
+            timingLine("00:01:00.000", [("12", #""NumberOfLaps":10,"LastLapTime":{"Value":"1:32.229","PersonalFastest":true}"#)]),
+            timingLine("00:02:00.000", [("12", #""InPit":true"#)]),
+            timingLine("00:10:00.000", [("12", #""NumberOfLaps":11,"InPit":false,"PitOut":true"#)]),
+            timingLine("00:10:30.000", [("12", #""PitOut":false"#)]),
+        ])
+        #expect(DriverCardModel.at(1_060_000, number: "12", session: session)?.flash?.text == "1:32.229")
+        let exit = DriverCardModel.at(1_600_000, number: "12", session: session)
+        #expect(exit?.flash == nil)
+        #expect(exit?.lapClock == "0:00.0")
+        #expect(DriverCardModel.at(1_605_000, number: "12", session: session)?.lapClock == "0:05.0")
+    }
+
     @Test func cardGapIsIntervalInRacesAndToFastestInQualifying() {
         let lines = [timingLine("00:00:01.000", [("4", #""Position":"2","GapToLeader":"+3.000","IntervalToPositionAhead":{"Value":"+0.800"},"TimeDiffToFastest":"+0.300","TimeDiffToPositionAhead":"+0.100""#)])]
         let race = FixtureSession.synthetic(type: "Race", timing: lines)

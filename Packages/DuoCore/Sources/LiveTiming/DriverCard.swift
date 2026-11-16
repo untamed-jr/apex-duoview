@@ -17,7 +17,8 @@ public struct DriverCardModel: Sendable, Equatable {
     /// crossing, and once it is retired or stopped.
     public var lapClock: String?
     public var inPit: Bool
-    /// The lap just finished ("1:29.518") and its colour, for 6 s after the line; nil in the pits.
+    /// The lap just finished ("1:29.518") and its colour, for 6 s after the line; nil in the pits
+    /// and while leaving them (PitOut).
     public var flash: (text: String, pace: SectorPace)?
     /// S1…S3 of the lap in progress: grey (`.empty`) until each is set.
     public var sectors: [SectorPace]
@@ -52,7 +53,9 @@ public struct DriverCardModel: Sendable, Equatable {
         let elapsed = s.lineCrossedAt.map { F1Values.sub(t, $0) }
         let out = s.inPit || s.retired || s.stopped
         var flash: (text: String, pace: SectorPace)?
-        if !s.inPit, let elapsed, (0..<flashMs).contains(elapsed), let lap = s.lastLapMs {
+        // Not while leaving the pits: in qualifying F1 raises the lap count with PitOut, and the
+        // last lap then is the previous run's.
+        if !s.inPit, !s.pitOut, let elapsed, (0..<flashMs).contains(elapsed), let lap = s.lastLapMs {
             flash = (Tower.lapText(lap), s.lastLapPace)
         }
         return DriverCardModel(
