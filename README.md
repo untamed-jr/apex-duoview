@@ -101,6 +101,8 @@ timing itself is loaded when you watch and holds timing only.
 
 ## Credits
 
+- iOS port by [untamed-jr](https://github.com/untamed-jr), built together with Claude
+  ([Claude Code](https://claude.ai/code)).
 - Started from [Apexview](https://github.com/mikeyyy0/apexview), the Android app for foldables,
   MIT licensed.
 - The F1 TV API and login flow come from [eXhumer/f1tv-api](https://github.com/eXhumer/f1tv-api)
