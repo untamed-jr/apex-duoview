@@ -81,6 +81,16 @@ import Testing
         #expect(reqs.allSatisfy { $0.headers["User-Agent"] == Endpoints.userAgent })
     }
 
+    @Test func bearerTokenIsTheSubscriptionTokenWhileSignedIn() async throws {
+        let f = await Self.fake()
+        let s = F1TVSession(http: f)
+        #expect(await s.bearerToken() == nil)
+        _ = try await s.signIn(token: "TOK")
+        #expect(await s.bearerToken() == "TOK")
+        await s.signOut()
+        #expect(await s.bearerToken() == nil)
+    }
+
     @Test func tierCapabilities() async throws {
         let reg = F1TVSession(http: await Self.fake(tier: "REG"))
         let r = try await reg.signIn(token: "T")

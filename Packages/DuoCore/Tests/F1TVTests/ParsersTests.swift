@@ -236,6 +236,61 @@ private let now = Date(timeIntervalSince1970: 1_794_526_278)  // 2026-11-12, the
         #expect(items[0].subtitle(now: now, calendar: utc) == "Live")
     }
 
+    // MARK: Timing archive reference
+
+    @Test func timingRefFromEmf() throws {
+        let race = try #require(Parsers.search(try fixture("archive-races")).first { $0.contentId == 1000010431 })
+        let ref = try #require(race.timingRef)
+        #expect(ref == TimingRef(
+            year: 2026, meetingKey: "1299", sessionKey: "11412", circuitKey: 14,
+            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix",
+            start: Date(timeIntervalSince1970: 1_794_157_200)))
+
+        // The home page's copy of the race carries the same reference.
+        let home = Parsers.home(try fixture("home"))
+        let fromHome = (home.featured + home.rows.flatMap(\.items)).first { $0.contentId == 1000010431 }
+        #expect(fromHome?.timingRef == ref)
+
+        // A show filed under the weekend has the meeting but no session key or start.
+        let show = try #require((home.featured + home.rows.flatMap(\.items)).first { $0.contentId == 1000079850 }?.timingRef)
+        #expect(show.circuitKey == 14)
+        #expect(show.meetingKey == "1299")
+        #expect(show.sessionKey == nil)
+        #expect(show.start == nil)
+    }
+
+    @Test func timingRefOnWeekendItemsUsesTheFullTitle() throws {
+        let w = Parsers.weekend(try fixture("weekend-saopaulo"), now: now)
+        let p2 = try #require(w.sessions.first { $0.contentId == 1000010424 })
+        #expect(p2.title == "Practice 2")
+        #expect(p2.timingRef?.title == "2026 São Paulo GP - Practice 2")
+        #expect(p2.timingRef?.sessionKey == "11406")
+        #expect(p2.timingRef?.circuitKey == 14)
+        #expect(p2.timingRef?.year == 2026)
+    }
+
+    @Test func timingRefOnLiveItemsAndFallbacks() throws {
+        let page = json("""
+        {"resultObj":{"items":[
+          {"metadata":{"contentId":99,"titleBrief":"Race","title":"Las Vegas Grand Prix","emfAttributes":{"Meeting_Name":"Las Vegas Grand Prix","MeetingKey":"1300","CircuitKey":"152","MeetingSessionKey":"","Meeting_Start_Date":"2026-11-19T00:00:00+00:00","sessionStartDate":"1795230000000"}}},
+          {"metadata":{"contentId":98,"title":"No emf"}},
+          {"metadata":{"contentId":97,"title":"No year","emfAttributes":{"MeetingKey":"1300"}}},
+          {"metadata":{"contentId":96,"title":"No meeting","year":"2026","emfAttributes":{"CircuitKey":"152"}}}
+        ]}}
+        """)
+        let items = Parsers.liveNow(page)
+        let ref = try #require(items[0].timingRef)
+        #expect(ref.year == 2026)  // from Meeting_Start_Date: no "year" on the item
+        #expect(ref.meetingKey == "1300")
+        #expect(ref.sessionKey == nil)
+        #expect(ref.circuitKey == 152)
+        #expect(ref.title == "Las Vegas Grand Prix")
+        #expect(ref.start == Date(timeIntervalSince1970: 1_795_230_000))
+        #expect(items[1].timingRef == nil)
+        #expect(items[2].timingRef == nil)
+        #expect(items[3].timingRef == nil)
+    }
+
     // MARK: Review focus 2: nulls and bad items
 
     @Test func lenientItem() throws {

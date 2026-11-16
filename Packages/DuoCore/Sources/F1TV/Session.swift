@@ -49,6 +49,10 @@ public actor F1TVSession {
 
     public var isSignedIn: Bool { ascendon != nil && account != nil }
 
+    /// The subscription token, which F1's timing archive and live timing take as
+    /// `Authorization: Bearer`; nil when signed out. Never log it or put it in an error.
+    public func bearerToken() -> String? { isSignedIn ? ascendon : nil }
+
     public init(http: any HTTPClient) {
         self.http = http
     }

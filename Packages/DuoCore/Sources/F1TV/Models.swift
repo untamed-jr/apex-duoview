@@ -19,11 +19,14 @@ public struct CatalogItem: Sendable, Hashable, Identifiable {
     public var start: Date?
     /// Set for a show or documentary series: F1 TV's page of its episodes.
     public var pageId: Int?
+    /// Where F1's timing archive files it, when F1 TV says which weekend it belongs to.
+    public var timingRef: TimingRef?
 
     public init(
         contentId: Int, title: String = "", subtype: String = "", contentType: String = "",
         genre: String = "", picturePath: String? = nil, durationSeconds: Int? = nil,
-        year: Int? = nil, meeting: String = "", start: Date? = nil, pageId: Int? = nil
+        year: Int? = nil, meeting: String = "", start: Date? = nil, pageId: Int? = nil,
+        timingRef: TimingRef? = nil
     ) {
         self.contentId = contentId
         self.title = title
@@ -36,6 +39,7 @@ public struct CatalogItem: Sendable, Hashable, Identifiable {
         self.meeting = meeting
         self.start = start
         self.pageId = pageId
+        self.timingRef = timingRef
     }
 
     /// Series pages have a content ID of their own, but may have none: fall back to the page.

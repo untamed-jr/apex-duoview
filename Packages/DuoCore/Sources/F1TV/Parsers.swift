@@ -31,7 +31,8 @@ public enum Parsers {
             year: meta["year"].int,
             meeting: emf["Meeting_Name"].string,
             start: date(ms: emf["sessionStartDate"]),
-            pageId: pageId
+            pageId: pageId,
+            timingRef: timingRef(meta)
         )
     }
 
@@ -48,7 +49,8 @@ public enum Parsers {
                 subtype: "LIVE",
                 contentType: meta["contentType"].string,
                 picturePath: nonEmpty(meta["pictureUrl"].string),
-                meeting: meta["emfAttributes"]["Meeting_Name"].string
+                meeting: meta["emfAttributes"]["Meeting_Name"].string,
+                timingRef: timingRef(meta)
             )
         }
     }
@@ -119,7 +121,8 @@ public enum Parsers {
                 durationSeconds: meta["duration"].int,
                 year: meta["year"].int,
                 meeting: meetingName ?? emf["Meeting_Name"].string,
-                start: date(ms: emf["sessionStartDate"])
+                start: date(ms: emf["sessionStartDate"]),
+                timingRef: timingRef(meta)
             )
             byId[id] = item
             if isSession { sessions.append(item) } else { videos.append(item) }
@@ -294,6 +297,27 @@ public enum Parsers {
     }
 
     // MARK: Helpers
+
+    /// The timing archive's keys from a tile's `emfAttributes`, as Android reads them: the year
+    /// from the tile, else the meeting's start date. Nil without a year or a meeting to look in.
+    private static func timingRef(_ meta: JSONValue) -> TimingRef? {
+        let emf = meta["emfAttributes"]
+        guard case .object = emf else { return nil }
+        guard let year = meta["year"].int ?? Int(emf["Meeting_Start_Date"].string.prefix(4)) else { return nil }
+        let meetingKey = emf["MeetingKey"].string.trimmingCharacters(in: .whitespaces)
+        let meetingName = emf["Meeting_Name"].string.trimmingCharacters(in: .whitespaces)
+        guard !meetingKey.isEmpty || !meetingName.isEmpty else { return nil }
+        let sessionKey = emf["MeetingSessionKey"].string.trimmingCharacters(in: .whitespaces)
+        return TimingRef(
+            year: year,
+            meetingKey: meetingKey,
+            sessionKey: sessionKey.isEmpty ? nil : sessionKey,
+            circuitKey: emf["CircuitKey"].int,
+            meetingName: meetingName,
+            title: meta["title"].string.trimmingCharacters(in: .whitespacesAndNewlines),
+            start: date(ms: emf["sessionStartDate"])
+        )
+    }
 
     /// The tile's `metadata` object, or nil when it is missing or not an object.
     private static func metadata(_ container: JSONValue) -> JSONValue? {
