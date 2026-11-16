@@ -80,7 +80,9 @@ import F1TV
         let t = TowerTests.raceT
         #expect(Tower.rows(at: t, session: race, favourite: nil).allSatisfy { !$0.battle })
         // check:raceBattlesSteadyFor10sToLightsOutPlus10min: (10,43) and (43,51) within 1.0 s at
-        // every line for the 10 s before t (check:raceInterval43to10…, check:raceInterval51to43…).
+        // every line for the 10 s before t (check:raceInterval43to10…, check:raceInterval51to43…),
+        // and in the last two lines touching each pair (check:raceBattlePair10_43LastTwoTouchingLines,
+        // check:raceBattlePair43_51…, check:raceBattlePair30_63…; check:raceBattlePair12_1… is apart).
         let rows = Tower.rows(at: t, session: race, favourite: "43")
         #expect(rows.filter(\.battle).map(\.number) == ["10", "43", "51"])
         let rows30 = Tower.rows(at: t, session: race, favourite: "30")
