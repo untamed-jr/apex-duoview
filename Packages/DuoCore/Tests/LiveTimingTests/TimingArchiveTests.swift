@@ -232,18 +232,51 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(loaded.positions.cars.count >= 20)
     }
 
-    @Test func optionalTopicsGoMissingInTopicOrder() async throws {
+    /// Refused or not there is `missing`; failed to download is `failed`: separate lists, each in
+    /// topic order. Core topics refused are only missing; the load goes on.
+    @Test func optionalTopicsGoMissingOrFailedInTopicOrder() async throws {
         let http = try await Self.raceHTTP()
         await http.serve(Self.racePath + "SessionStatus.jsonStream", status: 403)
         await http.serve(Self.racePath + "WeatherData.jsonStream", status: 404)
-        await http.fail(Self.racePath + "TimingData.jsonStream", with: URLError(.timedOut))
+        await http.serve(Self.racePath + "TimingData.jsonStream", status: 404)
         await http.serve(Self.racePath + "Heartbeat.jsonStream", status: 500)
+        await http.fail(Self.racePath + "ExtrapolatedClock.jsonStream", with: URLError(.timedOut))
         let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
-        #expect(loaded.missing == ["Heartbeat", "TimingData", "SessionStatus", "WeatherData"])
+        #expect(loaded.missing == ["TimingData", "SessionStatus", "WeatherData"])
+        #expect(loaded.failed == ["Heartbeat", "ExtrapolatedClock"])
         // Without the heartbeat the cars' own clocks give the start: 2.1 s early on this race
         // (check:raceStartsDifferMs).
         #expect(loaded.streamStart == Fixture.raceStart - 2_102)
         #expect(loaded.timing.at(Fixture.raceLightsOut).isEmpty)
+    }
+
+    /// TimingData, TrackStatus or SessionStatus failing to download fails the whole load (it is
+    /// tried again), rather than a session with silent gaps.
+    @Test(arguments: TimingArchive.core)
+    func coreTopicFailingFailsTheLoad(topic: String) async throws {
+        for failure in [HTTPFailure.network, .status(503)] {
+            let http = try await Self.raceHTTP()
+            switch failure {
+            case .network: await http.fail(Self.racePath + topic + ".jsonStream", with: URLError(.networkConnectionLost))
+            case .status(let code): await http.serve(Self.racePath + topic + ".jsonStream", status: code)
+            }
+            if case .failed = await TimingArchive.loadOutcome(Self.race, using: Self.archive(http)) {} else {
+                Issue.record("\(topic) \(failure): failed")
+            }
+        }
+    }
+
+    enum HTTPFailure { case network, status(Int) }
+
+    /// Any other optional topic that fails is listed in `failed`, not `missing`, and the rest loads.
+    @Test func optionalTopicFailingIsListedAsFailed() async throws {
+        let http = try await Self.raceHTTP()
+        await http.fail(Self.racePath + "WeatherData.jsonStream", with: URLError(.timedOut))
+        await http.serve(Self.racePath + "TimingAppData.jsonStream", status: 502)
+        let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
+        #expect(loaded.failed == ["TimingAppData", "WeatherData"])
+        #expect(loaded.missing == [])
+        #expect(!loaded.timing.at(Fixture.raceLightsOut + 300_000).isEmpty)
     }
 
     @Test(arguments: ["DriverList.json", "SessionInfo.json", "Position.z.jsonStream"])
@@ -281,9 +314,16 @@ struct LeakyError: Error, CustomStringConvertible {
             await $0.fail(Self.racePath + "DriverList.json", with: URLError(.networkConnectionLost))
         }
         if case .unavailable = mixed {} else { Issue.record("a refusal wins over a failure") }
-        // An optional topic that fails still loads, listed as missing.
+        // An optional topic that fails still loads, listed as failed (not missing).
         let optional = try await outcome { await $0.fail(Self.racePath + "WeatherData.jsonStream", with: URLError(.timedOut)) }
-        #expect(optional.value?.missing == ["WeatherData"])
+        #expect(optional.value?.failed == ["WeatherData"])
+        #expect(optional.value?.missing == [])
+        // A core topic that fails fails the load; refused, it is only missing.
+        if case .failed = try await outcome({ await $0.fail(Self.racePath + "TrackStatus.jsonStream", with: URLError(.timedOut)) }) {} else {
+            Issue.record("a failed TrackStatus is failed")
+        }
+        let refusedCore = try await outcome { await $0.serve(Self.racePath + "TrackStatus.jsonStream", status: 403) }
+        #expect(refusedCore.value?.missing == ["TrackStatus"])
         // Files that came but hold nothing usable: unavailable.
         let empty = try await outcome { await $0.serve(Self.racePath + "DriverList.json", body: Data("[]".utf8)) }
         if case .unavailable = empty {} else { Issue.record("a DriverList that isn't an object is unavailable") }
@@ -313,18 +353,20 @@ struct LeakyError: Error, CustomStringConvertible {
 
     @Test func tokenNeverInResult() async throws {
         let http = try await Self.raceHTTP()
-        await http.fail(Self.racePath + "TrackStatus.jsonStream", with: LeakyError(token: Self.token))
+        await http.fail(Self.racePath + "LapCount.jsonStream", with: LeakyError(token: Self.token))
         await http.serve(Self.racePath + "WeatherData.jsonStream", status: 403)
         let archive = Self.archive(http)
         let loaded = try #require(await TimingArchive.load(Self.race, using: archive))
-        #expect(loaded.missing == ["TrackStatus", "WeatherData"])
+        #expect(loaded.missing == ["WeatherData"])
+        #expect(loaded.failed == ["LapCount"])
         var text = ""
         dump(loaded, to: &text, maxDepth: 3, maxItems: 10_000)
-        text += String(describing: loaded.missing) + String(describing: loaded.info) + String(describing: loaded.drivers)
+        text += String(describing: loaded.missing) + String(describing: loaded.failed) + String(describing: loaded.info)
+            + String(describing: loaded.drivers)
         #expect(!text.contains(Self.token))
-        for file in [await archive.file(sessionPath: Self.racePath, name: "TrackStatus.jsonStream"),
+        for file in [await archive.file(sessionPath: Self.racePath, name: "LapCount.jsonStream"),
                      await archive.file(sessionPath: Self.racePath, name: "WeatherData.jsonStream"),
-                     await archive.range(sessionPath: Self.racePath, name: "TrackStatus.jsonStream", bytes: 0...9)] {
+                     await archive.range(sessionPath: Self.racePath, name: "LapCount.jsonStream", bytes: 0...9)] {
             #expect(!String(describing: file).contains(Self.token))
             #expect(!String(reflecting: file).contains(Self.token))
         }
@@ -434,6 +476,28 @@ struct LeakyError: Error, CustomStringConvertible {
         if case .failed = await Self.archive(failed).lookup(for: ref, watched: nil) {} else { Issue.record("garbled: failed") }
         // `session(for:)` is the same answer without the reason.
         #expect(await Self.archive(failed).session(for: ref, watched: nil) == nil)
+    }
+
+    /// The index lags and a probe fails to download: no match may only mean that probe, so the
+    /// lookup is `.failed` (tried again), not "no timing". A probe that is refused stays a miss.
+    @Test func failedProbeWithNoMatchIsFailed() async throws {
+        let ref = TimingRef(year: 2026, meetingKey: "1299", sessionKey: "11412", circuitKey: 14,
+                            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix",
+                            start: Date(timeIntervalSince1970: Double(Self.race.start) / 1000))
+        let http = FakeArchiveHTTP()
+        await http.serve("2026/Index.json", body: try JSONSerialization.data(withJSONObject: Self.plain(try Self.indexWithoutRace())))
+        await http.fail(Self.racePath + "SessionInfo.json", with: URLError(.timedOut))
+        if case .failed = await Self.archive(http).lookup(for: ref, watched: nil) {} else {
+            Issue.record("a failed probe with no match is failed")
+        }
+        // The probe answers next time: found.
+        await http.serve(Self.racePath + "SessionInfo.json", body: try Fixture.data("sp26-race/SessionInfo.json"))
+        #expect(await Self.archive(http).lookup(for: ref, watched: nil).value == Self.race)
+        // Every probe refused or not there: no timing.
+        await http.serve(Self.racePath + "SessionInfo.json", status: 404)
+        if case .unavailable = await Self.archive(http).lookup(for: ref, watched: nil) {} else {
+            Issue.record("refused probes are unavailable")
+        }
     }
 
     @Test func sessionKeyWithAStartProbesThatDay() async throws {

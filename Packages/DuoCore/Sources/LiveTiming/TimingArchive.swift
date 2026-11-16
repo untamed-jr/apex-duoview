@@ -39,12 +39,17 @@ public struct LoadedSession: Sendable {
     public var flags: TrackFlags
     /// Empty when the archive has no SessionStatus.
     public var sessionStatus: SessionStatusTimeline
-    /// Optional topics the archive didn't give ("WeatherData", ...), in a fixed order.
+    /// Optional topics the archive didn't publish (refused or not there: "WeatherData", ...), in
+    /// topic order.
     public var missing: [String]
+    /// Optional topics that failed to download (the network, or another error), in topic order;
+    /// shown as absent, not retried one by one. The core topics (`TimingArchive.core`) never
+    /// land here: one of them failing fails the whole load, which is tried again.
+    public var failed: [String]
 
     public init(info: TimingSessionInfo, drivers: [String: DriverInfo], streamStart: UTCms, positions: PositionSeries,
                 timing: TimingTimeline, stints: StintTimeline, header: HeaderTimeline, flags: TrackFlags,
-                sessionStatus: SessionStatusTimeline = SessionStatusTimeline(), missing: [String]) {
+                sessionStatus: SessionStatusTimeline = SessionStatusTimeline(), missing: [String], failed: [String] = []) {
         self.info = info
         self.drivers = drivers
         self.streamStart = streamStart
@@ -55,6 +60,7 @@ public struct LoadedSession: Sendable {
         self.flags = flags
         self.sessionStatus = sessionStatus
         self.missing = missing
+        self.failed = failed
     }
 }
 
@@ -101,8 +107,9 @@ public actor TimingArchive {
 
     /// As `session(for:watched:)`, telling a session that isn't there (a refused or missing
     /// index, no match: `.unavailable`) from one that couldn't be looked for (the index failed
-    /// to download, or came back unreadable: `.failed`, worth trying again). A probe that fails
-    /// counts as no match.
+    /// to download, or came back unreadable: `.failed`, worth trying again). When no probed
+    /// folder matches and any probe failed to download, that is `.failed` too: the missing
+    /// session may be the one whose probe failed.
     public func lookup(for ref: TimingRef, watched: UTCms?) async -> ArchiveOutcome<ArchiveSession> {
         let index: JSONValue
         switch await get("\(ref.year)/Index.json", range: nil) {
@@ -130,25 +137,31 @@ public actor TimingArchive {
         let paths = SessionLookup.probePaths(ref: ref, meetingFolder: meeting.folder,
                                              gmtOffsetSeconds: meeting.gmtOffsetSeconds, watched: watched)
             .filter { !listed.contains($0) }
-        let probed = await withTaskGroup(of: ArchiveSession?.self) { group in
+        let (probed, probeFailed) = await withTaskGroup(of: (session: ArchiveSession?, failed: Bool).self) { group in
             for path in paths {
                 group.addTask {
-                    guard case .data(let body) = await self.file(sessionPath: path, name: "SessionInfo.json"),
+                    let file = await self.file(sessionPath: path, name: "SessionInfo.json")
+                    if case .failed = file { return (nil, true) }
+                    guard case .data(let body) = file,
                           let json = try? JSONValue.parse(Self.withoutBOM(body)),
-                          var info = TimingSessionInfo.parse(json) else { return nil }
+                          var info = TimingSessionInfo.parse(json) else { return (nil, false) }
                     if info.path.isEmpty { info.path = path }
-                    return ArchiveSession(info)
+                    return (ArchiveSession(info), false)
                 }
             }
             var found: [ArchiveSession] = []
-            for await session in group { if let session { found.append(session) } }
-            return found
+            var anyFailed = false
+            for await result in group {
+                if let session = result.session { found.append(session) }
+                if result.failed { anyFailed = true }
+            }
+            return (found, anyFailed)
         }
         // In the order the paths were asked for, so a tie goes the same way every time.
         let ordered = paths.compactMap { path in probed.first { $0.path == path } }
             + probed.filter { found in !paths.contains(found.path) }
         guard let picked = SessionLookup.pick(ordered.map { .init(sameMeeting: true, session: $0) }, ref: ref, watched: watched)
-        else { return .unavailable }
+        else { return probeFailed ? .failed : .unavailable }
         return .found(picked)
     }
 
@@ -174,6 +187,10 @@ public actor TimingArchive {
 
     /// The files without which there is no replay timing.
     static let required = ["DriverList", "SessionInfo", "Position.z"]
+    /// Optional topics the timing views lean on (the tower, the flags, the lights-out mark): when
+    /// one fails to download (not refused), the whole load is `.failed` and tried again rather
+    /// than shown with silent gaps. Refused, they are only `missing`.
+    public static let core = ["TimingData", "TrackStatus", "SessionStatus"]
 
     /// Fetches the session's files concurrently and parses them off the caller's actor
     /// (`@concurrent`, whatever the caller's isolation). Nil only when DriverList, SessionInfo or
@@ -185,8 +202,10 @@ public actor TimingArchive {
 
     /// As `load`, telling why there is no session: `.unavailable` when a required file
     /// (DriverList, SessionInfo, Position) was refused or missing, or holds nothing usable;
-    /// `.failed` when none was refused but one failed to download, so trying again may work. A
-    /// refusal wins over a failure: a retry fetches everything again and can't cure it.
+    /// `.failed` when none was refused but one (or a `core` topic) failed to download, so trying
+    /// again may work. A refusal of a required file wins over any failure: a retry fetches
+    /// everything again and can't cure it. Other optional topics that fail go in
+    /// `LoadedSession.failed`, those not published in `missing`.
     @concurrent
     public static func loadOutcome(_ session: ArchiveSession, using archive: TimingArchive) async -> ArchiveOutcome<LoadedSession> {
         let topics = topics(for: session)
@@ -230,7 +249,7 @@ public actor TimingArchive {
             return false
         }
         if required.contains(where: isMissing) { return .unavailable }
-        if required.contains(where: isFailed) { return .failed }
+        if required.contains(where: isFailed) || core.contains(where: isFailed) { return .failed }
         guard case .json(let driverJSON)? = files["DriverList"], case .object = driverJSON,
               case .json(let infoJSON)? = files["SessionInfo"], let info = TimingSessionInfo.parse(infoJSON),
               let positionLines = lines("Position.z")
@@ -257,7 +276,8 @@ public actor TimingArchive {
             header: await header,
             flags: await flags,
             sessionStatus: SessionStatusTimeline.build(lines: lines("SessionStatus") ?? [], streamStart: streamStart),
-            missing: topics.filter { lines($0) == nil }
+            missing: topics.filter(isMissing),
+            failed: topics.filter(isFailed)
         ))
     }
 
