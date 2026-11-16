@@ -120,6 +120,22 @@ uploaded by hand in the repository's settings when the repository goes public.
 `Design/Logo-256.png` is a small copy of the icon for anywhere else that needs one. A clean vector version, and a check of how it reads at
 small sizes on the home screen, come later, before the App Store.
 
+## Opening screen (owner request, 2026-11-16)
+
+Make the app's opening as polished as other apps': not just the square logo. Planned shape, to
+be designed with the owner before it is built:
+
+- **Launch screen** (what iOS shows while the app starts): Apple only allows a still image here,
+  so it is a clean still that matches the first frame of the intro, so the hand-off is invisible.
+- **Intro** (inside the app, about 1–2 s, skippable, shown once per launch): the APEX logo
+  animating in over a dark racing image of our own (made for us, never F1's photos), the app
+  name and tagline, the version in small type.
+- **Small print:** "Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and
+  related marks are trade marks of Formula One Licensing B.V." (the usual wording in unofficial
+  F1 apps), plus "Requires an F1 TV subscription".
+- Images come from Higgsfield only after a credit quote the owner approves.
+- When: after beta.3, at the owner's choice (beta.4 or a small polish build).
+
 ## Screenshots
 
 README screenshots (and later App Store screenshots) are made with the
