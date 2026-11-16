@@ -27,6 +27,15 @@ import F1TV
         #expect(lines.map(\.offsetMs) == [1000, 3000, 4000])
     }
 
+    @Test func onlyLineFeedEndsALine() throws {
+        // U+2028, U+2029 and U+0085 can sit inside a JSON string; only "\n" (with an optional
+        // "\r" before it) ends a line.
+        let text = "00:00:01.000{\"a\":\"x\u{2028}y\u{2029}z\u{0085}w\"}\r\n00:00:02.000{\"a\":2}"
+        let lines = StreamLine.parseFile(Data(text.utf8))
+        #expect(lines.map(\.offsetMs) == [1000, 2000])
+        #expect(lines.first?.json["a"].string == "x\u{2028}y\u{2029}z\u{0085}w")
+    }
+
     @Test func truncatedLineIsNil() {
         #expect(StreamLine.parse("00:00:01.000{\"a\"") == nil)
         #expect(StreamLine.parse("00:00:01.000") == nil)

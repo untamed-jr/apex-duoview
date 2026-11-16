@@ -1,0 +1,18 @@
+﻿00:01:03.772{"Messages":[{"Utc":"2026-11-07T17:47:43","Category":"Flag","Flag":"YELLOW","Scope":"Sector","Sector":1,"Message":"YELLOW IN TRACK SECTOR 1"}]}
+00:01:05.400{"Messages":{"1":{"Utc":"2026-11-07T17:47:45","Category":"Flag","Flag":"YELLOW","Scope":"Sector","Sector":16,"Message":"YELLOW IN TRACK SECTOR 16"}}}
+00:06:09.221{"Messages":{"2":{"Utc":"2026-11-07T17:52:48","Category":"Other","Message":"WET TRACK"}}}
+00:06:14.155{"Messages":{"3":{"Utc":"2026-11-07T17:52:53","Category":"Other","Message":"LOW GRIP DELTA ACTIVE"}}}
+00:06:16.410{"Messages":{"4":{"Utc":"2026-11-07T17:52:56","Category":"Other","Message":"LOW GRIP CONDITIONS"}}}
+00:06:18.737{"Messages":{"5":{"Utc":"2026-11-07T17:52:58","Category":"Other","Message":"OVERTAKE DISABLED"}}}
+00:07:35.873{"Messages":{"6":{"Utc":"2026-11-07T17:54:15","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":3,"Message":"CLEAR IN TRACK SECTOR 3"}}}
+00:07:37.582{"Messages":{"7":{"Utc":"2026-11-07T17:54:17","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":4,"Message":"CLEAR IN TRACK SECTOR 4"}}}
+00:07:39.330{"Messages":{"8":{"Utc":"2026-11-07T17:54:18","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":5,"Message":"CLEAR IN TRACK SECTOR 5"}}}
+00:07:41.058{"Messages":{"9":{"Utc":"2026-11-07T17:54:20","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":7,"Message":"CLEAR IN TRACK SECTOR 7"}}}
+00:07:43.275{"Messages":{"10":{"Utc":"2026-11-07T17:54:22","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":8,"Message":"CLEAR IN TRACK SECTOR 8"}}}
+00:07:45.275{"Messages":{"11":{"Utc":"2026-11-07T17:54:24","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":9,"Message":"CLEAR IN TRACK SECTOR 9"}}}
+00:07:47.962{"Messages":{"12":{"Utc":"2026-11-07T17:54:27","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":10,"Message":"CLEAR IN TRACK SECTOR 10"}}}
+00:07:53.258{"Messages":{"13":{"Utc":"2026-11-07T17:54:32","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":16,"Message":"CLEAR IN TRACK SECTOR 16"}}}
+00:07:54.696{"Messages":{"14":{"Utc":"2026-11-07T17:54:34","Category":"Flag","Flag":"CLEAR","Scope":"Sector","Sector":1,"Message":"CLEAR IN TRACK SECTOR 1"}}}
+00:13:21.014{"Messages":{"15":{"Utc":"2026-11-07T18:00:00","Category":"Flag","Flag":"GREEN","Scope":"Track","Message":"GREEN LIGHT - PIT EXIT OPEN"}}}
+00:15:44.175{"Messages":{"16":{"Utc":"2026-11-07T18:02:23","Category":"Flag","Flag":"RED","Scope":"Track","Message":"RED FLAG"}}}
+00:18:21.176{"Messages":{"17":{"Utc":"2026-11-07T18:05:00","Category":"Flag","Flag":"CLEAR","Scope":"Track","Message":"TRACK CLEAR"}}}

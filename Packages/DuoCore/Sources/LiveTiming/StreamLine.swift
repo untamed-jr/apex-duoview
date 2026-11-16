@@ -31,11 +31,15 @@ public struct StreamLine: Sendable, Equatable {
         return StreamLine(offsetMs: offset, json: json)
     }
 
-    /// Strips a UTF-8 BOM and skips blank or unparseable lines.
+    /// Strips a UTF-8 BOM and skips blank or unparseable lines. Only "\n" ends a line (a "\r"
+    /// before it is dropped): U+2028 and friends may sit inside a JSON string.
     public static func parseFile(_ data: Data) -> [StreamLine] {
         var body = data
         if body.starts(with: [0xEF, 0xBB, 0xBF]) { body = body.dropFirst(3) }
         let text = String(decoding: body, as: UTF8.self)
-        return text.split(whereSeparator: { $0.isNewline }).compactMap { parse($0) }
+        return text.utf8.split(separator: 0x0A).compactMap { bytes in
+            let line = bytes.last == 0x0D ? bytes.dropLast() : bytes
+            return parse(Substring(line))
+        }
     }
 }

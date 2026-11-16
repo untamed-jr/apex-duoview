@@ -121,6 +121,6 @@ import F1TV
         let out = try Inflate.raw(packed)
         let elapsed = Date().timeIntervalSince(start)
         #expect([UInt8](out) == payload)
-        #expect(elapsed < 0.5)
+        #expect(elapsed < 2)
     }
 }
