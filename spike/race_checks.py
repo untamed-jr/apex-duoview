@@ -155,6 +155,51 @@ def events(states, upto, started):
     return sorted(out)
 
 
+def gap_ms(text):
+    """F1's gap text ("+4.401") in ms; None for "LAP 7", "1L" and blanks."""
+    body = (text or "").strip().lstrip("+")
+    try:
+        return int(round(float(body) * 1000)) if body and all(c.isdigit() or c == "." for c in body) else None
+    except ValueError:
+        return None
+
+
+def pit_circle_checks(states, hist, t10):
+    """The leader's reference lap, the circle's layout and a rejoin at `t10` (offsets)."""
+    at = {n: state_at([(o, m, False) for o, m in h], t10) for n, h in states.items()}
+    leader = next(n for n, m in at.items() if pos(m) == 1)
+    crossings = [o for o, _, c in hist[leader] if c and o <= t10]
+    windows = [b - a for a, b in zip(crossings, crossings[1:]) if 40_000 <= b - a <= 240_000]
+    # Every window is green: no stops in the race window, and TrackStatus is 1 (AllClear) from
+    # 00:28:19 to the fixture's end.
+    green = windows[-5:]
+    check("raceLeaderAtLightsOutPlus10min", leader)
+    # F1 sends no time for lap 1 (LastLapTime "" at the first crossing): lights out to the line.
+    first = hist[leader][[c for _, _, c in hist[leader]].index(True)]
+    check("raceLeaderLap1LastLapTimeValue", repr(first[1]["LastLapTime"]["Value"]))
+    check("raceLeaderLap1FromLightsOut", first[0] - RACE_LIGHTS_OUT_OFF)
+    check("raceLeaderLapWindowsAtLightsOutPlus10min", windows)
+    check("raceReferenceLapAtLightsOutPlus10min", sum(green) // len(green))
+    check("raceTypicalLapAtLightsOutPlus10min", sorted(windows[-5:])[len(windows[-5:]) // 2])
+    ref = sum(green) // len(green)
+    racing = {n: m for n, m in at.items() if m.get("Retired") is not True and m.get("Stopped") is not True}
+    gaps = {n: (0 if n == leader else gap_ms(m.get("GapToLeader"))) for n, m in racing.items()}
+    check("raceGapsToLeaderAtLightsOutPlus10min", sorted(gaps.items(), key=lambda g: g[1]))
+    lead_frac = ((t10 - crossings[-1]) / ref) % 1
+    check("raceLeaderFractionAtLightsOutPlus10min", round(lead_frac, 6))
+    for n in ("1", "44"):
+        check(f"raceCar{n}FractionAtLightsOutPlus10min", round((lead_frac - gaps[n] / ref) % 1, 6))
+    # A stop now for 44: out behind the last car whose gap is at most its own plus the loss.
+    others = sorted((g, n) for n, g in gaps.items() if n != "44")
+    for loss in (22_000, 5_000):
+        target = gaps["44"] + loss
+        ahead = [(g, n) for g, n in others if g <= target]
+        check(f"raceRejoin44At{loss // 1000}sAtLightsOutPlus10min", (len(ahead) + 1, ahead[-1][1], target - ahead[-1][0]))
+    with open(os.path.join(RACE, "DriverList.json"), encoding="utf-8-sig") as f:
+        drivers = json.load(f)
+    check("raceTlas11_16_44", [drivers[n]["Tla"] for n in ("11", "16", "44")])
+
+
 def car_data_checks():
     """Channel 45 in the qualifying CarData slice: present in how many samples, and in how many
     taken on a straight (150 km/h or more, throttle 95 % or more)."""
@@ -218,6 +263,8 @@ def main():
     check("raceEventsAtLightsOutPlus10min", [(o, k, n, race_lap(states, o, 71)) for o, k, n in ev])
     ev = events(states, 10**12, lights)
     check("raceEventsWholeFixture", [(o, k, n, race_lap(states, o, 71)) for o, k, n in ev])
+
+    pit_circle_checks(states, hist, t10)
 
     # Qualifying's red flag: race control's RED FLAG (TrackFlags' red runs from it until a GREEN
     # or CHEQUERED flag, and none comes in the fixture), earlier than TrackStatus's 5.
