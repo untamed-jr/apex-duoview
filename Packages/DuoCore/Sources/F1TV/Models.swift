@@ -227,11 +227,15 @@ public struct VideoDetail: Sendable, Equatable {
     public var contentId: Int
     public var title: String
     public var channels: [Channel]
+    /// Where the timing archive files this video's session, from the response's `emfAttributes`:
+    /// items rebuilt without metadata (bookmarks, resume) find their timing here.
+    public var timingRef: TimingRef?
 
-    public init(contentId: Int, title: String, channels: [Channel]) {
+    public init(contentId: Int, title: String, channels: [Channel], timingRef: TimingRef? = nil) {
         self.contentId = contentId
         self.title = title
         self.channels = channels
+        self.timingRef = timingRef
     }
 }
 

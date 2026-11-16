@@ -38,6 +38,21 @@ private let now = Date(timeIntervalSince1970: 1_794_526_278)  // 2026-11-12, the
         #expect(nor.displayTitle == "1 Norris")
     }
 
+    /// Bookmarks and resume rebuild items without metadata: the video's own response carries the
+    /// timing reference instead.
+    @Test func videoCarriesTheTimingRef() throws {
+        let expected = TimingRef(
+            year: 2026, meetingKey: "1299", sessionKey: "11412", circuitKey: 14,
+            meetingName: "São Paulo Grand Prix", title: "2026 São Paulo Grand Prix",
+            start: Date(timeIntervalSince1970: 1_794_157_200))
+        for name in ["video-1000010431-WEB_HLS", "video-1000010431-WEB_DASH"] {
+            #expect(try Parsers.video(try fixture(name)).timingRef == expected, "\(name)")
+        }
+        let bare = try Parsers.video(json(#"{"resultObj":{"containers":[{"metadata":{"contentId":7,"title":"X"}}]}}"#))
+        #expect(bare.timingRef == nil)
+        #expect(VideoDetail(contentId: 7, title: "X", channels: []).timingRef == nil)
+    }
+
     @Test func videoWithNoContainerThrows() {
         for body in [#"{"resultObj":{"containers":[]}}"#, #"{"resultObj":{}}"#, #"{"resultObj":{"containers":[{}]}}"#] {
             #expect(throws: F1TVError.self) { try Parsers.video(json(body)) }

@@ -255,7 +255,8 @@ public enum Parsers {
         if title.isEmpty { title = "Content \(contentId)" }
         return VideoDetail(
             contentId: contentId, title: title,
-            channels: channels.isEmpty ? [Channel(id: nil, isDefault: true, title: "Main feed")] : channels
+            channels: channels.isEmpty ? [Channel(id: nil, isDefault: true, title: "Main feed")] : channels,
+            timingRef: timingRef(meta)
         )
     }
 
