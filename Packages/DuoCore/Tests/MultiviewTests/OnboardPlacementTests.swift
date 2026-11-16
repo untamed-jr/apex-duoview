@@ -67,11 +67,14 @@ import LiveTiming
     @Test func placeTieOldestFirst() {
         let slots: [Channel?] = [Self.world, Self.onboard(1), Self.onboard(4), Self.onboard(16)]
         let states: [String: LapState] = ["1": .push, "4": .push, "16": .push]
-        // placedAt is by slot index: the one placed longest ago goes.
-        let placed = [1: Self.t0.addingTimeInterval(60), 2: Self.t0, 3: Self.t0.addingTimeInterval(30)]
+        // placedAt is by channel id: the onboard placed longest ago goes.
+        let placed = [2001: Self.t0.addingTimeInterval(60), 2004: Self.t0, 2016: Self.t0.addingTimeInterval(30)]
         #expect(Self.place(44, slots, states: states, placedAt: placed) == .replace(slot: 2, channel: Self.onboard(44)))
-        // A slot never placed by a tap counts as oldest.
-        #expect(Self.place(44, slots, states: states, placedAt: [1: Self.t0, 2: Self.t0]) == .replace(slot: 3, channel: Self.onboard(44)))
+        // It follows the feed when slots swap (a make-main): car 4's onboard is still the oldest.
+        let swapped: [Channel?] = [Self.world, Self.onboard(4), Self.onboard(16), Self.onboard(1)]
+        #expect(Self.place(44, swapped, states: states, placedAt: placed) == .replace(slot: 1, channel: Self.onboard(44)))
+        // A feed never placed by a tap counts as oldest.
+        #expect(Self.place(44, slots, states: states, placedAt: [2001: Self.t0, 2004: Self.t0]) == .replace(slot: 3, channel: Self.onboard(44)))
         // Equal times: the later slot goes.
         #expect(Self.place(44, [Self.world, Self.onboard(1), Self.onboard(4)], states: ["1": .pit, "4": .pit]) == .replace(slot: 2, channel: Self.onboard(44)))
         // The rank comes before age.
@@ -82,7 +85,7 @@ import LiveTiming
         // The main feed (slot 0) stays even when it is the least interesting onboard, as on Android.
         let slots: [Channel?] = [Self.onboard(4), Self.onboard(1), Self.onboard(16)]
         #expect(Self.place(44, slots, states: ["4": .pit, "1": .push, "16": .push],
-                           placedAt: [1: Self.t0, 2: Self.t0.addingTimeInterval(10)]) == .replace(slot: 1, channel: Self.onboard(44)))
+                           placedAt: [2001: Self.t0, 2016: Self.t0.addingTimeInterval(10)]) == .replace(slot: 1, channel: Self.onboard(44)))
         #expect(Self.place(44, [Self.onboard(4)], states: ["4": .pit]) == .noFreeSpot)
         #expect(Self.place(44, [Self.onboard(4), Self.world], states: ["4": .knockedOut]) == .noFreeSpot)
         #expect(Self.place(44, [Self.onboard(4), Self.onboard(1)], audio: 2001, states: ["4": .pit]) == .noFreeSpot)
