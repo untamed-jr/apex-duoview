@@ -30,12 +30,11 @@ public enum MapCars {
     /// after `t`, hidden across a gap over 5 s), with its timing at `t`. Retired cars are left out.
     /// Dimmed cars come first, then from the back up, so the leader is drawn last (on top).
     ///
-    /// The flying ring needs the lap states: pass the session's `LapStates`, built once, when
-    /// calling this every frame; without it they are built here (for qualifying only).
-    public static func visible(at t: UTCms, session: LoadedSession, lapStates: LapStates? = nil) -> [Car] {
+    /// The flying ring reads `lapStates`: the session's `LapStates`, built once from its timing
+    /// (and rebuilt by a live caller as the timeline grows), never per call.
+    public static func visible(at t: UTCms, session: LoadedSession, lapStates: LapStates) -> [Car] {
         let timing = session.timing.at(t)
-        let qualifying = session.info.isQualifying
-        let states = qualifying ? (lapStates ?? LapStates(session: session)) : nil
+        let states = session.info.isQualifying ? lapStates : nil
         var cars: [Car] = []
         cars.reserveCapacity(session.positions.cars.count)
         for (number, track) in session.positions.cars {

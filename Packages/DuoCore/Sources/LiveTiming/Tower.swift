@@ -68,7 +68,7 @@ public enum Tower {
         let rows = timing.map { number, s -> TowerRow in
             let driver = session.drivers[number]
             let lap = s.lastLapMs.map(lapText)
-            let tyre = stints[number]?.last.flatMap { stint in stint.compound.first.map { (compound: $0, laps: stint.totalLaps) } }
+            let tyre = stints[number]?.last.flatMap(tyreMark)
             return TowerRow(
                 number: number,
                 tla: driver?.tla ?? number,
@@ -92,6 +92,14 @@ public enum Tower {
             default: return numberOrder(a.number, b.number)
             }
         }
+    }
+
+    /// The tyre cell for a stint: the compound's letter and laps on the set. Nil (no tyre) for a
+    /// compound F1 doesn't know yet ("UNKNOWN", "TEST_UNKNOWN", as it sends after a stop).
+    static func tyreMark(_ stint: Stint) -> (compound: Character, laps: Int)? {
+        let compound = stint.compound.trimmingCharacters(in: .whitespaces).uppercased()
+        guard let letter = compound.first, !compound.contains("UNKNOWN") else { return nil }
+        return (letter, stint.totalLaps)
     }
 
     /// The gap column's title: "Leader" in a race, "Fastest" otherwise (Android).

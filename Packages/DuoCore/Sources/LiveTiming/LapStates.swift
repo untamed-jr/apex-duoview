@@ -15,11 +15,11 @@ public enum LapState: Sendable, Equatable {
 
 public extension TimingSessionInfo {
     /// A race or a sprint (F1's Type "Race").
-    var isRace: Bool { type.localizedCaseInsensitiveContains("Race") }
+    var isRace: Bool { type.range(of: "Race", options: .caseInsensitive) != nil }
 
     /// Qualifying or sprint qualifying: the sessions with flying laps and knockouts (Android's
     /// `showsPushLaps`).
-    var isQualifying: Bool { type.localizedCaseInsensitiveContains("Qualifying") }
+    var isQualifying: Bool { type.range(of: "Qualifying", options: .caseInsensitive) != nil }
 }
 
 /// Each car's lap state through a session, derived from its timing history by Android's rules
@@ -40,6 +40,9 @@ public extension TimingSessionInfo {
 ///
 /// Built once (one pass over the timing history); `at` is a binary search per car, cheap enough
 /// for every frame. Each state depends only on the history at or before its own time.
+///
+/// It is a snapshot of the timeline it was built from: a live caller, whose timeline grows,
+/// rebuilds it when the timeline changes (not on every frame).
 public struct LapStates: Sendable {
     struct History: Sendable {
         var times: [UTCms] = []

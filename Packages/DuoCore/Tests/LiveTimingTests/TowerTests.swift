@@ -35,15 +35,16 @@ enum FixtureSession {
     static func quali() throws -> LoadedSession { try #require(loadedQuali) }
 
     /// A session from hand-written TimingData lines, with no positions.
-    static func synthetic(type: String, timing: [StreamLine], drivers: [String: DriverInfo] = [:], start: UTCms = 1_000_000) -> LoadedSession {
+    static func synthetic(type: String, timing: [StreamLine], drivers: [String: DriverInfo] = [:], start: UTCms = 1_000_000,
+                          stints: [StreamLine] = [], positions: PositionSeries = PositionSeries(cars: [:])) -> LoadedSession {
         LoadedSession(
             info: TimingSessionInfo(key: 1, name: type, type: type, path: "x/", start: start, gmtOffsetSeconds: 0,
                                     circuitKey: 14, meetingName: "Test", year: 2026),
             drivers: drivers,
             streamStart: start,
-            positions: PositionSeries(cars: [:]),
+            positions: positions,
             timing: TimingTimeline.build(lines: timing, streamStart: start),
-            stints: StintTimeline.build(lines: [], streamStart: start),
+            stints: StintTimeline.build(lines: stints, streamStart: start),
             header: HeaderTimeline.build(lapCount: [], clock: [], weather: [], streamStart: start),
             flags: TrackFlags.build(trackStatus: [], raceControl: [], streamStart: start, gmtOffsetSeconds: 0),
             missing: []
@@ -118,6 +119,23 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
         ])
         #expect(Tower.rows(at: 1_001_000, session: session, favourite: nil).first?.lastLap == "1:30.000")
         #expect(Tower.rows(at: 1_001_000, session: session, favourite: nil).first?.lastLapPace == .personalBest)
+        // After a stop F1 sends the new set as UNKNOWN until it knows the compound: no tyre then.
+        let stints = [
+            line(#"00:00:01.000{"Lines":{"4":{"Stints":[{"Compound":"MEDIUM","New":"true","TotalLaps":12,"StartLaps":0}]}}}"#),
+            line(#"00:00:02.000{"Lines":{"4":{"Stints":{"1":{"Compound":"UNKNOWN","New":"true","TotalLaps":0,"StartLaps":0}}}}}"#),
+            line(#"00:00:03.000{"Lines":{"4":{"Stints":{"1":{"Compound":"TEST_UNKNOWN"}}}}}"#),
+            line(#"00:00:30.000{"Lines":{"4":{"Stints":{"1":{"Compound":"HARD","TotalLaps":1}}}}}"#),
+        ]
+        let tyres = FixtureSession.synthetic(type: "Race", timing: [
+            timingLine("00:00:01.000", [("4", #""Position":"1""#)]),
+        ], stints: stints)
+        let mark = { (t: UTCms) in Tower.rows(at: t, session: tyres, favourite: nil).first?.tyre }
+        #expect(mark(1_001_000)?.compound == "M")
+        #expect(mark(1_001_000)?.laps == 12)
+        #expect(mark(1_002_000) == nil)
+        #expect(mark(1_003_000) == nil)
+        #expect(mark(1_030_000)?.compound == "H")
+        #expect(mark(1_030_000)?.laps == 1)
         #expect(Tower.rows(at: 1_002_000, session: session, favourite: nil).first?.lastLap == "PIT")
         #expect(Tower.rows(at: 1_030_000, session: session, favourite: nil).first?.lastLap == "1:30.000")
     }
@@ -187,19 +205,49 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
         // check:raceCar77SamplesWithin5sOfRetiredPlus60s: 77 still sends positions, so leaving it
         // out is the retirement's doing.
         #expect(race.positions.cars["77"]?.mapPoint(at: t) != nil)
-        let cars = MapCars.visible(at: t, session: race)
+        let cars = MapCars.visible(at: t, session: race, lapStates: LapStates(session: race))
         #expect(!cars.contains { $0.number == "77" })
         #expect(cars.contains { $0.number == "44" })
         #expect(cars.allSatisfy { race.positions.cars[$0.number]?.mapPoint(at: t) == $0.point })
         // Before it retired: on the map, dimmed in the pit lane (check:raceCar77SamplesWithin5sOf3200000,
         // check:raceCar77At3200000).
-        let early = try #require(MapCars.visible(at: Fixture.raceStart + 3_200_000, session: race).first { $0.number == "77" })
+        let early = try #require(MapCars.visible(at: Fixture.raceStart + 3_200_000, session: race, lapStates: LapStates(session: race))
+            .first { $0.number == "77" })
         #expect(early.dimmed)
         #expect(early.tla == race.drivers["77"]?.tla)
         #expect(!early.flying)
         // Dimmed cars are drawn first, then from the back up, so the leader is on top.
-        let order = MapCars.visible(at: TowerTests.raceT, session: race)
+        let order = MapCars.visible(at: TowerTests.raceT, session: race, lapStates: LapStates(session: race))
         #expect(order.last?.number == "12")  // check:raceTowerOrderAtLightsOutPlus10min (12 leads)
+    }
+
+    @Test func flyingRingOnAPushLapInQualifying() {
+        // Car 4 leaves the pits (count raised with PitOut: an out lap), crosses the line (a push
+        // lap), crosses again (cool-down). Car 1 stays in the pits.
+        let timing = [
+            timingLine("00:00:01.000", [("4", #""Position":"2","InPit":true,"PitOut":false"#), ("1", #""Position":"1","InPit":true"#)]),
+            timingLine("00:01:00.000", [("4", #""InPit":false,"PitOut":true,"NumberOfLaps":1"#)]),
+            timingLine("00:02:30.000", [("4", #""NumberOfLaps":2"#)]),
+            timingLine("00:04:00.000", [("4", #""NumberOfLaps":3"#)]),
+        ]
+        let start: UTCms = 1_000_000
+        let times = stride(from: start, through: start + 300_000, by: 1_000).map { $0 }
+        let positions = PositionSeries(cars: [
+            "4": CarTrack(number: "4", times: times, xs: times.map { _ in 100 }, ys: times.map { _ in 200 }),
+            "1": CarTrack(number: "1", times: times, xs: times.map { _ in 300 }, ys: times.map { _ in 400 }),
+        ])
+        for type in ["Qualifying", "Race"] {
+            let session = FixtureSession.synthetic(type: type, timing: timing, start: start, positions: positions)
+            let states = LapStates(session: session)
+            func car(_ n: String, _ t: UTCms) -> MapCars.Car? {
+                MapCars.visible(at: t, session: session, lapStates: states).first { $0.number == n }
+            }
+            #expect(car("4", start + 90_000)?.flying == false)          // out lap
+            #expect(car("4", start + 200_000)?.flying == (type == "Qualifying"))
+            #expect(car("4", start + 250_000)?.flying == false)         // cool-down
+            #expect(car("1", start + 200_000)?.flying == false)
+            #expect(car("1", start + 200_000)?.dimmed == true)
+        }
     }
 
     @Test func towerUsesNothingAfterT() throws {
@@ -211,7 +259,8 @@ func timingLine(_ stamp: String, _ cars: [(String, String)], top: String = "") -
             #expect(Tower.rows(at: t, session: full, favourite: "43") == Tower.rows(at: t, session: cut, favourite: "43"))
             #expect(LapStates(session: full).at(t) == LapStates(session: cut).at(t))
             #expect(DriverCardModel.at(t, number: car, session: full) == DriverCardModel.at(t, number: car, session: cut))
-            #expect(MapCars.visible(at: t, session: full) == MapCars.visible(at: t, session: cut))
+            #expect(MapCars.visible(at: t, session: full, lapStates: LapStates(session: full))
+                    == MapCars.visible(at: t, session: cut, lapStates: LapStates(session: cut)))
         }
     }
 }
