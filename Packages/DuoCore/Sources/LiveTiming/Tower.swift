@@ -62,7 +62,7 @@ public enum Tower {
         let zone = knockoutZone(timing, part: session.info.isQualifying ? session.timing.sessionPart(at: t) : nil)
         var battling = Set<String>()
         if let favourite, session.info.isRace {
-            let rivals = Battle.rivals(of: favourite, updates: lastUpdates(session.timing, at: t))
+            let rivals = Battle.rivals(of: favourite, at: t, timing: session.timing)
             if !rivals.isEmpty { battling = Set(rivals + [favourite]) }
         }
         let rows = timing.map { number, s -> TowerRow in
@@ -126,12 +126,6 @@ public enum Tower {
             .sorted { ($0.value.position ?? 0, $0.key) < ($1.value.position ?? 0, $1.key) }
         let size = knockoutZoneSize(carsStillIn: still.count, part: part)
         return Set(still.suffix(size).map(\.key))
-    }
-
-    /// Every car's timing at the last two timing updates at or before `t`, oldest first.
-    static func lastUpdates(_ timing: TimingTimeline, at t: UTCms) -> [[String: DriverTimingState]] {
-        guard let i = F1Values.lastIndex(in: timing.updateTimes, atOrBefore: t) else { return [] }
-        return timing.updateTimes[max(i - 1, 0)...i].map { timing.at($0) }
     }
 
     /// A lap time as F1 writes it: "1:29.518".
