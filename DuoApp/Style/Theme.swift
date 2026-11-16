@@ -33,6 +33,17 @@ enum Theme {
     /// Floating panels sit over the video at this opacity.
     static let panelOpacity = 0.9
 
+    /// The fastest of all (lap or sector), F1's purple.
+    static let timingPurple = rgb(0xB1, 0x4A, 0xED)
+    /// A personal best (lap or sector), F1's green.
+    static let timingGreen = rgb(0x30, 0xD1, 0x58)
+    /// Tyre compounds, as F1 rings them: soft, medium, hard, intermediate, wet.
+    static let tyreSoft = rgb(0xDA, 0x29, 0x1C)
+    static let tyreMedium = rgb(0xFF, 0xD1, 0x2E)
+    static let tyreHard = rgb(0xF0, 0xF0, 0xEC)
+    static let tyreIntermediate = rgb(0x43, 0xB0, 0x2A)
+    static let tyreWet = rgb(0x00, 0x67, 0xAD)
+
     /// A team colour from F1's "RRGGBB"; secondary silver when it is missing or unreadable.
     static func teamColour(_ hex: String) -> Color {
         guard hex.count == 6, let value = Int(hex, radix: 16) else { return textSecondary }

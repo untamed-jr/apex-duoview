@@ -5,7 +5,8 @@ import SwiftUI
 /// controls (−1 s / +1 s, ⟲ ⟳) are `MapPanelControls`, in the floating panel's header.
 struct MapPanel: View {
     let timing: TimingController
-    /// A car's dot was tapped (its racing number). Opens its onboard from build 12.
+    /// A car's dot was tapped (its racing number): opens its onboard. Holding a dot does nothing
+    /// yet (its pit window comes with the pit circle).
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
@@ -39,12 +40,18 @@ struct MapPanel: View {
     }
 }
 
-/// The header's controls: the offset with −1 s / +1 s, and the turn (⟲ ⟳, with Reset once turned).
+/// The header's controls: the Battle chip while your driver is in a battle, the offset with
+/// −1 s / +1 s, and the turn (⟲ ⟳, with Reset once turned).
 struct MapPanelControls: View {
     let timing: TimingController
+    /// The Battle chip was tapped: the rival's racing number, to open their onboard.
+    let onCar: @MainActor (String) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
+            if let rival = timing.battleRival {
+                BattleChip(rival: rival) { onCar(rival.number) }
+            }
             PanelTextButton(title: "\u{2212}1 s", accessibility: "Timing one second earlier") { timing.nudge(-1) }
             Text(OffsetText.text(timing.offsetMs))
                 .font(.caption2)
@@ -66,6 +73,36 @@ struct MapPanelControls: View {
                 }
             }
         }
+    }
+}
+
+/// "Battle" on the map's header: your driver is within 1.0 s of the car ahead or behind. Tapping it
+/// opens the rival's onboard.
+private struct BattleChip: View {
+    let rival: BattleRival
+    let action: @MainActor () -> Void
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            Text("Battle")
+                .font(.caption2)
+                .bold()
+                .fontWidth(.condensed)
+                .foregroundStyle(Color.black)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Theme.flagYellow, in: Capsule())
+                .frame(minHeight: 32)
+                .padding(.horizontal, 2)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Battle with \(rival.tla)")
+        .accessibilityHint("Opens \(rival.tla)'s onboard")
     }
 }
 

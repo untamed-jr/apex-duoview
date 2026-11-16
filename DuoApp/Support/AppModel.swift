@@ -68,6 +68,8 @@ final class AppModel {
         self.multiview = MultiviewController(
             coordinator: player, store: multiviewStore, recents: recents, history: history, timing: timing)
         favouriteDriver = multiviewStore.favouriteDriver
+        // Your driver's battles glow in the tower.
+        timing.setFavouriteDriver(favouriteDriver)
     }
 
     // MARK: Your driver
@@ -112,6 +114,7 @@ final class AppModel {
     func setFavouriteDriver(_ lastName: String?) {
         multiviewStore.favouriteDriver = lastName
         favouriteDriver = multiviewStore.favouriteDriver
+        timing.setFavouriteDriver(favouriteDriver)
     }
 
     /// The first-run sheet's answer: a driver (also resets the last-used feeds to the new
@@ -121,6 +124,7 @@ final class AppModel {
             multiviewStore.favouriteDriver = lastName
             multiviewStore.resetToDefault()
             favouriteDriver = multiviewStore.favouriteDriver
+            timing.setFavouriteDriver(favouriteDriver)
         }
         multiviewStore.driverPromptShown = true
     }

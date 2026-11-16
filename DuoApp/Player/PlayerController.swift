@@ -4,6 +4,7 @@ import F1TV
 import Foundation
 import Library
 import LiveTiming
+import Multiview
 import Observation
 import UIKit
 
@@ -14,6 +15,8 @@ import UIKit
 /// brings the cover back with the same view controller.
 /// It attaches the session's timing (shared with the multiview) once the PLAY is answered, with a
 /// clock reading this player's program date and position, and detaches it on close.
+/// Tap a car (`showOnboard`) switches to that car's onboard at the same moment; an onboard shows
+/// its driver card.
 /// Never logs or prints the stream URL, tokens or `PlayInfo`.
 @MainActor
 @Observable
@@ -29,6 +32,11 @@ final class PlayerController {
     /// Picture in picture is showing this player. The cover may be hidden meanwhile: the player
     /// and its play session stay until the window closes.
     private(set) var isInPictureInPicture = false
+    /// The onboard playing, for its driver card; nil for any other feed.
+    private(set) var onboard: PlayerOnboard?
+    /// One short line for the viewer ("No onboard for car 44 in this session."); clears itself
+    /// after 6 s.
+    private(set) var notice: String?
 
     @ObservationIgnored private let coordinator: PlayCoordinator
     @ObservationIgnored private let recents: RecentsStore
@@ -44,6 +52,12 @@ final class PlayerController {
     @ObservationIgnored private var canSave = false
     /// Where to start, decided against the real timeline once the item is ready.
     @ObservationIgnored private var pendingStart: Start = .position(0)
+    /// Tap-a-car: the moment (program date) the new onboard starts at, ahead of `pendingStart`,
+    /// which stands in when the stream has no date there.
+    @ObservationIgnored private var pendingDate: Date?
+    /// The session's feeds, for tap-a-car: fetched once per content.
+    @ObservationIgnored private var sessionChannels: (contentId: Int, channels: [Channel])?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
     /// The AVPlayerItem callbacks are for; anything from another item is dropped.
     @ObservationIgnored private var currentItemID: ObjectIdentifier?
     /// Bumped by every start, resume and close, so a slow answer for something superseded is dropped.
@@ -64,6 +78,8 @@ final class PlayerController {
     @ObservationIgnored private let pictureInPictureDelegate: PlayerPictureInPictureDelegate
 
     static let saveInterval: Double = 5
+    /// How long a notice stays up, as the multiview's.
+    static let noticeDuration: Duration = .seconds(6)
     /// "From the start" checks for the seekable range this often, this many times (10 s), then
     /// plays live.
     static let beginningPoll: Duration = .milliseconds(250)
@@ -82,6 +98,7 @@ final class PlayerController {
 
     isolated deinit {
         removeObservers()
+        noticeTask?.cancel()
     }
 
     // MARK: Starting
@@ -104,7 +121,9 @@ final class PlayerController {
         await self.start(item: item, channel: channel, startAt: start)
     }
 
-    func start(item: CatalogItem, channel: Channel, startAt: Start) async {
+    /// `at`: tap-a-car's moment, the program date the new feed starts at when its stream has one
+    /// (else `startAt`).
+    func start(item: CatalogItem, channel: Channel, startAt: Start, at date: Date? = nil) async {
         // Asking for what is already on screen changes nothing (and never sends a second PLAY).
         if player != nil, errorText == nil, currentItem?.contentId == item.contentId, currentChannel?.id == channel.id {
             // `resume` may have set the spinner; this player is already past loading.
@@ -121,6 +140,8 @@ final class PlayerController {
         if currentItem?.contentId != item.contentId { timing.detach(owner: self) }
         currentItem = item
         currentChannel = channel
+        let card = PlayerOnboard(channel)
+        if onboard != card { onboard = card }
         errorText = nil
         isLoading = true
         isPresented = true
@@ -147,7 +168,62 @@ final class PlayerController {
             guard let self else { return (programDate: nil, playerSeconds: .nan) }
             return self.timingClock()
         })
-        begin(url: info.url, startAt: startAt)
+        // An onboard gets its driver card (unless hidden).
+        timing.setCardFeeds(card.map { [$0.channelId: $0.number] } ?? [:], owner: self)
+        begin(url: info.url, startAt: startAt, date: date)
+    }
+
+    // MARK: Tap a car
+
+    /// Tap a car (map, tower, Battle chip): switches to that car's onboard at the same moment,
+    /// the program date when the stream has one, else the same position (the live edge for a
+    /// live stream without dates). Returns the notice when the session has no onboard for it
+    /// ("No onboard for car 44 in this session."), else nil. Its own onboard changes nothing.
+    @discardableResult
+    func showOnboard(racingNumber: Int) async -> String? {
+        guard let item = currentItem, let current = currentChannel, let player, errorText == nil, !isLoading,
+              !(current.isOnboard && current.racingNumber == racingNumber) else { return nil }
+        // Read before the fetch, so the moment is the tap's.
+        let date = player.currentItem?.currentDate()
+        let now = player.currentTime()
+        let live = player.currentItem?.duration.isIndefinite ?? item.isLive
+        let start: Start = live || !now.isNumeric ? .liveEdge : .position(max(Int64((now.seconds * 1_000).rounded()), 0))
+        guard let channels = await channels(for: item.contentId), currentItem?.contentId == item.contentId else { return nil }
+        guard let onboard = channels.first(where: { $0.isOnboard && $0.racingNumber == racingNumber && $0.id != nil }) else {
+            let message = Placement.noOnboard(racingNumber).message
+            if let message { showNotice(message) }
+            return message
+        }
+        await self.start(item: item, channel: onboard, startAt: start, at: date)
+        return nil
+    }
+
+    /// The session's feeds (once per content); nil when they can't be had.
+    private func channels(for contentId: Int) async -> [Channel]? {
+        if let sessionChannels, sessionChannels.contentId == contentId { return sessionChannels.channels }
+        guard let detail = try? await catalogue.video(contentId: contentId) else { return nil }
+        sessionChannels = (contentId, detail.channels)
+        return detail.channels
+    }
+
+    private func showNotice(_ text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: PlayerController.noticeDuration)
+            } catch {
+                return
+            }
+            self?.notice = nil
+        }
+    }
+
+    /// The viewer tapped the notice away.
+    func dismissNotice() {
+        noticeTask?.cancel()
+        noticeTask = nil
+        notice = nil
     }
 
     /// Resumes a bookmark: fetches the session's feeds, plans the start and plays.
@@ -197,6 +273,9 @@ final class PlayerController {
         timing.detach(owner: self)
         currentItem = nil
         currentChannel = nil
+        onboard = nil
+        sessionChannels = nil
+        dismissNotice()
         errorText = nil
         isLoading = false
         isPresented = false
@@ -228,6 +307,9 @@ final class PlayerController {
         timing.detach(owner: self)
         currentItem = nil
         currentChannel = nil
+        onboard = nil
+        sessionChannels = nil
+        dismissNotice()
         isLoading = false
         isPresented = false
     }
@@ -297,7 +379,7 @@ final class PlayerController {
 
     // MARK: Playback
 
-    private func begin(url: URL, startAt: Start) {
+    private func begin(url: URL, startAt: Start, date: Date? = nil) {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .moviePlayback)
         try? session.setActive(true)
@@ -305,6 +387,7 @@ final class PlayerController {
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
         pendingStart = startAt
+        pendingDate = date
         let itemID = ObjectIdentifier(item)
         currentItemID = itemID
         canSave = false
@@ -367,6 +450,22 @@ final class PlayerController {
                 : .replay(durationMs: duration.isNumeric ? Int64((duration.seconds * 1_000).rounded()) : 0)
             let start = pendingStart.resolved(for: timeline)
             pendingStart = .position(0)
+            let date = pendingDate
+            pendingDate = nil
+            if let date {
+                // Tap-a-car: the same moment as the feed it came from, by the streams' own dates.
+                // False when this stream has no date there: the position below stands in.
+                isLoading = false
+                let accepted = item.seek(to: date) { @Sendable [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        // Dropped if the item was replaced or closed while seeking.
+                        guard let self, self.currentItemID == itemID, let current = self.player else { return }
+                        self.canSave = true
+                        current.play()
+                    }
+                }
+                if accepted { return }
+            }
             if start == .beginning {
                 // A live session from its start (Android 0.98): nothing plays, and the spinner
                 // stays over the picture, until the seek to the start lands.
@@ -512,6 +611,7 @@ final class PlayerController {
         player = nil
         canSave = false
         pendingStart = .position(0)
+        pendingDate = nil
         currentItemID = nil
     }
 
@@ -630,5 +730,18 @@ nonisolated func onMainActor(_ body: @escaping @MainActor @Sendable () -> Void) 
         MainActor.assumeIsolated { body() }
     } else {
         Task { @MainActor in body() }
+    }
+}
+
+/// The onboard the single feed plays, for its driver card: its channel and racing number.
+struct PlayerOnboard: Equatable, Sendable {
+    let channelId: Int
+    let number: String
+
+    /// Nil for a feed that isn't an onboard, or has no id or racing number.
+    init?(_ channel: Channel) {
+        guard channel.isOnboard, let id = channel.id, let racingNumber = channel.racingNumber else { return nil }
+        channelId = id
+        number = String(racingNumber)
     }
 }

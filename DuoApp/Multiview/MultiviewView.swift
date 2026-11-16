@@ -162,7 +162,11 @@ struct MultiviewView: View {
                             timing: controller.timing,
                             bounds: Self.safeRect(screen: proxy.size, insets: insets),
                             postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
-                            onCar: { _ in })
+                            onCar: { number in
+                                noteInteraction()
+                                // Racing numbers are whole numbers; anything else has no onboard.
+                                if let racingNumber = Int(number) { controller.showOnboard(racingNumber: racingNumber) }
+                            })
                     }
                 }
                 .overlay {
@@ -270,6 +274,14 @@ struct MultiviewView: View {
                     onTap: { tapped(slot: entry.slot) },
                     onDrag: { event in dragged(entry, event, in: layout) },
                     onSwipe: { translation in swiped(translation) })
+            }
+            // The driver card sits above the touch surface too, so its long-press menu ("Hide
+            // card") answers; the rest of the tile keeps its tap and hold-to-drag.
+            .overlay(alignment: .topLeading) {
+                if visible, let channel = entry.channel, let id = channel.id, channel.isOnboard,
+                   let racingNumber = channel.racingNumber, controller.feedProblems[id] == nil {
+                    FeedCardOverlay(timing: controller.timing, channelId: id, racingNumber: racingNumber)
+                }
             }
             // The speaker sits above the touch surface, so it answers its own taps. It moves
             // with the tile.

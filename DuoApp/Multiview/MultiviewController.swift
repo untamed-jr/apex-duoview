@@ -134,6 +134,9 @@ final class MultiviewController {
     @ObservationIgnored private var feeds: [Int: MultiviewFeed] = [:]
     /// Each tile's size in pixels, by channel id: the resolution cap for a non-main feed.
     @ObservationIgnored private var tilePixels: [Int: CGSize] = [:]
+    /// When each feed in the slots was put there, by channel id (not slot: a swap keeps it):
+    /// tap-a-car replaces the onboard placed longest ago among equals.
+    @ObservationIgnored private var placedAt: [Int: Date] = [:]
     /// Where the main feed starts once it is ready; a refresh sets it to the main feed's place.
     @ObservationIgnored private var pendingStart: Start = .position(0)
     /// The feeds were started together (or there was nothing to start).
@@ -339,6 +342,8 @@ final class MultiviewController {
         promoteMainIfEmpty()
         // Each opening starts with the sound on the main feed.
         audioChannelId = slots[0]?.id
+        notePlacements()
+        updateCards()
 
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .moviePlayback)
@@ -391,6 +396,7 @@ final class MultiviewController {
     }
 
     private func resetSlots() {
+        placedAt = [:]
         sessionChannels = []
         slots = Array(repeating: nil, count: Self.slotCount)
         picks = Array(repeating: nil, count: Self.slotCount)
@@ -680,6 +686,56 @@ final class MultiviewController {
         // changed to one this speed never struggled with).
         updateSpeedHold()
         store.lastUsed = picks
+        notePlacements()
+        updateCards()
+    }
+
+    // MARK: Tap a car
+
+    /// Tap a car (map, tower, Battle chip): its onboard, matched by racing number, as
+    /// `OnboardPlacement` places it:
+    /// - already showing: it becomes the main feed;
+    /// - else an empty spot, else in place of the least interesting onboard (never the main
+    ///   feed, the feed with the sound, or a feed that isn't an onboard).
+    /// The change goes into the last-used feeds, as a swap does. Returns the notice shown when
+    /// nothing changes ("No onboard for car 44 in this session.", "No free spot — change a feed
+    /// in the editor."), else nil.
+    @discardableResult
+    func showOnboard(racingNumber: Int) -> String? {
+        guard currentItem != nil, !refreshing, errorText == nil else { return nil }
+        let placement = OnboardPlacement.place(
+            racingNumber: racingNumber, slots: slots, channels: channels, audioChannelId: audioChannelId,
+            lapStates: timing.lapStatesNow(), placedAt: placedAt)
+        switch placement {
+        case .makeMain(let slot):
+            if slot > 0 { makeMain(slot: slot) }
+        case .fill(let slot, let channel), .replace(let slot, let channel):
+            setFeed(channel, at: slot)
+        case .noFreeSpot, .noOnboard:
+            break
+        }
+        if let message = placement.message {
+            showNotice(message)
+            return message
+        }
+        return nil
+    }
+
+    /// Feeds new to the slots are placed now; feeds that left are forgotten.
+    private func notePlacements() {
+        let ids = Set(slots.compactMap { $0?.id })
+        placedAt = placedAt.filter { ids.contains($0.key) }
+        let now = Date()
+        for id in ids where placedAt[id] == nil { placedAt[id] = now }
+    }
+
+    /// The onboards in the slots get driver cards (unless hidden): the timing hears which.
+    private func updateCards() {
+        var feeds: [Int: String] = [:]
+        for case let channel? in slots where channel.isOnboard {
+            if let id = channel.id, let number = channel.racingNumber { feeds[id] = String(number) }
+        }
+        timing.setCardFeeds(feeds, owner: self)
     }
 
     /// An empty main slot takes the first filled one: the main spot goes to the next feed.

@@ -111,6 +111,28 @@ struct FeedTile: View {
     }
 }
 
+// MARK: - Driver card
+
+/// The driver card over an onboard tile (`DriverCardSlot`): top-leading, clear of the speaker,
+/// for content with timing. `MultiviewView` lays it above the tile's touch surface, so the card's
+/// long-press menu item "Hide card" answers (and, once hidden, its small "Show card" button);
+/// the rest of the tile keeps its tap and hold-to-drag. On by default; hidden per channel.
+struct FeedCardOverlay: View {
+    let timing: TimingController
+    let channelId: Int
+    let racingNumber: Int
+
+    var body: some View {
+        if timing.showsData {
+            DriverCardSlot(timing: timing, channelId: channelId, number: String(racingNumber))
+                .padding(.top, 6)
+                .padding(.leading, 6)
+                // Clear of the speaker button in the top-trailing corner.
+                .padding(.trailing, 50)
+        }
+    }
+}
+
 // MARK: - Speaker
 
 /// A feed's speaker: a speaker with waves on the feed with the sound, a crossed-out one on the

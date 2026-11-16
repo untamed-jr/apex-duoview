@@ -13,7 +13,8 @@ struct FloatingPanels: View {
     /// Where the panels may sit, in this view's own space (the safe area).
     let bounds: CGRect
     let postureKey: String
-    /// A car on the map was tapped (its racing number).
+    /// A car was tapped on the map or the tower, or the map's Battle chip (its racing number):
+    /// opens its onboard.
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
@@ -26,7 +27,7 @@ struct FloatingPanels: View {
                     ) {
                         EmptyView()
                     } content: {
-                        TowerPlaceholder()
+                        TowerView(timing: timing, onCar: onCar)
                     }
                 }
                 if timing.panels.contains(.map) {
@@ -34,7 +35,7 @@ struct FloatingPanels: View {
                         panel: .map, title: "Map", settings: timing.settings, bounds: bounds, postureKey: postureKey,
                         onClose: { timing.closePanel(.map) }
                     ) {
-                        MapPanelControls(timing: timing)
+                        MapPanelControls(timing: timing, onCar: onCar)
                     } content: {
                         MapPanel(timing: timing, onCar: onCar)
                     }
@@ -173,23 +174,6 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
     private func commit(_ frame: CGRect) {
         stored = frame
         settings.setPanelFrame(frame, panel: panel.rawValue, posture: postureKey)
-    }
-}
-
-/// The tower's spot until the timing tower arrives (build 12).
-struct TowerPlaceholder: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "list.number")
-                .font(.title3)
-                .foregroundStyle(Theme.textTertiary)
-                .accessibilityHidden(true)
-            Text("The timing tower arrives in the next build.")
-                .font(.footnote)
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(12)
     }
 }
 
