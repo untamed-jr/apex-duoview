@@ -16,7 +16,7 @@ public enum JSONValue: Sendable, Equatable {
     /// (`JSONFastPathTests` compares every committed fixture line), booleans included: JSON's
     /// `true` is `.bool`, its `1` is `.number`. It differs only
     /// - on numbers written with 17 or more significant digits, which can come out a few ulps
-    ///   off the decoder's correctly rounded value (up to about 16 measured on Linux);
+    ///   off the decoder's correctly rounded value (up to about 20 measured on Linux);
     /// - on duplicate keys, where the last wins;
     /// - on literals that underflow, such as 1e-400, which read as 0 instead of throwing.
     /// `JSONValueTests.knownDifferencesFromTheDecoder` pins these.

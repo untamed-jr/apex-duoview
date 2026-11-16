@@ -66,7 +66,7 @@ import Testing
         #endif
 
         // 17 or more significant digits can come out a few ulps off; the decoder rounds
-        // correctly. Up to about 16 ulps were measured on Linux over random doubles.
+        // correctly. Up to about 20 ulps were measured on Linux over random doubles.
         let text = "0.30000000000000004"
         let exact = try #require(Double(text))
         guard case .number(let fast) = try JSONValue.parse(Data(text.utf8)),

@@ -1,8 +1,8 @@
 import Foundation
 
-/// The moment of the race the picture shows, so timing can follow the video. F1 TV's streams
-/// carry a program date (`EXT-X-PROGRAM-DATE-TIME`) that runs a few seconds ahead of the timing
-/// archive's clock; `offsetMs` (−7 s unless the viewer nudges it) closes that gap.
+/// Picture time: the moment of the session the video shows, so timing can follow it. It is the
+/// main feed's program date-time plus `offsetMs`, a global offset (−7 s until the viewer nudges
+/// it, in whole seconds, until the cars match the picture).
 public struct PictureClock: Sendable {
     /// How far timing is moved from the stream's own time; negative is earlier.
     public var offsetMs: Int64
