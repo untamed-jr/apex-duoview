@@ -17,15 +17,21 @@ struct PlayerView: UIViewControllerRepresentable {
     }
 }
 
-/// The full-screen cover: the player, a spinner while loading, or the error with Close.
+/// The full-screen cover: the player, a spinner while loading, or the error with Close. With
+/// timing, a "Map" control beside Close shows the map and tower as floating panels over the
+/// picture (inside the safe area), remembered per posture as in the multiview.
 struct PlayerCover: View {
     let controller: PlayerController
+    let fold: FoldState
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let player = controller.player {
                 PlayerView(controller: controller, player: player).ignoresSafeArea()
+            }
+            if controller.player != nil, controller.errorText == nil, !controller.isLoading {
+                PlayerPanelsLayer(timing: controller.timing, fold: fold)
             }
             if controller.isLoading {
                 // Covers a ready picture until playback starts ("From the start" seeks first).
@@ -47,18 +53,42 @@ struct PlayerCover: View {
         }
         .overlay(alignment: .topLeading) {
             if controller.errorText == nil {
-                Button {
-                    controller.close()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .black.opacity(0.5))
+                HStack(spacing: 8) {
+                    Button {
+                        controller.close()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .black.opacity(0.5))
+                    }
+                    .accessibilityLabel("Close")
+                    if controller.player != nil, !controller.isLoading {
+                        TimingMapButton(timing: controller.timing, onInteraction: {})
+                    }
                 }
                 .padding(12)
-                .accessibilityLabel("Close")
             }
         }
         .statusBarHidden(controller.player != nil)
+    }
+}
+
+/// The floating panels over the single feed, only while one shows, so AVKit's own controls get
+/// every touch otherwise. Its own view: the cover's body never reads the timing.
+private struct PlayerPanelsLayer: View {
+    let timing: TimingController
+    let fold: FoldState
+
+    var body: some View {
+        if timing.showsData, !timing.panels.isEmpty {
+            GeometryReader { proxy in
+                FloatingPanels(
+                    timing: timing,
+                    bounds: CGRect(origin: .zero, size: proxy.size),
+                    postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
+                    onCar: { _ in })
+            }
+        }
     }
 }

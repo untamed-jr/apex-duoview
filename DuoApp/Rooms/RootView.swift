@@ -200,7 +200,7 @@ struct RootView: View {
                 set: { if !$0 { model.playback.coverDismissed() } }),
                 onDismiss: { offerDriverPrompt() }
             ) {
-                PlayerCover(controller: model.playback)
+                PlayerCover(controller: model.playback, fold: fold)
             }
             .fullScreenCover(isPresented: Binding(
                 get: { model.multiview.isPresented },

@@ -22,6 +22,23 @@ enum Theme {
     /// Corner radius of tiles and rows.
     static let cornerRadius: CGFloat = 10
 
+    // MARK: Timing
+
+    /// Flags on the track map: yellow sectors, safety car and VSC (Android's colours).
+    static let flagYellow = rgb(0xFF, 0xD6, 0x0A)
+    /// A red flag on the track map.
+    static let flagRed = rgb(0xFF, 0x3B, 0x30)
+    /// The dark casing under the map's outline, and the ring round each car dot.
+    static let mapCasing = Color(red: 0, green: 0, blue: 0, opacity: 0.85)
+    /// Floating panels sit over the video at this opacity.
+    static let panelOpacity = 0.9
+
+    /// A team colour from F1's "RRGGBB"; secondary silver when it is missing or unreadable.
+    static func teamColour(_ hex: String) -> Color {
+        guard hex.count == 6, let value = Int(hex, radix: 16) else { return textSecondary }
+        return rgb((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
+    }
+
     private static func rgb(_ red: Int, _ green: Int, _ blue: Int) -> Color {
         Color(red: Double(red) / 255, green: Double(green) / 255, blue: Double(blue) / 255)
     }

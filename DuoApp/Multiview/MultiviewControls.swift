@@ -1,12 +1,13 @@
 import F1TV
+import LiveTiming
 import Multiview
 import SwiftUI
 
 /// The multiview's own controls, in the beta.1 style (dark translucent capsules, condensed
 /// headings, red only for progress and LIVE), laid inside the safe area by `MultiviewView`.
 ///
-/// - Top: Close, the session title, "Switch layout" (only with more than one usable layout) and
-///   "Feeds".
+/// - Top: Close, the session title, "Switch layout" (only with more than one usable layout), "Map"
+///   (only with timing) and "Feeds".
 /// - Bottom: one scrubber for every feed with the elapsed and remaining time, play/pause, LIVE for
 ///   live sessions, the speed (not at the live edge) and the audio language of the feed with the
 ///   sound (only with more than one option).
@@ -17,7 +18,8 @@ import SwiftUI
 /// the tiles underneath. A notice ("Caught up to live…") shows whether or not the controls do.
 ///
 /// The time is read only by `MultiviewScrubber` and `MultiviewPlaybackBar`, so the twice-a-second
-/// update redraws them alone, never the tiles.
+/// update redraws them alone, never the tiles. Timing is read only by `TimingMapButton` and
+/// `TimelineMarksStrip`.
 struct MultiviewControls: View {
     let controller: MultiviewController
     let visible: Bool
@@ -84,7 +86,7 @@ struct MultiviewControls: View {
 
 // MARK: - Top bar
 
-/// Close and the title on the leading side; "Switch layout" and "Feeds" on the trailing side,
+/// Close and the title on the leading side; "Switch layout", "Map" and "Feeds" on the trailing side,
 /// kept 56 pt in from the edge so the top-right tile's speaker stays reachable while the controls
 /// are held up (paused, loading).
 struct MultiviewTopBar: View {
@@ -130,6 +132,7 @@ struct MultiviewTopBar: View {
                 .buttonStyle(.plain)
                 .fixedSize()
             }
+            TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
             if !controller.channels.isEmpty {
                 Button {
                     onInteraction()
@@ -380,6 +383,10 @@ struct MultiviewScrubber: View {
                 .tint(Theme.accent)
                 .accessibilityLabel("Position")
                 .accessibilityValue(MultiviewClock.text(shown - lower))
+                // Lights out, chequered and flag bands just under the track; no change to layout.
+                .overlay(alignment: .bottom) {
+                    TimelineMarksStrip(timing: controller.timing, range: range)
+                }
             Text(trailingText(shown: shown))
                 .font(.caption)
                 .fontWidth(.condensed)
@@ -410,6 +417,79 @@ struct MultiviewScrubber: View {
             scrubbing = false
         }
         onInteraction()
+    }
+}
+
+// MARK: - Timeline marks
+
+/// The timing's marks under the scrubber's track: lights out (a white tick), the chequered flag
+/// (a small chequer) and safety car, VSC and red flag periods (yellow or red bars), each at its
+/// moment less the timing offset, clipped to what the scrubber spans. Not touchable.
+struct TimelineMarksStrip: View {
+    let timing: TimingController
+    let range: ClosedRange<Double>
+
+    static let height: CGFloat = 6
+
+    var body: some View {
+        let marks = timing.timelineMarks.compactMap { $0.clipped(to: range) }
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(marks.enumerated()), id: \.offset) { entry in
+                    TimelineMarkView(mark: entry.element, range: range, width: width)
+                }
+            }
+        }
+        .frame(height: Self.height)
+        .padding(.horizontal, TimelineMarkLayout.trackInset)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(marks.isEmpty ? "" : "Timeline marks: " + marks.map(\.label).joined(separator: ", "))
+        .accessibilityHidden(marks.isEmpty)
+    }
+}
+
+/// One mark, placed along the strip.
+private struct TimelineMarkView: View {
+    let mark: TimelineMark
+    let range: ClosedRange<Double>
+    let width: CGFloat
+
+    var body: some View {
+        switch mark {
+        case .band(let kind, let from, let to):
+            let start = TimelineMarkLayout.x(of: from, in: range, width: width)
+            let end = TimelineMarkLayout.x(of: to, in: range, width: width)
+            Capsule()
+                .fill(kind == .red ? Theme.flagRed : Theme.flagYellow)
+                .frame(width: max(end - start, 2), height: 3)
+                .offset(x: start, y: 1.5)
+        case .lightsOut(let at, _):
+            Rectangle()
+                .fill(Color.white)
+                .frame(width: 2, height: TimelineMarksStrip.height)
+                .offset(x: TimelineMarkLayout.x(of: at, in: range, width: width) - 1)
+        case .chequered(let at):
+            ChequerGlyph()
+                .offset(x: TimelineMarkLayout.x(of: at, in: range, width: width) - 3)
+        }
+    }
+}
+
+/// A 6 pt chequered square.
+private struct ChequerGlyph: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color.white.frame(width: 3, height: 3)
+                Color.black.frame(width: 3, height: 3)
+            }
+            HStack(spacing: 0) {
+                Color.black.frame(width: 3, height: 3)
+                Color.white.frame(width: 3, height: 3)
+            }
+        }
     }
 }
 

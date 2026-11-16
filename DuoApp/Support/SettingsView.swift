@@ -1,7 +1,8 @@
 import F1TV
 import SwiftUI
 
-/// Settings: account, multiview, a live fold readout, About, credits and the debug fold simulator.
+/// Settings: account, multiview, the track map, a live fold readout, About, credits and the debug
+/// fold simulator.
 /// Shown in the system sheet on a narrow screen, and in the app's own `SettingsPanel` on a wide
 /// one, so it closes through `onDone` rather than the environment's dismiss action.
 struct SettingsView: View {
@@ -18,6 +19,7 @@ struct SettingsView: View {
             Form {
                 accountSection.listRowBackground(Theme.surface)
                 MultiviewSettingsSection(model: model).listRowBackground(Theme.surface)
+                TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
                 foldSection.listRowBackground(Theme.surface)
                 aboutSection.listRowBackground(Theme.surface)
                 creditsSection.listRowBackground(Theme.surface)

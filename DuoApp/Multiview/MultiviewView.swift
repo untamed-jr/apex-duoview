@@ -17,6 +17,10 @@ import SwiftUI
 /// Feeds: the controls' "Feeds" opens the feeds editor (a sheet). With fewer than four feeds the
 /// once-only "fewer feeds" question shows, never over the editor.
 ///
+/// Timing: the controls' "Map" shows the map and tower as floating panels (`FloatingPanels`),
+/// above the tiles and below the controls, inside the safe area. Only the panels take touches.
+/// This view never reads the timing itself, so its twice-a-second updates redraw only the panels.
+///
 /// Controls (`MultiviewControls`): up when the multiview opens, hidden after 4 s without use, and
 /// held up while paused, loading, scrubbing or showing an error. A tap on a tile keeps its job
 /// (swap, unfreeze, pick a feed), so it never shows the controls: a tap on the black background
@@ -153,6 +157,15 @@ struct MultiviewView: View {
                 // Frames glide; the drag itself isn't part of this value, so it tracks the finger.
                 .animation(.snappy, value: layout.placement)
                 .overlay {
+                    if controller.errorText == nil {
+                        FloatingPanels(
+                            timing: controller.timing,
+                            bounds: Self.safeRect(screen: proxy.size, insets: insets),
+                            postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
+                            onCar: { _ in })
+                    }
+                }
+                .overlay {
                     controls(layout)
                         .padding(insets)
                 }
@@ -183,6 +196,15 @@ struct MultiviewView: View {
     }
 
     // MARK: Layout
+
+    /// The safe area in full-screen coordinates (the inner reader's space).
+    static func safeRect(screen: CGSize, insets: EdgeInsets) -> CGRect {
+        CGRect(
+            x: insets.leading,
+            y: insets.top,
+            width: max(screen.width - insets.leading - insets.trailing, 0),
+            height: max(screen.height - insets.top - insets.bottom, 0))
+    }
 
     /// The tiles' frames for this screen, in full-screen coordinates. The tiles are laid out inside
     /// the safe area (spec: tiles stay out of cutouts; the optional edge-to-edge main feed is left
