@@ -4,6 +4,22 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+## v1.0-beta.3 — Live data (2026-11-17)
+
+Builds 11 to 16. In short:
+
+- **Replays:** a track map (floating or docked), the timing tower, driver cards and race marks on
+  the timeline follow the picture and never run ahead of it. Tap a car on the map or the tower to
+  bring up its onboard.
+- **Data layouts for the fold:** Director's Desk when flat; half-open like a laptop, Race
+  Engineer (an onboard above, the engineer's console below) or Scrub Deck (the video above, a touch
+  timeline of flags, overtakes, stops and laps below).
+- **Races get a pit circle** that shows where each car would come out after a stop.
+- **Live sessions** use F1's live timing, recorded on the phone so you can rewind, catch up from
+  F1's archive when you join late, and offer the next live programme when one starts.
+- Each build below lists what it changed and what is still to check. The live parts can only be
+  tried on a live weekend (next: Las Vegas, November 19–22).
+
 ### v1.0-beta.3, build 16 — final fixes from the beta.3 review
 
 - **Live timing stays light late in a race.** Each rebuild now reads only what arrived since the
@@ -45,6 +61,9 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   figures above come from a computer).
 - Data use when joining late: each top-up try downloads the archive topics whole (up to about
   17 MB late in a race), on mobile data too.
+- Small things the review left: a step back (even −1 s) blanks the console, deck and pit circle
+  until they are rebuilt, about a second; the console area is blank, not "Tap a car to pick an
+  onboard", while a session loads; a paused map may keep old car positions until play or a seek.
 - Known, not fixed: after a reconnect, a lap count that rose while disconnected may be read as a
   line crossing at the reconnect, so that car's lap clock and lap window can be off until its next
   crossing.
