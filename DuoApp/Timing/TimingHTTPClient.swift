@@ -1,5 +1,8 @@
 import F1TV
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// `HTTPClient` for timing: F1's archive (`livetiming.formula1.com`, with the F1 TV token in
 /// `Authorization`) and MultiViewer's circuits (no token). Its own ephemeral URLSession, so the
