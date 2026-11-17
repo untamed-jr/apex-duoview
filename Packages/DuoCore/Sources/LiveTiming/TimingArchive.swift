@@ -203,7 +203,7 @@ public actor TimingArchive {
     /// LapCount is published for races (and sprints) only.
     static func topics(for session: ArchiveSession) -> [String] {
         ["Heartbeat", "TimingData", "TimingAppData", "RaceControlMessages", "TrackStatus", "SessionStatus"]
-            + (session.type == "Race" ? ["LapCount"] : [])
+            + (TimingSessionInfo.isRace(type: session.type) ? ["LapCount"] : [])
             + ["ExtrapolatedClock", "WeatherData"]
     }
 

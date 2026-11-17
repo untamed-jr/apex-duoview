@@ -105,8 +105,11 @@ public enum LayoutEngine {
 
     /// Exactly `feedCount` frames (none for `feedCount <= 0`); index 0 is the main tile. For
     /// `feedCount > 4` the extra tiles are hidden and take the main tile's rect. A zero or negative
-    /// screen yields hidden zero rects. An unknown or nil `optionID` means the default, and an
-    /// option that does not fit this screen falls back as described in `compute`.
+    /// screen yields hidden zero rects. An unknown or nil `optionID` means the default of the
+    /// options without timing (`optionIDs(posture:feedCount:)`), even where timing is in and
+    /// `optionIDs(…, hasTiming: true)` lists a data layout first (laptop with one feed: Scrub
+    /// Deck): to get a data layout, pass its id (the app always passes one). An option that does
+    /// not fit this screen falls back as described in `compute`.
     public static func frames(screen: CGSize, foldFrame: CGRect?, posture: Posture,
                               feedCount: Int, optionID: String?) -> [TileFrame] {
         guard feedCount > 0 else { return [] }

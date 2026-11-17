@@ -15,11 +15,19 @@ public enum LapState: Sendable, Equatable {
 
 public extension TimingSessionInfo {
     /// A race or a sprint (F1's Type "Race").
-    var isRace: Bool { type.range(of: "Race", options: .caseInsensitive) != nil }
+    var isRace: Bool { Self.isRace(type: type) }
 
     /// Qualifying or sprint qualifying: the sessions with flying laps and knockouts (Android's
     /// `showsPushLaps`).
     var isQualifying: Bool { type.range(of: "Qualifying", options: .caseInsensitive) != nil }
+}
+
+extension TimingSessionInfo {
+    /// `isRace` for a session type, wherever one is read (the archive's topics, a live
+    /// session's optional ones).
+    static func isRace(type: String) -> Bool {
+        type.range(of: "Race", options: .caseInsensitive) != nil
+    }
 }
 
 /// Each car's lap state through a session, derived from its timing history by Android's rules

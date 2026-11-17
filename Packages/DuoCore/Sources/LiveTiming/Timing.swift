@@ -106,7 +106,9 @@ public struct TimingTimeline: Sendable {
     }
 
     let cars: [String: History]
-    /// The moments some car's state changed, oldest first ("timing updates").
+    /// The moments some car's state changed, oldest first ("timing updates"). Whole session,
+    /// including what comes after picture time: anything shown as data must read only those at
+    /// or before picture time, never later.
     public let updateTimes: [UTCms]
     let partTimes: [UTCms]
     let parts: [Int]

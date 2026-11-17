@@ -68,6 +68,9 @@ public struct TrackFlags: Sendable {
     let safetyCarIn: [UTCms]
     let resumptions: [Resumption]
     let redFlags: [RedFlag]
+    /// Every safety car, VSC and red flag period of the session, oldest first. Whole session,
+    /// including what comes after picture time: for the session's shape (`TimelineMark.marks`,
+    /// which cuts them), never shown as data without cutting at picture time.
     public private(set) var spans: [FlagSpan] = []
 
     /// An announcement is shown for an hour at most, so a stale one never lingers.

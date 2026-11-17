@@ -55,6 +55,17 @@ import F1TV
         openSC.end = nil
         #expect(RaceEvents.list(until: s + 69_999, session: session) == [lightsOut, openSC])
         #expect(RaceEvents.list(until: s + 9_999, session: session) == [lightsOut])
+        // A band starting exactly at picture time isn't shown yet, on the strip as on the
+        // timeline's marks.
+        func hasBand(_ marks: [TimelineMark]) -> Bool {
+            marks.contains { if case .band = $0 { return true } else { return false } }
+        }
+        #expect(RaceEvents.list(until: s + 10_000, session: session) == [lightsOut])
+        #expect(!hasBand(TimelineMark.marks(for: session, pictureTime: s + 10_000, playerSeconds: 100, wholeRace: false)))
+        var justOut = sc
+        justOut.end = nil
+        #expect(RaceEvents.list(until: s + 10_001, session: session) == [lightsOut, justOut])
+        #expect(hasBand(TimelineMark.marks(for: session, pictureTime: s + 10_001, playerSeconds: 100, wholeRace: false)))
 
         // Qualifying's red flag in the fixture: from race control's RED FLAG
         // (check:qualiRedFlagUtc = 1794074543000, before TrackStatus's 5 at

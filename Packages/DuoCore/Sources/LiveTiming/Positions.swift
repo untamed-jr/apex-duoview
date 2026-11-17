@@ -31,6 +31,8 @@ public struct CarTrack: Sendable {
     }
 
     public var first: UTCms? { times.first }
+    /// The last sample's time in the whole session, which may be after picture time: for how
+    /// far the data reaches (the top-up's reach), never shown as data.
     public var last: UTCms? { times.last }
 
     /// The sample at `index` into `times`.
@@ -60,8 +62,10 @@ public struct CarTrack: Sendable {
 
     /// Where the map draws the car at `t`: as `at`, but a (0,0) sample doesn't count (F1's first
     /// samples put every car at the origin), so the car is interpolated between the real samples
-    /// either side of `t`. Nil before the first real sample at or before `t` (nothing later than
-    /// `t` is used to place it), after the last, and when those samples are more than 5 s apart.
+    /// either side of `t`. Nil before the first real sample at or before `t`, after the last, and
+    /// when those samples are more than 5 s apart. Like `at`, it reads the first real sample
+    /// after `t` to interpolate towards (at most 5 s on, the car's next position on the same
+    /// stretch of track), but never places a car from samples after `t` alone.
     public func mapPoint(at t: UTCms) -> TrackPoint? {
         guard let found = F1Values.lastIndex(in: times, atOrBefore: t) else { return nil }
         var lo = found

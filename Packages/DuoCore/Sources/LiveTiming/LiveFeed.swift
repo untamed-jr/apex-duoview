@@ -174,7 +174,7 @@ public struct LiveFeed: Sendable {
     /// `LoadedSession.missing` until they arrive (LapCount for races only), as the archive's.
     static func optionalTopics(type: String) -> [String] {
         ["TimingData", "TimingAppData", "RaceControlMessages", "TrackStatus", "SessionStatus"]
-            + (type == "Race" ? ["LapCount"] : []) + ["ExtrapolatedClock", "WeatherData"]
+            + (TimingSessionInfo.isRace(type: type) ? ["LapCount"] : []) + ["ExtrapolatedClock", "WeatherData"]
     }
 
     /// The topics `session()` reads.

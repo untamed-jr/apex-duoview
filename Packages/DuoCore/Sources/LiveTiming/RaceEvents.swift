@@ -39,6 +39,7 @@ public enum RaceEvents {
     /// The events at or before `t` (picture time), oldest first; events at the same moment in
     /// the order lights out, bands, pits, fastest laps, retirements, chequered flag. Nothing
     /// after `t` is read: an event later than `t` is left out and an end later than `t` is nil.
+    /// A band starting exactly at `t` isn't shown yet, as on the timeline's marks.
     /// `t` nil is the whole session, ends included (the opt-in "Show the whole race on the Scrub
     /// Deck", off by default).
     public static func list(until t: UTCms?, session: LoadedSession) -> [RaceEvent] {
@@ -57,7 +58,7 @@ public enum RaceEvents {
         var out: [RaceEvent] = []
         if let started, started <= cut { out.append(RaceEvent(t: started, lap: lap(started), kind: .lightsOut, end: nil)) }
 
-        for span in session.flags.spans where span.start <= cut {
+        for span in session.flags.spans where span.start < cut {
             let kind: RaceEventKind
             switch span.kind {
             case .safetyCar: kind = .safetyCar

@@ -261,6 +261,18 @@ struct LeakyError: Error, CustomStringConvertible {
 
     /// Refused or not there is `missing`; failed to download is `failed`: separate lists, each in
     /// topic order. Core topics refused are only missing; the load goes on.
+    @Test func lapCountIsReadForWhatIsRaceCallsARace() {
+        // The archive's topics and a live session's optional ones use `isRace`'s own test.
+        for type in ["Race", "race", "Sprint Race", "Qualifying", "Practice 1"] {
+            var session = Self.race
+            session.type = type
+            let info = TimingSessionInfo(key: 1, name: type, type: type, path: "x/", start: nil, gmtOffsetSeconds: 0,
+                                         circuitKey: nil, meetingName: "", year: nil)
+            #expect(TimingArchive.topics(for: session).contains("LapCount") == info.isRace, "\(type)")
+            #expect(LiveFeed.optionalTopics(type: type).contains("LapCount") == info.isRace, "\(type)")
+        }
+    }
+
     @Test func optionalTopicsGoMissingOrFailedInTopicOrder() async throws {
         let http = try await Self.raceHTTP()
         await http.serve(Self.racePath + "SessionStatus.jsonStream", status: 403)
