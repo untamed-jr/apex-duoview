@@ -141,8 +141,8 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ### Untested — check later (build 14)
 
-- The zero-warnings build (regenerate the project with XcodeGen first: build 14 adds
-  `DuoApp/Timing/RaceDataModels.swift`, `RaceEngineerConsole.swift` and `ScrubDeck.swift`).
+- ~~The zero-warnings build~~ — checked 2026-11-17: build 14 built on the Mac with no
+  warnings and runs on the iPhone Duo simulator.
 - **T-B4, the exit test's laptop part** on the São Paulo 2026 race replay: in laptop posture,
   Race Engineer's console follows the top onboard, and dragging the Scrub Deck moves every feed
   to that moment.
@@ -214,8 +214,7 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ### Untested — check later (build 13)
 
-- The zero-warnings build (regenerate the project with XcodeGen first: build 13 adds
-  `DuoApp/Multiview/DataRegionViews.swift` and removes `DuoApp/Multiview/ReservedArea.swift`).
+- ~~The zero-warnings build~~ — checked 2026-11-17 with build 14.
 - **T-B3:** each fold's data layout on the São Paulo race replay — Director's Desk (flat, 1–4
   feeds), the book data screen (1–4 feeds), Race Engineer and Scrub Deck (laptop, 1–4 feeds) —
   and the glides between them and across folds, with the same views moving (no video restarts).
@@ -270,8 +269,7 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ### Untested — check later (build 12)
 
-- The zero-warnings build (regenerate the project with XcodeGen first: build 12 adds four files
-  to `DuoApp/Timing`).
+- ~~The zero-warnings build~~ — checked 2026-11-17 with build 14.
 - **T-B2:** tap a car on the map and on the tower; the card shows the lap time and the speed.
 - Tap-a-car in multiview: a car already showing becomes the main feed; an empty spot fills; the
   least interesting onboard is replaced; the notices; the last-used feeds after it.
@@ -308,7 +306,8 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ### Untested — check later (build 11)
 
-- The zero-warnings build, and the map moving with the São Paulo replay within about a second;
+- The map moving with the São Paulo replay within about a second (the zero-warnings build was
+  checked 2026-11-17 with build 14);
   −1 s / +1 s; how far the TRACKER tile runs ahead of the world feed (owner check T-B1).
 - The archive accepting the F1 TV token from the app; the retry line when offline.
 - Dragging, resizing and pinching the panels, and their places per fold; AVKit's own controls
