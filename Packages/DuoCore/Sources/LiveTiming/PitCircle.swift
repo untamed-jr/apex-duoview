@@ -50,8 +50,8 @@ public struct PitCircleState: Sendable, Equatable {
     public var leader: String
     /// The leader's lap in progress.
     public var lap: Int?
-    /// In running order (by gap to the leader). Retired and stopped cars, and cars whose gap
-    /// isn't a time (none behind a car whose interval isn't one either), are left out.
+    /// In running order (by gap to the leader). Retired and stopped cars are left out, and so is
+    /// a car with no gap at all (no time, no chain and no lap in common with the leader yet).
     public var cars: [PitCircleCar]
 
     public init(referenceLapMs: Int, greenLaps: Int, pitLossMs: Int, measuredStops: Int, leader: String, lap: Int?,
@@ -229,7 +229,7 @@ public enum PitCircle {
         // A lap slower than the reference (a safety car, a stop, a red flag) holds the leader
         // just short of the line until it crosses, instead of wrapping the field round.
         let leaderAt = fraction(min(Double(F1Values.sub(t, crossed)) / ref, leaderHold))
-        let gaps = gapsToLeader(states)
+        let gaps = gapsToLeader(states, at: t, timing: session.timing)
         let placed = ordered(gaps).map { (number: $0.key, gap: $0.value, at: fraction(leaderAt - Double($0.value) / ref)) }
         let stops = sessionStops(until: t, session: session)
         let cars = placed.map { car -> PitCircleCar in
@@ -261,7 +261,7 @@ public enum PitCircle {
         guard session.info.isRace else { return nil }
         let states = session.timing.at(t)
         guard let me = states[car], !me.inPit else { return nil }
-        let gaps = gapsToLeader(states)
+        let gaps = gapsToLeader(states, at: t, timing: session.timing)
         guard let mine = gaps[car] else { return nil }
         let out = mine + max(pitLossMs, 0)
         let others = ordered(gaps.filter { $0.key != car })
@@ -274,23 +274,41 @@ public enum PitCircle {
 
     // MARK: Shared with RaceLines
 
-    /// Each racing car's time behind the leader in ms (the leader 0): its GapToLeader when that
-    /// is a time, else the car ahead's plus its interval. Retired and stopped cars, and cars with
-    /// neither (a lapped car whose gaps read "1L"), are left out.
-    static func gapsToLeader(_ states: [String: DriverTimingState]) -> [String: Int] {
+    /// Each racing car's time behind the leader in ms (the leader 0), from `states` (timing at
+    /// `t`): its GapToLeader when that is a time; else the car ahead's plus its interval; else
+    /// (a lapped car whose gaps read "1L" or "+1 LAP") its crossing of the latest lap both it and
+    /// the leader had finished by `t`, less the leader's. The chain goes on behind such a car.
+    /// Retired and stopped cars, and cars with none of these, are left out.
+    static func gapsToLeader(_ states: [String: DriverTimingState], at t: UTCms, timing: TimingTimeline) -> [String: Int] {
         var out: [String: Int] = [:]
         let racing = states.filter { !$0.value.retired && !$0.value.stopped }
         let ordered = racing.filter { $0.value.position != nil }.sorted { ($0.value.position ?? 0) < ($1.value.position ?? 0) }
+        let leader = ordered.first { $0.value.position == 1 }?.key
+        var leaderLaps: [Int: UTCms]?
+        func byCrossings(_ number: String) -> Int? {
+            guard let leader else { return nil }
+            if leaderLaps == nil {
+                leaderLaps = Dictionary(timing.completedLaps(of: leader, upTo: t).map { ($0.lap, $0.crossedAt) }) { _, last in last }
+            }
+            for lap in timing.completedLaps(of: number, upTo: t).reversed() {
+                if let theirs = leaderLaps?[lap.lap] { return Int(clamping: F1Values.sub(lap.crossedAt, theirs)) }
+            }
+            return nil
+        }
         var previous: Int?
         for (number, s) in ordered {
             let gap: Int?
-            if s.position == 1 { gap = 0 } else { gap = gapMs(s.gapToLeader) ?? previous.flatMap { p in gapMs(s.interval).map { p + $0 } } }
+            if s.position == 1 {
+                gap = 0
+            } else {
+                gap = gapMs(s.gapToLeader) ?? previous.flatMap { p in gapMs(s.interval).map { p + $0 } } ?? byCrossings(number)
+            }
             out[number] = gap
             previous = gap
         }
         // Cars without a position are placed by their gap.
         for (number, s) in racing where s.position == nil {
-            if let gap = gapMs(s.gapToLeader) { out[number] = gap }
+            if let gap = gapMs(s.gapToLeader) ?? byCrossings(number) { out[number] = gap }
         }
         return out
     }

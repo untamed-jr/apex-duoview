@@ -73,8 +73,8 @@ public enum RaceLines {
         var behind: (tla: String, gap: String, closing: Bool?)?
         var aheadNumber: String?, behindNumber: String?
         if race, let p = me.position {
-            let gaps = PitCircle.gapsToLeader(states)
-            let then = trendTime(car: car, at: t, session: session).map { PitCircle.gapsToLeader(session.timing.at($0)) }
+            let gaps = PitCircle.gapsToLeader(states, at: t, timing: session.timing)
+            let then = trendTime(car: car, at: t, session: session).map { PitCircle.gapsToLeader(session.timing.at($0), at: $0, timing: session.timing) }
             func trend(front: String, back: String) -> Bool? {
                 guard let now = difference(gaps, front, back), let before = then.flatMap({ difference($0, front, back) }),
                       now != before else { return nil }

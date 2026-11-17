@@ -106,6 +106,41 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         #expect(abs(try #require(held.cars.last?.fraction) - (0.999 - 2.0 / 90)) < 1e-9)
     }
 
+    @Test func lappedCarsStayOnTheCircle() throws {
+        // 3 is a lap down ("1L" gap and interval); 4 is 2 s behind it with its gap also "+1 LAP".
+        // 3's gap is its crossing of the latest lap both it and the leader finished, less the
+        // leader's; 4 chains from 3.
+        let s: UTCms = 1_000_000
+        let session = RaceFixture.synthetic(timing: [
+            timingLine("00:00:00.000", [
+                ("1", #""Position":"1","GapToLeader":"","IntervalToPositionAhead":{"Value":""}"#),
+                ("2", #""Position":"2","GapToLeader":"+5.000","IntervalToPositionAhead":{"Value":"+5.000"}"#),
+                ("3", #""Position":"3","GapToLeader":"1L","IntervalToPositionAhead":{"Value":"1L"}"#),
+                ("4", #""Position":"4","GapToLeader":"+1 LAP","IntervalToPositionAhead":{"Value":"+2.000"}"#),
+            ]),
+            timingLine("00:01:40.000", [("1", #""NumberOfLaps":1"#)]),
+            timingLine("00:01:45.000", [("2", #""NumberOfLaps":1"#)]),
+            timingLine("00:03:10.000", [("1", #""NumberOfLaps":2"#)]),
+            timingLine("00:03:15.000", [("2", #""NumberOfLaps":2"#), ("3", #""NumberOfLaps":1"#)]),
+            timingLine("00:03:17.000", [("4", #""NumberOfLaps":1"#)]),
+            timingLine("00:04:40.000", [("1", #""NumberOfLaps":3"#)]),
+            timingLine("00:04:45.000", [("2", #""NumberOfLaps":3"#)]),
+            timingLine("00:04:50.000", [("3", #""NumberOfLaps":2"#)]),
+            timingLine("00:04:52.000", [("4", #""NumberOfLaps":2"#)]),
+        ], start: s)
+        // At 289 s the latest lap both finished is lap 1: 195 − 100 s.
+        let early = try #require(PitCircle.layout(at: s + 289_000, session: session))
+        #expect(early.cars.map(\.number) == ["1", "2", "3", "4"])
+        #expect(early.cars.map(\.gapToLeaderMs) == [0, 5_000, 95_000, 97_000])
+        // At 300 s it is lap 2: 290 − 190 s.
+        let circle = try #require(PitCircle.layout(at: s + 300_000, session: session))
+        #expect(circle.cars.map(\.gapToLeaderMs) == [0, 5_000, 100_000, 102_000])
+        #expect(circle.cars.first { $0.number == "3" }?.gapToLeader == "+100.0")
+        // And the stop maths counts them: 2 stopping for 96 s comes out 1 s behind 3, in P3.
+        #expect(PitCircle.rejoin(car: "2", at: s + 300_000, session: session, pitLossMs: 96_000)
+                == Rejoin(position: 3, behind: "3", gapMs: 1_000))
+    }
+
     @Test func pitLossMedianThenStoredThen22s() {
         #expect(PitCircle.pitLossMs(sessionStops: [25_000, 21_000, 20_000], storedMs: 19_000) == 21_000)
         #expect(PitCircle.pitLossMs(sessionStops: [20_000, 24_000], storedMs: nil) == 24_000)
