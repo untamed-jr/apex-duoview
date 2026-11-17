@@ -141,6 +141,8 @@ final class TimingController {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var mapTask: Task<Void, Never>?
+    /// A live map's start/finish line being looked for (`findMapStart`).
+    @ObservationIgnored private var mapStartTask: Task<Void, Never>?
     @ObservationIgnored private var tickTask: Task<Void, Never>?
     /// The loaded session's lap states, built once when it loads.
     @ObservationIgnored private var lapStates: LapStates?
@@ -222,6 +224,7 @@ final class TimingController {
     isolated deinit {
         loadTask?.cancel()
         mapTask?.cancel()
+        mapStartTask?.cancel()
         tickTask?.cancel()
         carData?.cancel()
         liveListenTask?.cancel()
@@ -330,6 +333,8 @@ final class TimingController {
         loadTask = nil
         mapTask?.cancel()
         mapTask = nil
+        mapStartTask?.cancel()
+        mapStartTask = nil
         tickTask?.cancel()
         tickTask = nil
         clock = nil
@@ -928,7 +933,8 @@ final class TimingController {
     /// One refresh: the session (when rebuilt), the link, the car data around picture time,
     /// and the top-up for the feed's session.
     private func refreshLive(_ builder: LiveSessionBuilder, generation mine: Int) async {
-        let r = await builder.refresh(pictureTime: pictureTime, wanted: needsTicking || loaded == nil)
+        let wanted = LiveRebuildClock.wanted(wrongSession: liveWrongSession, reading: needsTicking, hasSession: loaded != nil)
+        let r = await builder.refresh(pictureTime: pictureTime, wanted: wanted)
         guard generation == mine, liveBuilder === builder, !Task.isCancelled else { return }
         livePhase = r.phase
         liveEverSubscribed = r.everSubscribed
@@ -945,6 +951,9 @@ final class TimingController {
                 status = .unavailable(Self.noTiming)
             } else {
                 status = .loading
+                // Its session wasn't built while it was another's: build it at the next refresh.
+                await builder.rebuildSoon()
+                guard generation == mine, liveBuilder === builder, !Task.isCancelled else { return }
             }
         }
         switch r.session {
@@ -979,8 +988,27 @@ final class TimingController {
             status = .ready
             startMap(key: key, year: session.info.year ?? liveRef?.year ?? 0, session: session, generation: mine)
             updateTicking()
+        } else {
+            findMapStart(session, generation: mine)
         }
         publish()
+    }
+
+    /// A live map made before enough cars had crossed the line has no start/finish line: once
+    /// the crossings pin it, the map takes it (off the main actor, one try at a time).
+    private func findMapStart(_ session: LoadedSession, generation mine: Int) {
+        guard let current = map, current.startIndex == nil, mapStartTask == nil else { return }
+        mapStartTask = Task { [weak self] in
+            let found = await Task.detached(priority: .utility) {
+                CircuitLoader.withStartFinish(current, session: session)
+            }.value
+            guard let self, self.generation == mine, !Task.isCancelled else { return }
+            self.mapStartTask = nil
+            if let found, let now = self.map, now.startIndex == nil,
+               now.geometry.outline == found.geometry.outline {
+                self.map = found
+            }
+        }
     }
 
     /// The live session is gone (another session): the views empty until the next one.
@@ -991,6 +1019,8 @@ final class TimingController {
         circuitKey = nil
         mapTask?.cancel()
         mapTask = nil
+        mapStartTask?.cancel()
+        mapStartTask = nil
         map = nil
         mapMessage = nil
         backfillTask?.cancel()

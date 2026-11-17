@@ -82,6 +82,18 @@ enum CircuitLoader {
             traced: traced)
     }
 
+    /// `map` with its start/finish line, once the session's crossings pin it (a live session
+    /// joined part-way has too few at first); nil while they still don't, or when it has one.
+    static func withStartFinish(_ map: TrackMap, session: LoadedSession) -> TrackMap? {
+        guard map.startIndex == nil,
+              let start = OutlineTracer.startFinish(outline: map.geometry.outline,
+                                                    crossings: session.timing.lineCrossings(upTo: .max),
+                                                    tracks: session.positions.cars)
+        else { return nil }
+        return TrackMap(geometry: map.geometry, corners: map.corners, sectorRuns: map.sectorRuns, startIndex: start,
+                        forward: map.forward, traced: map.traced)
+    }
+
     static func parse(_ data: Data) -> Circuit? {
         guard let json = try? JSONValue.parse(data) else { return nil }
         return Circuit.parse(json)

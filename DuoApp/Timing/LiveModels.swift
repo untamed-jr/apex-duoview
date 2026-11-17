@@ -233,9 +233,9 @@ struct LiveGapFinder: Equatable, Sendable {
 
 // MARK: - Rebuilding the live session
 
-/// How often the live session is rebuilt (`LiveFeed.session()` parses every line again on each
-/// call). Chosen: at most every 2 s, stretched to 4 times as long as the last rebuild took, up to
-/// 5 s. The 2 Hz tick reads the cached `LoadedSession` meanwhile. Picture time runs at least the
+/// How often the live session is rebuilt (`LiveFeed.session()` reads only the lines since its
+/// last call, but a top-up or a reconnect makes it read them all again). Chosen: at most every
+/// 2 s, stretched to 4 times as long as the last rebuild took, up to 5 s. The 2 Hz tick reads the cached `LoadedSession` meanwhile. Picture time runs at least the
 /// 7 s offset (plus the stream's own delay) behind the newest timing, so a session up to 5 s old
 /// still reaches it. Android reparsed every 10 s. Only when something changed, and never two at
 /// once; the first snapshot, a session change and a top-up rebuild at once.
@@ -265,6 +265,13 @@ struct LiveRebuildClock: Equatable, Sendable {
     mutating func rebuilt(start: Int64, end: Int64) {
         lastStart = start
         lastDuration = max(end - start, 0)
+    }
+
+    /// Whether a refresh may rebuild the session at all: never while the feed is another
+    /// session's (`wrongSession`: it would be thrown away), else while something reads the
+    /// timing (`reading`) or until the first session is in (`hasSession` false).
+    static func wanted(wrongSession: Bool, reading: Bool, hasSession: Bool) -> Bool {
+        !wrongSession && (reading || !hasSession)
     }
 }
 
@@ -444,8 +451,15 @@ actor LiveSessionBuilder {
         urgent = true
     }
 
-    /// The session (rebuilt when due and `wanted`, or when there is none yet), the link and the
-    /// car data around `pictureTime`.
+    /// The next refresh that may rebuild does, at once (the feed turned out to be the watched
+    /// session's after being taken for another's).
+    func rebuildSoon() {
+        changed = true
+        urgent = true
+    }
+
+    /// The session (rebuilt when due and `wanted`: `LiveRebuildClock.wanted`), the link and
+    /// the car data around `pictureTime`.
     func refresh(pictureTime: UTCms?, wanted: Bool) -> LiveRefresh {
         var update = LiveSessionUpdate.unchanged
         let start = now()
@@ -454,7 +468,7 @@ actor LiveSessionBuilder {
             hadSession = false
             changed = false
             urgent = false
-        } else if (wanted || !hadSession), clock.due(now: start, changed: changed, urgent: urgent || !hadSession) {
+        } else if wanted, clock.due(now: start, changed: changed, urgent: urgent || !hadSession) {
             changed = false
             urgent = false
             if let session = feed.session() {
