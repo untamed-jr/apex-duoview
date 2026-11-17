@@ -93,9 +93,10 @@ struct DataRegionFrame<Content: View>: View {
 
 /// Laptop with one feed and no timing: a quiet line in the bottom half (where beta.2's placeholder
 /// was) rather than a blank screen. "Loading timing…" while the timing loads (or is tried again
-/// after a failure), "No timing for this session" when there is none; nothing before the player
-/// has attached the timing (the opening spinner shows then). Its own view, so only it follows the
-/// timing's status. Not interactive.
+/// after a failure; for a live item the live line, "Connecting to live timing…", as the map's),
+/// "No timing for this session" when there is none; nothing before the player has attached the
+/// timing (the opening spinner shows then). Its own view, so only it follows the timing's status.
+/// Not interactive.
 struct LaptopTimingNote: View {
     static let loading = "Loading timing\u{2026}"
 
@@ -103,7 +104,7 @@ struct LaptopTimingNote: View {
 
     var body: some View {
         Group {
-            if let text = Self.text(timing.status) {
+            if let text = Self.text(timing.status, loading: timing.loadingText) {
                 Text(text)
                     .font(.footnote)
                     .foregroundStyle(Theme.textSecondary)
@@ -116,7 +117,8 @@ struct LaptopTimingNote: View {
         .accessibilityElement(children: .combine)
     }
 
-    static func text(_ status: TimingStatus) -> String? {
+    /// The line for `status`; `loading` is what loading reads (`TimingController.loadingText`).
+    static func text(_ status: TimingStatus, loading: String = LaptopTimingNote.loading) -> String? {
         switch status {
         case .idle: return nil
         case .loading: return loading
@@ -125,5 +127,23 @@ struct LaptopTimingNote: View {
         // The data layouts take over once the timing is in; nothing to say here.
         case .ready, .estimated: return nil
         }
+    }
+}
+
+/// A quiet status line over a data view that still shows ("Timing catching up"): the laptop
+/// note's style, one line. Not interactive.
+struct TimingQuietLine: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.footnote)
+            .foregroundStyle(Theme.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity)
+            .allowsHitTesting(false)
     }
 }

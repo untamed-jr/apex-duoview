@@ -26,6 +26,9 @@ struct PitCircleView: View {
             } else {
                 MapPanelMessage(text: state.message ?? "", busy: false)
             }
+        } else if timing.timingHidden {
+            // Live, well before the join: the map panel's note says why.
+            Color.clear
         } else {
             MapPanelMessage(text: "Loading the pit circle\u{2026}", busy: true)
         }

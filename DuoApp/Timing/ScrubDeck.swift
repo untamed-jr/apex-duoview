@@ -55,11 +55,20 @@ private struct ScrubDeckContent: View {
             let axis = DeckAxis.make(deck, timeline: controller.timeline)
             if axis.anchors.count >= 2 {
                 deckBody(deck, axis: axis)
+                    .overlay(alignment: .top) {
+                        // Live, just before the join: the state on joining, labelled.
+                        if let note = timing.catchUpNote {
+                            TimingQuietLine(text: note)
+                                .background(Theme.surface.opacity(0.9))
+                        }
+                    }
             } else {
                 message("Waiting for the video\u{2026}")
             }
+        } else if timing.timingHidden, let note = timing.catchUpNote {
+            message(note)
         } else {
-            message("Loading timing\u{2026}")
+            message(timing.loadingText)
         }
     }
 

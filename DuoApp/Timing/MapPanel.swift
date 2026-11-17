@@ -187,8 +187,9 @@ struct MapPanelMessage: View {
 }
 
 /// The map itself. The fit (auto-rotation, scale) and everything that doesn't move are worked
-/// out when the size or the turn changes; each frame of the `TimelineView` (which stops while the
-/// panel is gone) reads only picture time and the cars. The renderer captures plain values only.
+/// out when the size or the turn changes; each frame of the `TimelineView` (at most 30 a second;
+/// none while the panel is gone or the picture stands still, `TimingController.pictureMoving`)
+/// reads only picture time and the cars. The renderer captures plain values only.
 private struct MapCanvas: View {
     let timing: TimingController
     let map: TrackMap
@@ -215,7 +216,8 @@ private struct MapCanvas: View {
         GeometryReader { proxy in
             let transform = map.geometry.fit(in: proxy.size, inset: MapDrawing.inset, userTurnDegrees: turn)
             let projected = ProjectedMap(map: map, transform: transform)
-            TimelineView(.animation) { context in
+            // Up to 30 frames a second while the picture moves; none while it stands still.
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !timing.pictureMoving)) { context in
                 let state: MapState = timing.pictureTime.map { timing.mapState(at: $0) } ?? .empty
                 let phase = context.date.timeIntervalSinceReferenceDate
                 Canvas { graphics, _ in

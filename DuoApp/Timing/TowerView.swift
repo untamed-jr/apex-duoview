@@ -17,16 +17,24 @@ struct TowerView: View {
     var body: some View {
         switch timing.status {
         case .ready, .estimated:
-            GeometryReader { proxy in
-                let columns = TowerColumns.fitting(proxy.size.width)
-                VStack(spacing: 0) {
-                    SessionHeaderView(timing: timing)
-                    TowerColumnTitles(gapHeader: timing.gapHeader, columns: columns)
-                    TowerRows(timing: timing, columns: columns, onCar: onCar)
+            if timing.timingHidden {
+                // Live, well before the join: nothing to show yet but why.
+                TowerMessage(text: timing.catchUpNote ?? LiveNote.catchingUp, busy: false)
+            } else {
+                GeometryReader { proxy in
+                    let columns = TowerColumns.fitting(proxy.size.width)
+                    VStack(spacing: 0) {
+                        SessionHeaderView(timing: timing)
+                        if let note = timing.catchUpNote {
+                            TimingQuietLine(text: note)
+                        }
+                        TowerColumnTitles(gapHeader: timing.gapHeader, columns: columns)
+                        TowerRows(timing: timing, columns: columns, onCar: onCar)
+                    }
                 }
             }
         case .loading:
-            TowerMessage(text: "Loading timing…", busy: true)
+            TowerMessage(text: timing.loadingText, busy: true)
         case .unavailable(let reason):
             TowerMessage(text: reason, busy: false)
         case .idle:

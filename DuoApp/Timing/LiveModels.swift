@@ -166,6 +166,17 @@ enum LiveNote {
         }
     }
 
+    /// What picture time `t` shows before the join (`joinedAt`) that the archive top-up hasn't
+    /// reached (`archiveReach`; nil before any top-up):
+    /// - `.none`: after the join, or within the archive's reach: the timing as it is;
+    /// - `.headStart`: up to `headStartMs` before the join: the state on joining, labelled;
+    /// - `.hidden`: further back: no timing at all, only the label.
+    /// Recording gaps after the join aren't this: they show the state from before the gap.
+    static func catchUp(at t: UTCms, joinedAt: UTCms?, archiveReach: UTCms?) -> LiveCatchUp {
+        guard let joinedAt, t < joinedAt, archiveReach.map({ t > $0 }) ?? true else { return .none }
+        return LiveMath.sub(joinedAt, t) > headStartMs ? .hidden : .headStart
+    }
+
     /// Picture time `t` shows timing the feed never received:
     /// - before the feed joined (`joinedAt`, where the state on joining stands in), until the
     ///   archive top-up reaches it (`archiveReach`, the archive's last car position; nil before
@@ -193,6 +204,13 @@ enum LiveNote {
         }
         return nil
     }
+}
+
+/// How a picture time before the join shows (`LiveNote.catchUp`).
+enum LiveCatchUp: Equatable, Sendable {
+    case none
+    case headStart
+    case hidden
 }
 
 /// A stretch the live feed holds no messages for: from the last message before a later

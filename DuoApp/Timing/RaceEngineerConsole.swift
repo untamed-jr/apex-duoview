@@ -72,6 +72,10 @@ private struct ConsoleLines: View {
     var body: some View {
         if let console = timing.console {
             VStack(alignment: .leading, spacing: 6) {
+                // Live, just before the join: the state on joining, labelled.
+                if let note = timing.catchUpNote {
+                    TimingQuietLine(text: note)
+                }
                 ConsoleHeader(console: console)
                 ConsoleReadouts(console: console)
                 if console.race {
@@ -82,12 +86,19 @@ private struct ConsoleLines: View {
                 Spacer(minLength: 0)
             }
         } else {
-            Text(ConsoleText.pickOnboard)
+            Text(placeholder)
                 .font(.footnote)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// With no console: live and well before the join, why; a car on top whose console is being
+    /// built (or was cleared by a rewind), nothing yet; no car on top, the hint.
+    private var placeholder: String {
+        if timing.timingHidden { return timing.catchUpNote ?? "" }
+        return timing.consoleCar == nil ? ConsoleText.pickOnboard : ""
     }
 }
 

@@ -120,6 +120,18 @@ final class TimingController {
     private(set) var pitCircle: PitCircleViewState?
     /// The pit circle's labels: the gap to the leader (on) or to the car ahead (off).
     private(set) var pitGapsToLeader = false
+    /// Picture time moved at the last tick (or a seek, a nudge): the map redraws at up to 30 Hz;
+    /// while it stands still (paused) the map draws only when something it shows changes.
+    private(set) var pictureMoving = true
+    /// "Timing catching up" while live picture time is before the join and the archive hasn't
+    /// reached it (`LiveNote.catchUp`): for the tower, the console and the deck (the map has its
+    /// own note, `mapNote`); nil otherwise.
+    private(set) var catchUpNote: String?
+    /// Picture time is more than 90 s before the live join, past the archive's reach: the tower,
+    /// header, cards, console, deck, pit circle, marks and map show nothing but the note.
+    private(set) var timingHidden = false
+    /// Picture time at the last publish.
+    @ObservationIgnored private var lastPictureTime: UTCms?
 
     @ObservationIgnored let settings: TimingSettings
     @ObservationIgnored private let archive: TimingArchive
@@ -331,6 +343,7 @@ final class TimingController {
     /// Stops and forgets everything: the session, the map, the panels.
     func detach() {
         generation += 1
+        lastPictureTime = nil
         loadTask?.cancel()
         loadTask = nil
         mapTask?.cancel()
@@ -399,7 +412,8 @@ final class TimingController {
     /// stopped, and left out once retired; the flags at `t`; the safety car's dot just ahead of
     /// the leader while it is out. Cheap enough for every frame.
     func mapState(at t: UTCms) -> MapState {
-        guard let loaded, let lapStates else { return .empty }
+        // Nothing before a live join the archive hasn't reached, beyond the 90 s head start.
+        guard let loaded, let lapStates, liveCatchUp(at: t) != .hidden else { return .empty }
         // Dimmed cars underneath, then from the back up, so the leader is drawn on top.
         let visible = MapCars.visible(at: t, session: loaded, lapStates: lapStates)
         let leader = visible.first { $0.position == 1 }?.point
@@ -633,7 +647,7 @@ final class TimingController {
 
     /// Each car's lap state at picture time, for tap-a-car's ranking; empty before anything loads.
     func lapStatesNow() -> [String: LapState] {
-        guard let lapStates, let t = pictureTime else { return [:] }
+        guard let lapStates, let t = pictureTime, liveCatchUp(at: t) != .hidden else { return [:] }
         return lapStates.at(t)
     }
 
@@ -782,9 +796,14 @@ final class TimingController {
     private func startTicking() {
         guard tickTask == nil else { return }
         tickTask = Task { [weak self] in
+            var previous: UTCms?
             while !Task.isCancelled {
                 guard let self else { return }
                 self.publish()
+                // Picture time stood still since the last tick (paused): the map stops redrawing.
+                let now = self.lastPictureTime
+                if previous != nil, previous == now, self.pictureMoving { self.pictureMoving = false }
+                previous = now
                 do {
                     try await Task.sleep(for: TimingController.snapshotInterval)
                 } catch {
@@ -801,6 +820,19 @@ final class TimingController {
         let state: TimingStatus = now.estimated ? .estimated : .ready
         if status != state { status = state }
         let t = now.t
+        if t != lastPictureTime, !pictureMoving { pictureMoving = true }
+        lastPictureTime = t
+        // Live, before the join and past the archive's reach: within 90 s the state on joining
+        // stands in, labelled; further back nothing shows but the label.
+        let catchUp = liveCatchUp(at: t)
+        let note: String? = catchUp == .none ? nil : LiveNote.catchingUp
+        if catchUpNote != note { catchUpNote = note }
+        if timingHidden != (catchUp == .hidden) { timingHidden = catchUp == .hidden }
+        if catchUp == .hidden {
+            hideTiming()
+            updateLiveNote(pictureTime: t)
+            return
+        }
         let marks = wantsMarks
             ? TimelineMark.marks(for: loaded, pictureTime: t, playerSeconds: now.playerSeconds, wholeRace: showWholeRace)
             : []
@@ -811,6 +843,25 @@ final class TimingController {
         publishDeck(loaded, at: t, playerSeconds: now.playerSeconds)
         publishPitCircle(loaded, at: t)
         updateLiveNote(pictureTime: t)
+    }
+
+    /// How picture time `t` shows before a live join (`LiveNote.catchUp`); `.none` otherwise.
+    private func liveCatchUp(at t: UTCms) -> LiveCatchUp {
+        guard liveBuilder != nil, !liveWrongSession else { return .none }
+        return LiveNote.catchUp(at: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach)
+    }
+
+    /// Nothing at picture time to show (`LiveCatchUp.hidden`): the tower, its header, the battle,
+    /// the cards, the console, the deck, the pit circle and the timeline's marks empty.
+    private func hideTiming() {
+        if !timelineMarks.isEmpty { timelineMarks = [] }
+        if !tower.isEmpty { tower = [] }
+        if battleRival != nil { battleRival = nil }
+        if header != .empty { header = .empty }
+        if !cards.isEmpty { cards = [:] }
+        dropConsole()
+        dropDeck()
+        dropPitCircle()
     }
 
     /// The pit circle, while the map panel shows it (floating or docked). Built off the main
@@ -937,6 +988,8 @@ final class TimingController {
         liveCars = [:]
         if liveNote != nil { liveNote = nil }
         if liveContentId != nil { liveContentId = nil }
+        if catchUpNote != nil { catchUpNote = nil }
+        if timingHidden { timingHidden = false }
     }
 
     /// One refresh: the session (when rebuilt), the link, the car data around picture time,
@@ -1047,6 +1100,8 @@ final class TimingController {
         dropDeck()
         dropPitCircle()
         rememberedStops = -1
+        if catchUpNote != nil { catchUpNote = nil }
+        if timingHidden { timingHidden = false }
     }
 
     /// The live note at picture time `t`.
