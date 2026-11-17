@@ -15,9 +15,11 @@ public struct PitCircleCar: Sendable, Equatable {
     public var angle: Double
     /// Time behind the leader in ms (0 for the leader), counted through every car ahead.
     public var gapToLeaderMs: Int
-    /// The default label: the gap to the next car ahead round the circle, "+1.2".
+    /// The default label: the gap to the next car ahead round the circle, "+1.2"; F1's own
+    /// interval when it isn't a time ("1L").
     public var gapToAhead: String
-    /// The label with the toggle on: "Leader", or the gap to the leader, "+12.3".
+    /// The label with the toggle on: "Leader", or the gap to the leader, "+12.3"; F1's own gap
+    /// when it isn't a time ("1L", "+1 LAP").
     public var gapToLeader: String
     /// In the pit lane: the view puts it on the inner arc.
     public var inPit: Bool
@@ -231,11 +233,19 @@ public enum PitCircle {
         // just short of the line until it crosses, instead of wrapping the field round.
         let leaderAt = fraction(min(Double(F1Values.sub(t, crossed)) / ref, leaderHold))
         let gaps = gapsToLeader(states, at: t, timing: session.timing)
-        let placed = ordered(gaps).map { (number: $0.key, gap: $0.value, at: fraction(leaderAt - Double($0.value) / ref)) }
+        let placed = ordered(gaps, leader: leader).map { (number: $0.key, gap: $0.value, at: fraction(leaderAt - Double($0.value) / ref)) }
         let stops = sessionStops(until: t, session: session)
         let cars = placed.map { car -> PitCircleCar in
             let ahead = placed.filter { $0.number != car.number }.map { fraction($0.at - car.at) }.min()
             let driver = session.drivers[car.number]
+            // Where F1's own gap isn't a time ("1L", "+1 LAP"), the label is F1's words; the
+            // car is still placed by its crossings.
+            let state = states[car.number]
+            func words(_ text: String?) -> String? {
+                guard car.number != leader, let text = text?.trimmingCharacters(in: .whitespaces),
+                      !text.isEmpty, gapMs(text) == nil else { return nil }
+                return text
+            }
             return PitCircleCar(
                 number: car.number,
                 tla: driver?.tla ?? car.number,
@@ -243,8 +253,8 @@ public enum PitCircle {
                 fraction: car.at,
                 angle: car.at * 360,
                 gapToLeaderMs: car.gap,
-                gapToAhead: ahead.map { signedText(Int(($0 * ref).rounded())) } ?? "",
-                gapToLeader: car.number == leader ? "Leader" : signedText(car.gap),
+                gapToAhead: words(state?.interval) ?? ahead.map { signedText(Int(($0 * ref).rounded())) } ?? "",
+                gapToLeader: car.number == leader ? "Leader" : words(state?.gapToLeader) ?? signedText(car.gap),
                 inPit: states[car.number]?.inPit ?? false
             )
         }
@@ -256,8 +266,8 @@ public enum PitCircle {
     }
 
     /// Where `car` would come out if it stopped at `t`: its gap to the leader plus `pitLossMs`,
-    /// among every other racing car's gap. Nil outside races, for a car in the pits, retired,
-    /// stopped, or whose gap isn't known.
+    /// among the gaps of the other cars on track (not retired, stopped or in the pit lane). Nil
+    /// outside races, for a car in the pits, retired, stopped, or whose gap isn't known.
     public static func rejoin(car: String, at t: UTCms, session: LoadedSession, pitLossMs: Int) -> Rejoin? {
         guard session.info.isRace else { return nil }
         let states = session.timing.at(t)
@@ -265,7 +275,9 @@ public enum PitCircle {
         let gaps = gapsToLeader(states, at: t, timing: session.timing)
         guard let mine = gaps[car] else { return nil }
         let out = mine + max(pitLossMs, 0)
-        let others = ordered(gaps.filter { $0.key != car })
+        // A car in the pit lane (or parked in its garage) is no car to come out behind.
+        let leader = states.first { $0.value.position == 1 }?.key
+        let others = ordered(gaps.filter { $0.key != car && states[$0.key]?.inPit != true }, leader: leader)
         let ahead = others.filter { $0.value <= out }
         guard let behind = ahead.last else {
             return Rejoin(position: 1, behind: nil, gapMs: others.first.map { $0.value - out } ?? 0)
@@ -278,7 +290,9 @@ public enum PitCircle {
     /// Each racing car's time behind the leader in ms (the leader 0), from `states` (timing at
     /// `t`): its GapToLeader when that is a time; else the car ahead's plus its interval; else
     /// (a lapped car whose gaps read "1L" or "+1 LAP") its crossing of the latest lap both it and
-    /// the leader had finished by `t`, less the leader's. The chain goes on behind such a car.
+    /// the leader had finished by `t`, less the leader's; at least the time since the leader
+    /// crossed the lap after the car's latest (so a car that stops crossing drops back), and
+    /// never below 0. The chain goes on behind such a car.
     /// Retired and stopped cars, and cars with none of these, are left out.
     static func gapsToLeader(_ states: [String: DriverTimingState], at t: UTCms, timing: TimingTimeline) -> [String: Int] {
         var out: [String: Int] = [:]
@@ -291,10 +305,17 @@ public enum PitCircle {
             if leaderLaps == nil {
                 leaderLaps = Dictionary(timing.completedLaps(of: leader, upTo: t).map { ($0.lap, $0.crossedAt) }) { _, last in last }
             }
-            for lap in timing.completedLaps(of: number, upTo: t).reversed() {
-                if let theirs = leaderLaps?[lap.lap] { return Int(clamping: F1Values.sub(lap.crossedAt, theirs)) }
+            let laps = timing.completedLaps(of: number, upTo: t)
+            guard let common = laps.last(where: { leaderLaps?[$0.lap] != nil }),
+                  let theirs = leaderLaps?[common.lap] else { return nil }
+            var gap = F1Values.sub(common.crossedAt, theirs)
+            // The car hasn't crossed the lap after its latest yet: if the leader has, the car is
+            // at least the time since then behind (it grows while a car sits in a garage).
+            if let latest = laps.last?.lap, let next = leaderLaps?[latest + 1] {
+                gap = max(gap, F1Values.sub(t, next))
             }
-            return nil
+            // Never ahead of the leader (a lead change mid-lap).
+            return Int(clamping: max(gap, 0))
         }
         var previous: Int?
         for (number, s) in ordered {
@@ -314,9 +335,13 @@ public enum PitCircle {
         return out
     }
 
-    /// Gaps in running order: smallest first, ties by number.
-    static func ordered(_ gaps: [String: Int]) -> [(key: String, value: Int)] {
-        gaps.sorted { $0.value != $1.value ? $0.value < $1.value : Tower.numberOrder($0.key, $1.key) }
+    /// Gaps in running order: smallest first; on a tie the leader first, then by number.
+    static func ordered(_ gaps: [String: Int], leader: String? = nil) -> [(key: String, value: Int)] {
+        gaps.sorted { a, b in
+            if a.value != b.value { return a.value < b.value }
+            if a.key == leader || b.key == leader { return a.key == leader }
+            return Tower.numberOrder(a.key, b.key)
+        }
     }
 
     /// F1's gap text ("+4.401", "65.123", "1:05.123") in ms; nil for "LAP 7", "1L", "+1 LAP", "".
