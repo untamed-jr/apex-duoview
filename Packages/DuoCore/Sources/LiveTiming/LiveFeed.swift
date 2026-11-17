@@ -61,6 +61,8 @@ public struct LiveFeed: Sendable {
         var lines: [StreamLine]
         /// The first of `deltas` that follows them.
         var from: Int
+        /// Where in `lines` the difference from the archive's state to the snapshot's is, if any.
+        var patchIndex: Int?
     }
 
     public init() {}
@@ -218,9 +220,19 @@ public struct LiveFeed: Sendable {
                                          weather: of("WeatherData"), streamStart: start),
             flags: TrackFlags.build(trackStatus: of("TrackStatus"), raceControl: of("RaceControlMessages"),
                                     streamStart: start, gmtOffsetSeconds: info.gmtOffsetSeconds),
-            sessionStatus: SessionStatusTimeline.build(lines: of("SessionStatus"), streamStart: start),
+            sessionStatus: SessionStatusTimeline.build(lines: of("SessionStatus"), streamStart: start,
+                                                       snapshotLines: snapshotLines("SessionStatus")),
             missing: optional.filter { of($0).isEmpty }
         )
+    }
+
+    /// Which of `topic`'s lines (`lines(topic)`) are only the state on joining, not a change at
+    /// their time: the opening snapshot (at the stream's start), the snapshot that first named
+    /// the topic after joining, or, after a top-up that didn't meet the live lines, what the
+    /// archive lacked of the snapshot.
+    func snapshotLines(_ topic: String) -> Set<Int> {
+        if let t = topped[topic] { return t.patchIndex.map { [$0] } ?? [] }
+        return opening[topic] != nil || lateStart.contains(topic) ? [0] : []
     }
 
     /// How many of `topic`'s lines `session()` has read since it last started that topic again
@@ -334,7 +346,8 @@ public struct LiveFeed: Sendable {
                 let given = Set(((patch.map { [$0] } ?? []) + live[from...]).flatMap(Self.messageKeys))
                 if !given.isEmpty { archivePart = archivePart.map { Self.dropping(given, from: $0) } }
             }
-            topped[topic] = Topped(lines: archivePart + (patch.map { [$0] } ?? []), from: from)
+            topped[topic] = Topped(lines: archivePart + (patch.map { [$0] } ?? []), from: from,
+                                   patchIndex: patch == nil ? nil : archivePart.count)
         }
     }
 

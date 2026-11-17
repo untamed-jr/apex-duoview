@@ -106,7 +106,7 @@ public enum RaceEvents {
 
         var previous: String?
         for change in session.sessionStatus.changes where change.at <= cut {
-            if change.status == "Finished", previous != "Finished" {
+            if change.status == "Finished", previous != "Finished", !change.isSnapshot {
                 out.append(RaceEvent(t: change.at, lap: lap(change.at, finished: true), kind: .chequered, end: nil))
             }
             previous = change.status

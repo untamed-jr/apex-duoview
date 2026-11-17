@@ -71,7 +71,7 @@ public enum TimelineMark: Equatable, Sendable {
         }
         var previous: String?
         for change in session.sessionStatus.changes {
-            if change.status == "Finished", previous != "Finished" { out.append(.chequered(at: seconds(change.at))) }
+            if change.status == "Finished", previous != "Finished", !change.isSnapshot { out.append(.chequered(at: seconds(change.at))) }
             previous = change.status
         }
         return out

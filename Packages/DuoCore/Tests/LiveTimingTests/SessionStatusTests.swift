@@ -58,4 +58,59 @@ import Testing
         #expect(none.status(at: 0) == nil)
         #expect(SessionStatusTimeline() == none)
     }
+
+    @Test func aStateOnJoiningIsNoChange() {
+        // Line 0 is a live feed's opening snapshot (at the stream's start): the session was
+        // already under way, so when the lights went out isn't known.
+        let joined = SessionStatusTimeline.build(lines: lines(
+            #"00:00:00.000{"Status":"Started"}"#,
+            #"12:00:10.000{"Status":"Aborted"}"#,
+            #"12:00:20.000{"Status":"Started"}"#,
+            #"12:00:30.000{"Status":"Finished"}"#
+        ), streamStart: 0, snapshotLines: [0])
+        #expect(joined.status(at: 0) == "Started")
+        #expect(joined.changes.map(\.isSnapshot) == [true, false, false, false])
+        #expect(joined.started == nil)
+        #expect(joined.first("Finished") == 43_230_000)
+        // Joined before the start: the first Started is lights out.
+        let early = SessionStatusTimeline.build(lines: lines(
+            #"00:00:00.000{"Status":"Inactive"}"#,
+            #"12:00:20.000{"Status":"Started"}"#
+        ), streamStart: 0, snapshotLines: [0])
+        #expect(early.started == 43_220_000)
+        // Joined after the flag: no chequered flag at the stream's start.
+        let after = SessionStatusTimeline.build(lines: lines(#"00:00:00.000{"Status":"Finished"}"#), streamStart: 0,
+                                                snapshotLines: [0])
+        #expect(after.first("Finished") == nil)
+        #expect(after.status(at: 0) == "Finished")
+    }
+
+    @Test func joiningLiveAfterTheStartMarksNoLightsOut() async throws {
+        let replay = try ArchiveReplay()
+        let joined = Fixture.raceLightsOut + 240_000
+        var feed = LiveFeed()
+        for m in replay.snapshot(at: joined, through: joined) + replay.changes.filter({ $0.utc > joined }) { feed.apply(m) }
+        let live = try #require(feed.built())
+        #expect(live.sessionStatus.status(at: joined - 60_000) == "Started")
+        #expect(live.sessionStatus.started == nil)
+        #expect(!TimelineMark.marks(for: live, pictureTime: joined + 60_000, playerSeconds: 1_000, wholeRace: true)
+            .contains { if case .lightsOut = $0 { return true } else { return false } })
+        #expect(!RaceEvents.list(until: nil, session: live).contains { $0.kind == .lightsOut })
+
+        // An archive that ends before the lights went out: what it lacks of the snapshot is no
+        // change either.
+        var lagging = feed
+        lagging.topUp(archive: replay.streams.mapValues { $0.filter { replay.utc($0) < Fixture.raceLightsOut - 60_000 } },
+                      archiveStart: replay.start)
+        let early = try #require(lagging.built())
+        #expect(early.sessionStatus.status(at: joined - 60_000) == "Inactive")  // the archive's last, until the join
+        #expect(early.sessionStatus.status(at: joined) == "Started")
+        #expect(early.sessionStatus.started == nil)
+
+        // The whole archive: lights out where it was.
+        feed.topUp(archive: replay.streams, archiveStart: replay.start)
+        let full = try #require(feed.built())
+        #expect(full.sessionStatus.started == Fixture.raceLightsOut)
+        #expect(RaceEvents.list(until: nil, session: full).contains { $0.kind == .lightsOut && $0.t == Fixture.raceLightsOut })
+    }
 }
