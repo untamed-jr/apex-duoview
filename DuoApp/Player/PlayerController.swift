@@ -83,6 +83,8 @@ final class PlayerController {
     static let saveInterval: Double = 5
     /// How long a notice stays up, as the multiview's.
     static let noticeDuration: Duration = .seconds(6)
+    /// Tap-a-car couldn't get the session's feeds (offline, or F1 TV didn't answer).
+    static let noFeedsNotice = "Couldn't load this session's onboards. Check your connection and try again."
     /// "From the start" checks for the seekable range this often, this many times (10 s), then
     /// plays live.
     static let beginningPoll: Duration = .milliseconds(250)
@@ -141,6 +143,9 @@ final class PlayerController {
         teardownPlayback()
         // Another feed of the same session keeps its timing; other content drops it.
         if currentItem?.contentId != item.contentId { timing.detach(owner: self) }
+        // The feed before had its own card: none until this one plays, so a failed PLAY leaves
+        // no card, tick or car data download behind.
+        timing.setCardFeeds([:], owner: self)
         currentItem = item
         currentChannel = channel
         let card = PlayerOnboard(channel)
@@ -191,7 +196,12 @@ final class PlayerController {
         let now = player.currentTime()
         let live = player.currentItem?.duration.isIndefinite ?? item.isLive
         let start: Start = live || !now.isNumeric ? .liveEdge : .position(max(Int64((now.seconds * 1_000).rounded()), 0))
-        guard let channels = await channels(for: item.contentId), currentItem?.contentId == item.contentId else { return nil }
+        let channels = await channels(for: item.contentId)
+        guard currentItem?.contentId == item.contentId else { return nil }
+        guard let channels else {
+            showNotice(Self.noFeedsNotice)
+            return Self.noFeedsNotice
+        }
         guard let onboard = channels.first(where: { $0.isOnboard && $0.racingNumber == racingNumber && $0.id != nil }) else {
             let message = Placement.noOnboard(racingNumber).message
             if let message { showNotice(message) }
