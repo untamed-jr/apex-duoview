@@ -259,6 +259,16 @@ final class PlayerController {
             return
         }
         guard generation == mine else { return }
+        // Saved live is not live now: only F1 TV's live-now list makes the item live.
+        var liveNow: [CatalogItem]?
+        if LiveResume.needsCheck(bookmark) {
+            liveNow = try? await catalogue.liveNow()
+            if Task.isCancelled {
+                if generation == mine { dismiss() }
+                return
+            }
+            guard generation == mine else { return }
+        }
         let channels = detail.channels
         let defaultId = (channels.first(where: \.isDefault) ?? channels.first)?.id
         let plan = ResumePlan.make(
@@ -268,15 +278,8 @@ final class PlayerController {
             isLiveNow: bookmark.live,
             durationMs: bookmark.durationMs)
         let channel = channels.first(where: { $0.id == plan.channelId }) ?? Channel(id: plan.channelId, isDefault: true)
-        // A bookmark keeps no metadata: the video's details say where its timing is. A live
-        // bookmark resumes as live (the live edge above), so its item is live too: live timing,
-        // and the next-live check.
-        let item = CatalogItem(
-            contentId: bookmark.contentId,
-            title: detail.title.isEmpty ? bookmark.title : detail.title,
-            subtype: bookmark.live ? "LIVE" : "",
-            picturePath: bookmark.picturePath,
-            timingRef: detail.timingRef)
+        // Live (live timing, the next-live check) only while F1 TV lists it live now.
+        let item = LiveResume.item(bookmark, detail: detail, isLive: LiveResume.isLive(bookmark, liveNow: liveNow))
         await start(item: item, channel: channel, startAt: plan.start)
     }
 

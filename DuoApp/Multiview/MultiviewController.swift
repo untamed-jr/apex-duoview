@@ -285,13 +285,18 @@ final class MultiviewController {
             return
         }
         guard generation == mine else { return }
-        // A live bookmark resumes at the live edge, so its item is live too: live timing, and the
-        // next-live check.
-        let item = CatalogItem(
-            contentId: bookmark.contentId,
-            title: detail.title.isEmpty ? bookmark.title : detail.title,
-            subtype: bookmark.live ? "LIVE" : "",
-            picturePath: bookmark.picturePath)
+        // Saved live is not live now: only F1 TV's live-now list makes the item live (live
+        // timing, the next-live check).
+        var liveNow: [CatalogItem]?
+        if LiveResume.needsCheck(bookmark) {
+            liveNow = try? await catalogue.liveNow()
+            if Task.isCancelled {
+                if generation == mine { dismiss() }
+                return
+            }
+            guard generation == mine else { return }
+        }
+        let item = LiveResume.item(bookmark, detail: detail, isLive: LiveResume.isLive(bookmark, liveNow: liveNow))
         let start = ResumePlan.make(
             bookmark: bookmark,
             availableChannelIds: [bookmark.channelId],

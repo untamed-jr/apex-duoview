@@ -1,5 +1,6 @@
 import F1TV
 import Foundation
+import Library
 import LiveTiming
 
 // Live timing's plain values and pure rules (build 15): no SwiftUI, no UIKit, no networking, so
@@ -515,6 +516,33 @@ enum LiveRecordingFiles {
 /// - The watched broadcast counts as ended only when a successful fetch no longer lists it,
 ///   having listed it before.
 /// - "Not now" is remembered for that programme while the app runs.
+/// A resumed bookmark's item. `WatchBookmark.live` says only that the programme was live when
+/// the bookmark was saved: the item is live (live timing, the next-live check) only when F1 TV's
+/// live-now list has it now. Yesterday's race resumed from Recents is a replay, with archive
+/// timing. The video's details carry no live flag, so the list is the live-now signal.
+enum LiveResume {
+    /// Whether to ask F1 TV's live-now list at all: only a bookmark saved live can be live now.
+    static func needsCheck(_ bookmark: WatchBookmark) -> Bool {
+        bookmark.live
+    }
+
+    /// Live now: saved live and in F1 TV's live-now list (`liveNow`; nil when it couldn't be
+    /// read, which counts as not live).
+    static func isLive(_ bookmark: WatchBookmark, liveNow: [CatalogItem]?) -> Bool {
+        bookmark.live && (liveNow?.contains { $0.contentId == bookmark.contentId } ?? false)
+    }
+
+    /// The item to play. A bookmark keeps no metadata: the video's details say where its timing is.
+    static func item(_ bookmark: WatchBookmark, detail: VideoDetail, isLive: Bool) -> CatalogItem {
+        CatalogItem(
+            contentId: bookmark.contentId,
+            title: detail.title.isEmpty ? bookmark.title : detail.title,
+            subtype: isLive ? "LIVE" : "",
+            picturePath: bookmark.picturePath,
+            timingRef: detail.timingRef)
+    }
+}
+
 struct NextLiveState: Equatable, Sendable {
     static let checkInterval: Duration = .seconds(60)
 

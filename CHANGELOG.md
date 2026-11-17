@@ -91,8 +91,10 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   between the earlier visit and the new join shows the earlier visit's last state labelled
   "Timing catching up". The archive top-up fills in only what came before the first join, so
   that stretch keeps the label.
-- Resuming a live session from the resume banner now opens it as live (live timing and the
-  next-live check), in the single player and the multiview.
+- Resuming a bookmark saved during a live session opens it as live (live timing and the
+  next-live check) only while F1 TV still lists it as live now, in the single player and the
+  multiview. Once the session has ended, the same bookmark opens as a replay with archive
+  timing. Untested: resuming while F1 TV's live-now list can't be read opens it as a replay.
 
 ### v1.0-beta.3, build 14 — Race Engineer and Scrub Deck
 
