@@ -4,6 +4,90 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.3, build 15 — Live timing, recording, pit circle, next live programme
+
+- **Live timing.** A live session's map, tower, cards, header, console and deck now come from F1's
+  live timing (SignalR at livetiming.formula1.com) instead of the archive, through one connection
+  shared by the whole app and closed when nothing uses it. It subscribes to 14 topics, pings
+  every 15 s and reconnects 5 s after a drop (after three refusals in a row, every 60 s; a
+  refusal never signs you out). Your F1 TV sign-in goes only to F1's timing hosts, never to
+  MultiViewer, and is never written down.
+  - The map says "Connecting to live timing…" until the first data arrives, then, when needed,
+    "Live timing dropped — reconnecting…" (the data in hand stays up) or "Live timing is
+    connected, but F1 isn't sending car positions".
+  - The session is rebuilt from live timing at most every 2 s, stretched to 4 times as long as
+    a rebuild takes (up to 5 s); the 2 Hz views read the latest one in between.
+  - **Live speed readouts:** the console's readouts and the cards' speed come from live car data.
+    With "Speed readouts on mobile data" off, live car data isn't asked for on an expensive
+    connection (13 topics then), and comes back once on Wi-Fi.
+  - A live feed for another session than the one on screen shows "No timing for this session".
+- **Rewinding a live session** works from the start of what was followed: the session's timing is
+  recorded on the phone (Caches/live, one file per session, written every 2 s, appended to when
+  you come back to the same session, deleted after 7 days) and played back to the views.
+- **Catching up:** before the moment you joined, the views show the state on joining, labelled
+  "Timing catching up", until F1's archive fills that part in. The app asks the archive at once,
+  then every 2 minutes for up to 6 hours, until it reaches within 30 s of the join; a new session
+  starts that over.
+- **Pit circle** (races; the map panel's "Pit circle" / "Map" switch, floating or docked): the lap
+  as a circle in time at the leader's pace, finish at the top, cars clockwise by their gap to the
+  leader, cars in the pit lane on the inner ring.
+  - Labels show the gap to the car ahead, or to the leader with "Gaps: car ahead" / "Gaps:
+    leader". Lapped cars show F1's own text ("1L").
+  - **Tap or hold a car** to measure every gap to it and see its pit window ("If HAM stops now,
+    out 2.1 s behind NOR"), with the arc a stop costs drawn behind it; tap it again to let go.
+    Holding a car on the map shows the same line for a few seconds.
+  - Before the leader has finished a lap: "The circle starts once the leader has finished a
+    lap."; after joining a live race part-way, until the leader's next crossing: "The pit circle
+    appears when the leader next crosses the line."
+  - The pit loss is this race's median clean stop; once three or more are measured it is kept
+    for the circuit and used the next time before any stop is made there (else 22 s).
+- **Next live programme:** while you watch a live programme, F1 TV's "live now" list is checked
+  every 60 s. A programme that has gone live since you opened yours (or any live one once yours
+  has ended) is offered at the top of the video with "Switch" and "Not now"; "Switch" opens it at
+  the live edge the same way you were watching (multiview or single feed), "Not now" isn't asked
+  again for that programme. Never shown in picture in picture.
+
+### Untested — check later (build 15)
+
+- The zero-warnings build (regenerate the project with XcodeGen first: build 15 adds
+  `DuoApp/Timing/LiveModels.swift`, `LiveConnection.swift`, `LiveRecorder.swift`,
+  `PitCircleView.swift` and `NextLivePrompt.swift`).
+- **T-C, the first live weekend after this build** (nothing of it can be tried without a live
+  session):
+  - live timing connects ("Connecting to live timing…" then the map), the map and tower match
+    the picture, and the console's and cards' readouts move;
+  - a dropped connection (airplane mode for 10 s) says "Live timing dropped — reconnecting…" and
+    recovers without doubled laps, pit stops or race control messages;
+  - rewinding a live session shows what was followed; closing and reopening the same session
+    keeps the earlier part; "Timing catching up" before the join, gone once F1's archive has the
+    session;
+  - **first live weekend: seam/top-up with a real subscribe result** — the join between the
+    archive and the live data has only been checked against snapshots built from the archive,
+    never a real subscribe result. The recording file is the recording format, so the first
+    weekend's `Caches/live/{sessionKey}.txt` can become a test fixture: please keep one;
+  - "Live timing is connected, but F1 isn't sending car positions" if F1 sends none;
+  - with "Speed readouts on mobile data" off on cellular, the readouts stay empty and come back
+    on Wi-Fi;
+  - the next-live prompt: offered when another programme goes live (or yours ends), "Switch"
+    opening it the same way, "Not now" not asking again, never in picture in picture;
+  - a live session moving on to another session (SessionInfo's path) reconnects and starts a new
+    recording file.
+- **T-D, the exit test** (São Paulo 2026 race replay): the map and timing match the picture, a
+  tapped car brings up its onboard, Race Engineer and Scrub Deck work in laptop posture.
+- The pit circle on the São Paulo race replay: cars spaced by their gaps, the finish at the top,
+  the gap toggle, tap or hold a car for its window, the arc a stop costs, cars in the pits on the
+  inner ring; the map's hold (a long press on a dot) showing the window; whether the long press
+  ever steals a tap meant to open an onboard.
+- The pit circle redraws at 2 Hz (the leader moves in small steps), and holding a car on the map
+  measures the race's stops once on the main thread (a short pause late in a long race).
+- Smoothness late in a long live race: each rebuild parses every message so far again (off the
+  main thread); the interval stretches with the cost.
+- A rewind further back than 15 minutes on a live session shows no speed readouts (live car data
+  is kept for the last 15 minutes only).
+- Coming back to a live session after a gap: the part between the earlier visit and the new join
+  shows the earlier visit's last state, without the "Timing catching up" label (the label covers
+  only times before the first join), until the archive fills it in.
+
 ### v1.0-beta.3, build 14 — Race Engineer and Scrub Deck
 
 - **Race Engineer** (laptop, ⟳ with timing): the top screen shows an onboard — the main feed if
