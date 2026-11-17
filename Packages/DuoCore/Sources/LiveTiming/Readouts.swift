@@ -22,20 +22,23 @@ public enum Channel45Meaning: Sendable, Equatable {
     }
 
     /// The meaning for a season's car data. Before 2026, DRS. From 2026 (or with no year), only
-    /// what the samples show: a channel that changes is active aero; one that never changes (left
-    /// out reads 0, as `CarDataWindow` parses it) is absent.
+    /// what the samples show: a channel whose value changes is active aero; one left out (nil)
+    /// or never changing is absent.
     public static func of(year: Int?, samples: [String: [CarSample]]) -> Channel45Meaning {
         if let year, year < 2026 { return .drs }
         var first: Int?
         for sample in samples.values.joined() {
-            guard let seen = first else { first = sample.ch45; continue }
-            if sample.ch45 != seen { return .activeAero }
+            guard let value = sample.ch45 else { continue }
+            guard let seen = first else { first = value; continue }
+            if value != seen { return .activeAero }
         }
         return .absent
     }
 
-    /// Whether the light is lit for a channel 45 value; nil when there is no light.
-    func lit(_ value: Int) -> Bool? {
+    /// Whether the light is lit for a channel 45 value; nil when there is no light, or the
+    /// sample has no channel 45.
+    func lit(_ value: Int?) -> Bool? {
+        guard let value else { return nil }
         switch self {
         case .drs: return [10, 12, 14].contains(value)
         // No 2026 data carries the channel yet: any non-zero value counts as engaged.
@@ -45,21 +48,23 @@ public enum Channel45Meaning: Sendable, Equatable {
     }
 }
 
-/// Race Engineer's live readouts at one moment.
+/// Race Engineer's live readouts at one moment. Each channel is nil when F1 left it out of the
+/// sample (absent, never shown as 0).
 public struct Readout: Sendable, Equatable {
-    public var speedKmh: Int
-    public var gear: Int
-    public var rpm: Int
+    public var speedKmh: Int?
+    public var gear: Int?
+    public var rpm: Int?
     /// 0–100 (F1 sends up to 104 at times; the bars stop at 100).
-    public var throttle: Int
+    public var throttle: Int?
     /// 0–100.
-    public var brake: Int
-    /// The DRS or active-aero light; nil when channel 45 carries nothing (`Channel45Meaning.absent`).
+    public var brake: Int?
+    /// The DRS or active-aero light; nil when channel 45 carries nothing (`Channel45Meaning.absent`,
+    /// or no channel 45 in the sample).
     public var aero: Bool?
     /// The sample is more than 5 s older than picture time: the values hold and grey.
     public var stale: Bool
 
-    public init(speedKmh: Int, gear: Int, rpm: Int, throttle: Int, brake: Int, aero: Bool?, stale: Bool) {
+    public init(speedKmh: Int?, gear: Int?, rpm: Int?, throttle: Int?, brake: Int?, aero: Bool?, stale: Bool) {
         self.speedKmh = speedKmh
         self.gear = gear
         self.rpm = rpm
@@ -80,8 +85,8 @@ public enum Readouts {
             speedKmh: sample.speedKmh,
             gear: sample.gear,
             rpm: sample.rpm,
-            throttle: min(max(sample.throttle, 0), 100),
-            brake: min(max(sample.brake, 0), 100),
+            throttle: sample.throttle.map { min(max($0, 0), 100) },
+            brake: sample.brake.map { min(max($0, 0), 100) },
             aero: channel45.lit(sample.ch45),
             stale: stale
         )

@@ -35,6 +35,9 @@ import F1TV
         #expect(light(0, .activeAero) == false)
         #expect(light(3, .activeAero) == true)
         #expect(light(12, .absent) == nil)
+        // A channel left out of the sample is absent: no light, and no value, never 0.
+        let bare = Readouts.at(t0, samples: [CarSample(t: t0, speedKmh: 250)], channel45: .drs)
+        #expect(bare == Readout(speedKmh: 250, gear: nil, rpm: nil, throttle: nil, brake: nil, aero: nil, stale: false))
         #expect(Channel45Meaning.drs.label == "DRS")
         #expect(Channel45Meaning.activeAero.label == "Aero")
         #expect(Channel45Meaning.absent.label == nil)
@@ -67,9 +70,12 @@ import F1TV
         #expect(Channel45Meaning.of(year: 2026, samples: cars) == .absent)
         #expect(Channel45Meaning.of(year: nil, samples: cars) == .absent)
         #expect(Channel45Meaning.of(year: 2025, samples: cars) == .drs)
-        // A channel that moves is 2026's active aero.
+        // A channel that moves is 2026's active aero; one sent but never changing is absent.
+        var steady = cars
+        steady["11", default: []] += [CarSample(t: .max - 1, ch45: 1), CarSample(t: .max, ch45: 1)]
+        #expect(Channel45Meaning.of(year: 2026, samples: steady) == .absent)
         var moving = cars
-        moving["11", default: []].append(CarSample(t: .max, rpm: 0, speedKmh: 300, gear: 8, throttle: 100, brake: 0, ch45: 1))
+        moving["11", default: []] += [CarSample(t: .max - 1, ch45: 0), CarSample(t: .max, ch45: 1)]
         #expect(Channel45Meaning.of(year: 2026, samples: moving) == .activeAero)
 
         // check:carDataFastestSample = ('11', 1794074504771, {'0': 11541, '2': 219, '3': 5, '4': 77, '5': 100})
