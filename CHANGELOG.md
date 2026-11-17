@@ -4,6 +4,73 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.3, build 14 — Race Engineer and Scrub Deck
+
+- **Race Engineer** (laptop, ⟳ with timing): the top screen shows an onboard — the main feed if
+  it is one, else your driver's onboard, else the first onboard among the feeds — brought to the
+  main spot without moving the sound. With no onboard among the feeds, "Tap a car to pick an
+  onboard" shows over the main feed. Leaving Race Engineer puts the previous main feed back if
+  nothing else changed. The bottom screen is the console:
+  - speed (km/h or mph), gear, revs, and throttle and brake bars from F1's car data, holding the
+    last value and greying after 5 s; a channel F1 doesn't send shows "—", never 0. The DRS or
+    Aero light shows only when channel 45 carries something: São Paulo 2026 has no channel 45,
+    so there is no light;
+  - position, the car ahead and behind with the gap and whether it is closing or growing over the
+    last 3 laps — tap either to make it the top onboard;
+  - tyre and laps on the set, and "Pit now → P7 behind ALO" from the pit-circle maths (before the
+    leader has finished a lap: "The circle starts once the leader has finished a lap."; joined
+    late mid-race: "The pit circle appears when the leader next crosses the line.");
+  - the last 5 laps with sector colours;
+  - a mini map with only this car highlighted (tap a car there to pick it);
+  - the drawn and labelled "Saved for beta.4: team radio" spot.
+  In Race Engineer any car tapped (console, map, tower, Battle chip) becomes the top onboard.
+- **Scrub Deck** (laptop, the default with one feed): an event strip — lights out, pit stops
+  (small ticks, a tall one for your driver), safety car, VSC and red flag bands, each new fastest
+  lap, retirements, the chequered flag — and, for races and sprints, a lap chart with one line per
+  driver and yours highlighted. Qualifying and practice show the strip by time.
+  - **No spoilers:** both are drawn only up to the picture; the rest is a hatched, empty fog that
+    fills in as the race plays.
+  - **Drag** anywhere to preview a moment (its lap and time are shown); letting go moves every
+    feed there, as the scrubber does. In the fog the moment is spread evenly over the rest of the
+    video, so the lap there isn't shown.
+  - **Tap a marker** to jump to 5 s before it; **tap a line** to highlight that driver and get
+    "Open onboard".
+- **Settings › Track map › "Show the whole race"** (was "Show the whole race on the Scrub Deck"):
+  off by default; on, the Scrub Deck shows the whole race with no fog, and the timeline every flag
+  period.
+
+### Untested — check later (build 14)
+
+- The zero-warnings build (regenerate the project with XcodeGen first: build 14 adds
+  `DuoApp/Timing/RaceDataModels.swift`, `RaceEngineerConsole.swift` and `ScrubDeck.swift`).
+- **T-B4, the exit test's laptop part** on the São Paulo 2026 race replay: in laptop posture,
+  Race Engineer's console follows the top onboard, and dragging the Scrub Deck moves every feed
+  to that moment.
+- Race Engineer's top onboard: the main feed when it is an onboard, else My driver's, else the
+  first onboard; the sound staying on the feed you were hearing; "Tap a car to pick an onboard"
+  over the main feed with no onboard among the feeds; tapping the car ahead or behind (and a car
+  on the mini map) making it the top onboard; the previous main feed coming back when you leave
+  Race Engineer (⟳ or a fold change) without having changed anything.
+- The readouts against the onboard picture (speed, gear, revs, throttle and brake), greying after
+  5 s without data, and "—" for a channel F1 doesn't send; on a live session no readouts until
+  live car data comes (build 15).
+- **The active-aero light rule is provisional:** for 2026 the light shows (labelled "Aero") only
+  if channel 45 changes in the car data, lit for any non-zero value. No 2026 data seen so far
+  carries channel 45 (São Paulo 2026 has none, so no light there). Check it the first time a
+  2026 session sends the channel.
+- "The pit circle appears when the leader next crosses the line." shows only after a late join
+  to a live session (up to a lap); it can't be seen on a replay.
+- The Scrub Deck's fog: nothing past the picture before letting go of a drag; it fills in after
+  the seek and as the race plays; with "Show the whole race" on, no fog. Dragging into the fog
+  lands at an estimated lap (the video's time is spread evenly to its end).
+- A marker tap landing 5 s before the event on the video (lights out, a pit stop, a band's
+  start), after a −1 s / +1 s nudge too.
+- Tapping a lap chart line and "Open onboard"; with one feed this adds a feed, so the laptop
+  switches to that feed count's layout (the Scrub Deck stays only if it is chosen there too).
+- Whether the controls' bottom bar covers the console or the deck on the laptop's bottom screen,
+  and the console's fit at 669 × 455 (and narrower).
+- Qualifying and practice: the strip by time, with no lap chart.
+
 ### v1.0-beta.3, build 13 — Duo data layouts and the tracker delay
 
 - **Data layouts.** Once a session's timing has loaded, ⟳ offers each fold's data layout after
