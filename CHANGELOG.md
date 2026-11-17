@@ -23,7 +23,10 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   - the last 5 laps with sector colours;
   - a mini map with only this car highlighted (tap a car there to pick it);
   - the drawn and labelled "Saved for beta.4: team radio" spot.
-  In Race Engineer any car tapped (console, map, tower, Battle chip) becomes the top onboard.
+  In Race Engineer any car tapped (console, map, tower, Battle chip) becomes the top onboard;
+  when no other spot can take it (the usual four feeds: an onboard, the world feed you hear, the
+  tracker and the data feed), it takes the top onboard's place — never the feed you hear. The
+  feeds remembered for next time keep the order from before Race Engineer's own swap.
 - **Scrub Deck** (laptop, the default with one feed): an event strip — lights out, pit stops
   (small ticks, a tall one for your driver), safety car, VSC and red flag bands, each new fastest
   lap, retirements, the chequered flag — and, for races and sprints, a lap chart with one line per
@@ -70,6 +73,15 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 - Whether the controls' bottom bar covers the console or the deck on the laptop's bottom screen,
   and the console's fit at 669 × 455 (and narrower).
 - Qualifying and practice: the strip by time, with no lap chart.
+- Tapping the car ahead or behind with the usual four feeds: it replaces the top onboard (the
+  sound stays on the world feed). Closing the multiview from Race Engineer and opening it again:
+  the world feed is the main feed with the sound, as before Race Engineer's swap.
+- A replay opened before lights out: the Scrub Deck is all fog until lights out (scrub past it
+  with the timeline first); the pre-race part can't be reached from the deck.
+- "Tap a car to pick an onboard" with only world, tracker and data feeds adds a feed, so with
+  "fit to the screen" the layout for the new feed count shows (it may not be Race Engineer).
+- Smoothness late in a long race with the console or the deck open: both are rebuilt twice a
+  second on the main thread from the whole session so far (the test data has only 8 laps).
 
 ### v1.0-beta.3, build 13 — Duo data layouts and the tracker delay
 
