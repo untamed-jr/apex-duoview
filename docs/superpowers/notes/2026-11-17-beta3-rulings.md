@@ -112,3 +112,26 @@ How the work was organised (parallel builds, review rounds) isn't listed; it cha
 - The archive session drops index entries that lack a key or start, and lap counts are only read for sessions typed "Race".
 - Qualifying coverage on the committed test data is thin (no line crossings in the qualifying sample); the tower test does not cut Position after the picture time; shared formatting could move into one place; an empty three-letter code and tuple fields' hand-written equality are untidy.
 - Car data: an old whole file reused for a now-finished session could be short (beta only); two downloads can race; cleanup timing; the per-tick reuse and repeated notice; a server that ignores byte ranges re-downloads 8 MB a minute.
+
+## After the final review (build 16)
+
+- Ruling: one round of fixes only, as for beta.2. What the check of that round found was small and is left as is: a step back (even −1 s) blanks the console, deck and pit circle for about a second; the console area is blank instead of "Tap a car to pick an onboard" while a session loads; a paused map may keep old car positions until play or a seek; one test's comment sits above the wrong test; each live rebuild still copies the cars' histories once (cheap, not measured on the phone); finding a live map's start/finish line is not measured; the "before the join" check never goes from shown to hidden in its test; the live rebuild speed-up was measured on the owner's full-race recording, which stays out of the repo — cost if wrong: a polish build.
+- Not fixed: after a reconnect, a lap count that rose while disconnected can count as a line crossing at the reconnect (it needs a marker through the live data and a decision on lap windows).
+
+## If build 15 or 16 doesn't compile
+
+Nothing here could be compiled on Apple's tools before the owner's build (build 14 was the last: no warnings). Places to look first, from the reviews:
+
+- Map and pit circle gestures: a long press followed by a drag (`LongPressGesture.sequenced(before:)` with `.second(true, let drag?)`), and state changed from a `Task` when the gesture ends (MapPanel, PitCircleView).
+- MapPanel: `.task(id:)` on a private nested type with a `UUID` id; `TimelineView(.animation(minimumInterval: 1.0 / 30, paused:))`.
+- PitCircleView: the Canvas calling a nonisolated drawing type; the `else if timing.timingHidden { Color.clear }` branch.
+- RootView: `onChange(of:initial:)` with a private nested Equatable type.
+- PlayerView and MultiviewView: `NextLivePrompt` with `.animation(value:)` on an optional id.
+- LiveConnection: `NWPathMonitor` inside an actor (`#if canImport(Network)`); `URLSessionWebSocketTask` (`maximumMessageSize`, `@unknown default`); a cookie built from response headers; the 15 s linger task.
+- AppModel: `guard let (offer, inMultiview) = nextLive.accept()`.
+- TowerView: an `if`/`else` inside a `switch` case; ScrubDeck: `.overlay(alignment:)` with `if let` and an `else if …, let` branch, and `Theme.surface.opacity(0.9)` (check `Theme.surface` is a `Color`).
+- DataRegionViews: `TimingQuietLine` (Theme colours, `.minimumScaleFactor`, `.allowsHitTesting(false)`); `LaptopTimingNote.text(_:loading:)` with a default that names a static of the same type.
+- RaceEngineerConsole: the new `placeholder` property and reading `timing.consoleCar`.
+- `LiveEvent.link` gained a third value: any `case .link` match in a view would need it (none found).
+- CircuitLoader: `TrackMap`'s memberwise init in `withStartFinish`.
+- XcodeGen: run `xcodegen generate` after pulling; build 15 added five files in DuoApp/Timing.
