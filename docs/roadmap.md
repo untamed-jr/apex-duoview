@@ -37,7 +37,7 @@ All of 1 to 23 are in. 24 to 28 are experiments for beta.7, tried on the real de
 | 8 | Unfold to See: event card; opening jumps to that moment, rewound a few seconds | Closed | 4 |
 | 9 | Gap Thermometer: two cars, colour shifts as the gap closes | Closed | 4 |
 | 10 | Island Flag Ring: flag, lap and position in the Dynamic Island (needs device test) | Closed | 6 |
-| 11 | Director's Desk: big picture, thumbnail feeds, tower and map (needs device test) | Open | 3 |
+| 11 | Director's Desk: big picture, thumbnail feeds, tower and map (needs device test) | Open | 3 (landed in beta.3) |
 | 12 | Race Table: flat between two people, each half faces its viewer | Open | 7 (moved from 2 on 2026-11-13: needs the real hardware) |
 | 13 | Strategy Lab: tyre stints and a "pit now?" rejoin estimate | Open | 5 |
 | 14 | Archive Atlas: pick a circuit, every race there since 1981 | Open | 6 |
@@ -45,8 +45,8 @@ All of 1 to 23 are in. 24 to 28 are experiments for beta.7, tried on the real de
 | 16 | Onboard and Logbook: onboard plus that driver's radio, sectors and stops | Book | 4 |
 | 17 | Ear-Matched Rivals: each rival's radio in one AirPod | Book | 4 |
 | 18 | Then and Now: today's race beside a classic at the same circuit (needs test) | Book | 5 |
-| 19 | Race Engineer: onboard upright, engineer's console below | Laptop | 3 |
-| 20 | Scrub Deck: video upright, touch timeline of race events below | Laptop | 3 |
+| 19 | Race Engineer: onboard upright, engineer's console below | Laptop | 3 (landed in beta.3) |
+| 20 | Scrub Deck: video upright, touch timeline of race events below | Laptop | 3 (landed in beta.3) |
 | 21 | Prediction Pad: tap your calls, scored privately | Laptop | 5 |
 | 22 | Kitchen Board: large-type timing board, screen turns yellow or red on a flag | Standing | 6 |
 | 23 | Countdown Lamp: next circuit and countdown between races | Standing | 6 |
@@ -162,9 +162,9 @@ What 0.95 to 0.99.9 added, and where it lands here:
 
 | Android | What it does | Here |
 |---|---|---|
-| 0.95 | While watching live, offers the next live programme when one starts | beta.3 (moved from beta.2 on 2026-11-13: needs a live session to test) |
-| 0.96–0.98 | Before a live session plays, the feed picker asks "From the start" or "Watch live"; from the start really starts at the beginning; the pit circle works when joining live | the live choice and from the start landed in beta.2; the pit circle comes with the map in beta.3 |
-| 0.99.4 | Records live timing to disk from the moment a session starts, so the map has the whole session even when joined late | beta.3, adapted: iOS can't start a recording by alarm in the background, so it records while the app is open or playing, plus F1's archive once the session ends |
+| 0.95 | While watching live, offers the next live programme when one starts | landed in beta.3 ("Switch" or "Not now"; checked only while a live session is watched, hidden in picture in picture; still to test on a live weekend) |
+| 0.96–0.98 | Before a live session plays, the feed picker asks "From the start" or "Watch live"; from the start really starts at the beginning; the pit circle works when joining live | the live choice and from the start landed in beta.2; the pit circle landed in beta.3, with the map (it starts once the leader has finished a lap, and keeps the pit loss it measures per circuit) |
+| 0.99.4 | Records live timing to disk from the moment a session starts, so the map has the whole session even when joined late | landed in beta.3, adapted: iOS can't start a recording by alarm in the background, so it records while the app is open or playing, tops up the minutes before you joined from F1, and uses F1's archive once the session ends; recordings older than 7 days are deleted |
 | 0.99.5 | Playback speed 0.5× to 2× for every feed together | landed in beta.2 (multiview; the single feed keeps Apple's own speed menu) |
 | 0.99.9 | Sped-up multiview stays smooth; when the phone can't keep up, only the main feed keeps its picture | landed in beta.2 (the speed that struggled is remembered; Android's frame thinning isn't needed on iOS) |
 
