@@ -137,6 +137,9 @@ final class MultiviewController {
     /// When each feed in the slots was put there, by channel id (not slot: a swap keeps it):
     /// tap-a-car replaces the onboard placed longest ago among equals.
     @ObservationIgnored private var placedAt: [Int: Date] = [:]
+    /// The feeds whose tiles the layout shows (the view reports them); nil until it has. Only
+    /// these get driver cards.
+    @ObservationIgnored private var visibleFeeds: Set<Int>?
     /// Where the main feed starts once it is ready; a refresh sets it to the main feed's place.
     @ObservationIgnored private var pendingStart: Start = .position(0)
     /// The feeds were started together (or there was nothing to start).
@@ -397,6 +400,7 @@ final class MultiviewController {
 
     private func resetSlots() {
         placedAt = [:]
+        visibleFeeds = nil
         sessionChannels = []
         slots = Array(repeating: nil, count: Self.slotCount)
         picks = Array(repeating: nil, count: Self.slotCount)
@@ -706,19 +710,40 @@ final class MultiviewController {
         let placement = OnboardPlacement.place(
             racingNumber: racingNumber, slots: slots, channels: channels, audioChannelId: audioChannelId,
             lapStates: timing.lapStatesNow(), placedAt: placedAt)
+        var message = placement.message
         switch placement {
         case .makeMain(let slot):
-            if slot > 0 { makeMain(slot: slot) }
+            if slot > 0 {
+                // A feed that stopped can't take the main spot: say so rather than do nothing.
+                if let id = slots[slot]?.id, canBeMain(channelId: id) {
+                    makeMain(slot: slot)
+                } else {
+                    message = Self.stoppedOnboardNotice(racingNumber)
+                }
+            }
         case .fill(let slot, let channel), .replace(let slot, let channel):
             setFeed(channel, at: slot)
         case .noFreeSpot, .noOnboard:
             break
         }
-        if let message = placement.message {
+        if let message {
             showNotice(message)
             return message
         }
         return nil
+    }
+
+    /// Tap-a-car found the car's onboard showing, but stopped.
+    static func stoppedOnboardNotice(_ racingNumber: Int) -> String {
+        "Car \(racingNumber)'s onboard has stopped. Pick it again in the editor."
+    }
+
+    /// The layout's shown tiles, by channel id: only their onboards get cards (and with them
+    /// the 2 Hz tick and the car data download).
+    func setVisibleFeeds(_ ids: Set<Int>) {
+        guard visibleFeeds != ids else { return }
+        visibleFeeds = ids
+        updateCards()
     }
 
     /// Feeds new to the slots are placed now; feeds that left are forgotten.
@@ -729,11 +754,14 @@ final class MultiviewController {
         for id in ids where placedAt[id] == nil { placedAt[id] = now }
     }
 
-    /// The onboards in the slots get driver cards (unless hidden): the timing hears which.
+    /// The onboards in the slots whose tiles show get driver cards (unless hidden): the timing
+    /// hears which. Before the view has reported what shows, every onboard in the slots counts.
     private func updateCards() {
         var feeds: [Int: String] = [:]
         for case let channel? in slots where channel.isOnboard {
-            if let id = channel.id, let number = channel.racingNumber { feeds[id] = String(number) }
+            if let id = channel.id, let number = channel.racingNumber, visibleFeeds?.contains(id) ?? true {
+                feeds[id] = String(number)
+            }
         }
         timing.setCardFeeds(feeds, owner: self)
     }

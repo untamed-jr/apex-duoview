@@ -156,6 +156,10 @@ struct MultiviewView: View {
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 // Frames glide; the drag itself isn't part of this value, so it tracks the finger.
                 .animation(.snappy, value: layout.placement)
+                // Only the feeds the layout shows get driver cards.
+                .onChange(of: Self.visibleFeedIDs(layout), initial: true) { _, ids in
+                    controller.setVisibleFeeds(ids)
+                }
                 .overlay {
                     if controller.errorText == nil {
                         FloatingPanels(
@@ -200,6 +204,14 @@ struct MultiviewView: View {
     }
 
     // MARK: Layout
+
+    /// The channel ids of the tiles this layout shows.
+    private static func visibleFeedIDs(_ layout: Arrangement) -> Set<Int> {
+        Set(layout.tiles.compactMap { tile -> Int? in
+            guard tile.frame.visible, case .feed(let id) = tile.entry.key else { return nil }
+            return id
+        })
+    }
 
     /// The safe area in full-screen coordinates (the inner reader's space).
     static func safeRect(screen: CGSize, insets: EdgeInsets) -> CGRect {
