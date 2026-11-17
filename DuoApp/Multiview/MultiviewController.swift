@@ -143,6 +143,16 @@ final class MultiviewController {
     /// The timing panels the data layout shows in its own regions (the view reports them), handed
     /// to the timing after every attach.
     @ObservationIgnored private var dockedPanels: Set<TimingPanel> = []
+    /// The layout shows Race Engineer's console (its region is drawn), as the view reports: the
+    /// top screen then shows an onboard (`RaceEngineerTop`), and car taps make that car the top
+    /// onboard.
+    @ObservationIgnored private(set) var raceEngineerShown = false
+    /// The layout shows the Scrub Deck (its region is drawn), as the view reports.
+    @ObservationIgnored private var deckShown = false
+    /// The swap Race Engineer made by itself to bring an onboard up to the top screen: that
+    /// onboard and the feed that was the main one. Undone when the console goes, unless the slots
+    /// changed since (a tap, the editor); forgotten then.
+    @ObservationIgnored private var topSwap: (onboard: Int, main: Int)?
     /// Where the main feed starts once it is ready; a refresh sets it to the main feed's place.
     @ObservationIgnored private var pendingStart: Start = .position(0)
     /// The feeds were started together (or there was nothing to start).
@@ -335,6 +345,7 @@ final class MultiviewController {
         })
         // The view may have reported before the attach, when the timing ignored it.
         timing.setDockedPanels(dockedPanels, owner: self)
+        sendRaceViews()
 
         feedURLs = info.feeds
         // Links can't have expired seconds after this PLAY: a failure in the first minute is an
@@ -404,6 +415,11 @@ final class MultiviewController {
     }
 
     private func resetSlots() {
+        // The view reports the race views again once this session's timing (and so its data
+        // layout) is in.
+        raceEngineerShown = false
+        deckShown = false
+        topSwap = nil
         placedAt = [:]
         visibleFeeds = nil
         sessionChannels = []
@@ -510,6 +526,72 @@ final class MultiviewController {
     func setDockedPanels(_ docked: Set<TimingPanel>) {
         dockedPanels = docked
         timing.setDockedPanels(docked, owner: self)
+    }
+
+    /// Whether the layout shows Race Engineer's console and the Scrub Deck (the view reports their
+    /// regions). Race Engineer coming up puts an onboard on the top screen (`RaceEngineerTop`: the
+    /// main feed if it's an onboard, else your driver's, else the first onboard among the feeds),
+    /// by making it the main feed: the sound stays where it is. Leaving Race Engineer undoes that
+    /// swap if nothing changed the slots since. The timing hears both, and the top onboard's car.
+    func setRaceViews(console: Bool, deck: Bool) {
+        let wasConsole = raceEngineerShown
+        raceEngineerShown = console
+        deckShown = deck
+        if console, !wasConsole { chooseTopOnboard() }
+        if !console, wasConsole { undoTopSwap() }
+        sendRaceViews()
+    }
+
+    /// The racing number of the onboard on the main spot (Race Engineer's top screen); nil when
+    /// the main feed isn't an onboard.
+    var topOnboardNumber: String? {
+        guard let main = slots[0], main.isOnboard, let number = main.racingNumber else { return nil }
+        return String(number)
+    }
+
+    /// Race Engineer: a car tapped (ahead or behind on the console, its mini map, the map or the
+    /// tower) opens its onboard with the tap-a-car rules (`showOnboard`), and that onboard becomes
+    /// the top one (the main feed). The sound stays where it is. Returns the notice, as
+    /// `showOnboard` does.
+    @discardableResult
+    func showOnboardOnTop(racingNumber: Int) -> String? {
+        let message = showOnboard(racingNumber: racingNumber)
+        guard message == nil, raceEngineerShown else { return message }
+        // The viewer's own choice: nothing to undo on leaving.
+        topSwap = nil
+        if let slot = slots.firstIndex(where: { $0?.isOnboard == true && $0?.racingNumber == racingNumber }), slot > 0 {
+            makeMain(slot: slot)
+        }
+        return nil
+    }
+
+    /// Race Engineer's top onboard: brings the chosen onboard to the main spot when the main feed
+    /// isn't one (noting the swap, to undo on leaving). Nothing when no onboard is available: the
+    /// view then shows "Tap a car to pick an onboard" over the main feed.
+    private func chooseTopOnboard() {
+        guard raceEngineerShown, currentItem != nil, !refreshing, errorText == nil else { return }
+        let playable = Set(slots.compactMap { $0?.id }.filter { canBeMain(channelId: $0) })
+        guard let slot = RaceEngineerTop.slot(slots: slots, favourite: store.favouriteDriver, playable: playable),
+              slot > 0, let onboard = slots[slot]?.id, let main = slots[0]?.id else { return }
+        topSwap = (onboard: onboard, main: main)
+        makeMain(slot: slot)
+        if slots[0]?.id != onboard { topSwap = nil }
+    }
+
+    /// Leaving Race Engineer: the feed that was the main one before its own swap goes back, if the
+    /// slots are as that swap left them.
+    private func undoTopSwap() {
+        guard let swap = topSwap else { return }
+        topSwap = nil
+        guard slots[0]?.id == swap.onboard, let slot = slots.firstIndex(where: { $0?.id == swap.main }), slot > 0,
+              canBeMain(channelId: swap.main) else { return }
+        makeMain(slot: slot)
+    }
+
+    /// The timing hears whether the console and the deck show, and the top onboard's car.
+    private func sendRaceViews() {
+        timing.setConsole(shown: raceEngineerShown, car: topOnboardNumber, owner: self)
+        timing.setDeck(shown: deckShown, owner: self)
     }
 
     private static func layoutCount(_ feedCount: Int) -> Int {
@@ -705,6 +787,13 @@ final class MultiviewController {
         store.lastUsed = picks
         notePlacements()
         updateCards()
+        // Race Engineer: a swap of its own is forgotten once anything else moved the slots, and
+        // the top screen gets an onboard again if the main feed stopped being one.
+        if let swap = topSwap, slots[0]?.id != swap.onboard || !slots.contains(where: { $0?.id == swap.main }) {
+            topSwap = nil
+        }
+        chooseTopOnboard()
+        sendRaceViews()
     }
 
     // MARK: Tap a car
