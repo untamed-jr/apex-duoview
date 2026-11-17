@@ -510,12 +510,6 @@ enum LiveRecordingFiles {
 
 // MARK: - The next live programme
 
-/// The next-live offer while a live programme is watched (spec 0.95): the 60 s checks' state.
-/// - The first successful "live now" fetch after opening only notes what was live then
-///   (`liveAtStart`): nothing is offered from a failed or missing first fetch.
-/// - The watched broadcast counts as ended only when a successful fetch no longer lists it,
-///   having listed it before.
-/// - "Not now" is remembered for that programme while the app runs.
 /// A resumed bookmark's item. `WatchBookmark.live` says only that the programme was live when
 /// the bookmark was saved: the item is live (live timing, the next-live check) only when F1 TV's
 /// live-now list has it now. Yesterday's race resumed from Recents is a replay, with archive
@@ -543,6 +537,12 @@ enum LiveResume {
     }
 }
 
+/// The next-live offer while a live programme is watched (spec 0.95): the 60 s checks' state.
+/// - The first successful "live now" fetch after opening only notes what was live then
+///   (`liveAtStart`): nothing is offered from a failed or missing first fetch.
+/// - The watched broadcast counts as ended only when a successful fetch no longer lists it,
+///   having listed it before.
+/// - "Not now" is remembered for that programme while the app runs.
 struct NextLiveState: Equatable, Sendable {
     static let checkInterval: Duration = .seconds(60)
 

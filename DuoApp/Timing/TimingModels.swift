@@ -52,22 +52,6 @@ struct TowerColumns: Equatable, Sendable {
     }
 }
 
-/// What the 2 Hz views read: every value at picture time, never later.
-struct TimingSnapshot: Equatable, Sendable {
-    var drivers: [String: DriverInfo]
-    var flags: FlagState
-    var header: SessionHeader
-    var timing: [String: DriverTimingState]
-    var stints: [String: [Stint]]
-    /// F1's session status at picture time ("Started", "Finished", ...); nil before the first.
-    var sessionStatus: String?
-    var pictureTime: UTCms?
-
-    static let empty = TimingSnapshot(
-        drivers: [:], flags: FlagState(status: .clear), header: SessionHeader(), timing: [:], stints: [:],
-        sessionStatus: nil, pictureTime: nil)
-}
-
 /// The session header over the tower, at picture time: "Lap 23/71" in a race, else the session
 /// clock; the track status; the weather.
 struct SessionHeaderState: Equatable, Sendable {

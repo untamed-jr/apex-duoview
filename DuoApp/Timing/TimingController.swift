@@ -14,7 +14,7 @@ import Observation
 ///   60 s, then every 60 s, meanwhile "Map unavailable — trying again…".
 /// - Picture time: the main feed's program date plus the offset (`PictureClock`); without a
 ///   program date the session start plus the player's position, flagged as estimated.
-/// - Every value it hands out is read at or before picture time: the 2 Hz `snapshot`, and
+/// - Every value it hands out is read at or before picture time: the 2 Hz values below, and
 ///   `mapState(at:)`, which the map asks for at the display's frame rate. The timeline marks
 ///   (`TimelineMark.marks`) show lights out and the chequered flag always, and flag periods only
 ///   up to picture time unless "Show the whole race" is on.
@@ -66,8 +66,6 @@ final class TimingController {
     static let turnStep = 15.0
 
     private(set) var status: TimingStatus = .idle
-    /// Picture-time values for the 2 Hz views (tower, header, captions); `.empty` until loaded.
-    private(set) var snapshot: TimingSnapshot = .empty
     /// Lights out, chequered and flag bands, in the main feed's player seconds.
     private(set) var timelineMarks: [TimelineMark] = []
     /// The circuit, once found.
@@ -356,7 +354,6 @@ final class TimingController {
         timingSessionKey = nil
         if isRace { isRace = false }
         if status != .idle { status = .idle }
-        if snapshot != .empty { snapshot = .empty }
         if !tower.isEmpty { tower = [] }
         if gapHeader != "Leader" { gapHeader = "Leader" }
         if header != .empty { header = .empty }
@@ -752,7 +749,7 @@ final class TimingController {
         }
     }
 
-    // MARK: The 2 Hz snapshot
+    // MARK: The 2 Hz tick
 
     /// The panels read at 2 Hz: floating or docked.
     private var readPanels: Set<TimingPanel> {
@@ -791,22 +788,12 @@ final class TimingController {
     }
 
     /// Reads picture time once and publishes what changed: the status (estimated or not), the
-    /// snapshot, the timeline marks, and the tower, header, battle and cards when something shows
-    /// them.
+    /// timeline marks, and the tower, header, battle and cards when something shows them.
     private func publish() {
         guard let loaded, let now = reading() else { return }
         let state: TimingStatus = now.estimated ? .estimated : .ready
         if status != state { status = state }
         let t = now.t
-        let next = TimingSnapshot(
-            drivers: loaded.drivers,
-            flags: loaded.flags.at(t),
-            header: loaded.header.at(t),
-            timing: loaded.timing.at(t),
-            stints: loaded.stints.at(t),
-            sessionStatus: loaded.sessionStatus.status(at: t),
-            pictureTime: t)
-        if snapshot != next { snapshot = next }
         let marks = wantsMarks
             ? TimelineMark.marks(for: loaded, pictureTime: t, playerSeconds: now.playerSeconds, wholeRace: showWholeRace)
             : []
@@ -1011,7 +998,6 @@ final class TimingController {
         backfillPath = nil
         tickTask?.cancel()
         tickTask = nil
-        if snapshot != .empty { snapshot = .empty }
         if !tower.isEmpty { tower = [] }
         if header != .empty { header = .empty }
         if battleRival != nil { battleRival = nil }
