@@ -172,17 +172,36 @@ public struct TimingTimeline: Sendable {
     /// TimingData lines (the first is the full state, the rest deltas), timed at
     /// `streamStart + offset`.
     public static func build(lines: [StreamLine], streamStart: UTCms) -> TimingTimeline {
-        var live: [String: Live] = [:]
-        var cars: [String: History] = [:]
-        var updates: [UTCms] = []
-        var top: JSONValue = .null
-        var part: Int?
-        var partTimes: [UTCms] = [], parts: [Int] = []
-        var completed: [String: LapHistory] = [:]
+        var builder = Builder(streamStart: streamStart)
+        for line in lines { builder.add(line) }
+        return builder.timeline
+    }
 
-        for line in lines {
+    /// `build`, a line at a time: the live feed keeps one and adds only the lines that came
+    /// since it last asked. Histories are changed in place, so a line costs the same however
+    /// long the session has run.
+    struct Builder: LineFolder {
+        let streamStart: UTCms
+        private var live: [String: Live] = [:]
+        private var cars: [String: History] = [:]
+        private var updates: [UTCms] = []
+        private var top: JSONValue = .null
+        private var part: Int?
+        private var partTimes: [UTCms] = [], parts: [Int] = []
+        private var completed: [String: LapHistory] = [:]
+
+        init(streamStart: UTCms) {
+            self.streamStart = streamStart
+        }
+
+        /// The timeline so far.
+        var timeline: TimingTimeline {
+            TimingTimeline(cars: cars, updateTimes: updates, partTimes: partTimes, parts: parts, completed: completed)
+        }
+
+        mutating func add(_ line: StreamLine) {
             let t = F1Values.add(streamStart, line.offsetMs)
-            guard case .object(var members) = line.json else { continue }
+            guard case .object(var members) = line.json else { return }
             let lineDeltas = members.removeValue(forKey: "Lines") ?? .null
             var touched = Set<String>()
             if !members.isEmpty {
@@ -205,33 +224,28 @@ public struct TimingTimeline: Sendable {
             for number in touched {
                 guard let car = live[number] else { continue }
                 if let lap = car.lap, completed[number]?.laps.last != lap {
-                    var history = completed[number] ?? LapHistory()
-                    if history.times.last == t {
-                        history.laps[history.laps.count - 1] = lap
+                    if completed[number]?.times.last == t, let i = completed[number]?.laps.indices.last {
+                        completed[number]?.laps[i] = lap
                     } else {
-                        history.times.append(t)
-                        history.laps.append(lap)
+                        completed[number, default: LapHistory()].times.append(t)
+                        completed[number, default: LapHistory()].laps.append(lap)
                     }
-                    completed[number] = history
                 }
                 var state = car.state(part: part)
-                var history = cars[number] ?? History()
-                if let last = history.states.last {
+                if let last = cars[number]?.states.last {
                     if last == state { continue }
                     if last.sectors == state.sectors { state.sectors = last.sectors }  // share storage
                 }
-                if history.times.last == t {
-                    history.states[history.states.count - 1] = state
+                if cars[number]?.times.last == t, let i = cars[number]?.states.indices.last {
+                    cars[number]?.states[i] = state
                 } else {
-                    history.times.append(t)
-                    history.states.append(state)
+                    cars[number, default: History()].times.append(t)
+                    cars[number, default: History()].states.append(state)
                 }
-                cars[number] = history
                 changed = true
             }
             if changed, updates.last != t { updates.append(t) }
         }
-        return TimingTimeline(cars: cars, updateTimes: updates, partTimes: partTimes, parts: parts, completed: completed)
     }
 
     /// One car while building: its merged TimingData line plus what F1's state doesn't keep.
@@ -365,10 +379,25 @@ public struct StintTimeline: Sendable {
     let cars: [String: History]
 
     public static func build(lines: [StreamLine], streamStart: UTCms) -> StintTimeline {
-        var merged: [String: JSONValue] = [:]
-        var cars: [String: History] = [:]
-        for line in lines {
-            guard case .object(let deltas) = line.json["Lines"] else { continue }
+        var builder = Builder(streamStart: streamStart)
+        for line in lines { builder.add(line) }
+        return builder.timeline
+    }
+
+    /// `build`, a line at a time (as `TimingTimeline.Builder`).
+    struct Builder: LineFolder {
+        let streamStart: UTCms
+        private var merged: [String: JSONValue] = [:]
+        private var cars: [String: History] = [:]
+
+        init(streamStart: UTCms) {
+            self.streamStart = streamStart
+        }
+
+        var timeline: StintTimeline { StintTimeline(cars: cars) }
+
+        mutating func add(_ line: StreamLine) {
+            guard case .object(let deltas) = line.json["Lines"] else { return }
             let t = F1Values.add(streamStart, line.offsetMs)
             for (number, delta) in deltas {
                 guard case .object = delta else { continue }
@@ -380,18 +409,15 @@ public struct StintTimeline: Sendable {
                     return Stint(compound: compound, isNew: s["New"].bool ?? false,
                                  startLaps: s["StartLaps"].int ?? 0, totalLaps: s["TotalLaps"].int ?? 0)
                 }
-                var history = cars[number] ?? History()
-                if history.stints.last == stints { continue }
-                if history.times.last == t {
-                    history.stints[history.stints.count - 1] = stints
+                if cars[number]?.stints.last == stints { continue }
+                if cars[number]?.times.last == t, let i = cars[number]?.stints.indices.last {
+                    cars[number]?.stints[i] = stints
                 } else {
-                    history.times.append(t)
-                    history.stints.append(stints)
+                    cars[number, default: History()].times.append(t)
+                    cars[number, default: History()].stints.append(stints)
                 }
-                cars[number] = history
             }
         }
-        return StintTimeline(cars: cars)
     }
 
     /// Each car's stints at `t`, oldest first. Cars with nothing yet are absent.

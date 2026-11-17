@@ -95,24 +95,9 @@ public struct PositionSeries: Sendable {
     /// offset. `OffTrack` entries are skipped; a sample not later than the car's last is dropped
     /// (they can repeat or arrive slightly out of order). Undecodable lines are skipped.
     public static func parse(lines: [StreamLine]) -> PositionSeries {
-        var builders: [String: Builder] = [:]
-        for line in lines {
-            guard let object = F1Values.zObject(line), let samples = object["Position"] as? [Any] else { continue }
-            for case let sample as [String: Any] in samples {
-                guard let stamp = sample["Timestamp"] as? String, let t = F1Values.utc(stamp),
-                      let entries = sample["Entries"] as? [String: Any] else { continue }
-                for (number, value) in entries {
-                    guard let e = value as? [String: Any], (e["Status"] as? String) != "OffTrack",
-                          let x = F1Values.number(e["X"]), let y = F1Values.number(e["Y"]) else { continue }
-                    builders[number, default: Builder()].add(t, Float(x), Float(y))
-                }
-            }
-        }
-        var cars: [String: CarTrack] = [:]
-        for (number, b) in builders {
-            cars[number] = CarTrack(number: number, times: b.times, xs: b.xs, ys: b.ys)
-        }
-        return PositionSeries(cars: cars)
+        var builder = Builder()
+        for line in lines { builder.add(line) }
+        return builder.series
     }
 
     /// The latest sample time in each of a Position stream's lines, less that line's offset:
@@ -128,7 +113,40 @@ public struct PositionSeries: Sendable {
         return out
     }
 
-    private struct Builder {
+    /// `parse`, a line at a time: the live feed keeps one and adds only the lines that came
+    /// since it last asked.
+    struct Builder: LineFolder {
+        private var cars: [String: Samples] = [:]
+
+        init() {}
+
+        init(streamStart: UTCms) {}
+
+        /// One `.z` line's samples (as `parse`).
+        mutating func add(_ line: StreamLine) {
+            guard let object = F1Values.zObject(line), let samples = object["Position"] as? [Any] else { return }
+            for case let sample as [String: Any] in samples {
+                guard let stamp = sample["Timestamp"] as? String, let t = F1Values.utc(stamp),
+                      let entries = sample["Entries"] as? [String: Any] else { continue }
+                for (number, value) in entries {
+                    guard let e = value as? [String: Any], (e["Status"] as? String) != "OffTrack",
+                          let x = F1Values.number(e["X"]), let y = F1Values.number(e["Y"]) else { continue }
+                    cars[number, default: Samples()].add(t, Float(x), Float(y))
+                }
+            }
+        }
+
+        /// The cars so far.
+        var series: PositionSeries {
+            var out: [String: CarTrack] = [:]
+            for (number, b) in cars {
+                out[number] = CarTrack(number: number, times: b.times, xs: b.xs, ys: b.ys)
+            }
+            return PositionSeries(cars: out)
+        }
+    }
+
+    private struct Samples {
         var times: [UTCms] = []
         var xs: [Float] = []
         var ys: [Float] = []

@@ -53,6 +53,9 @@ public struct LiveFeed: Sendable {
     private var inFirstSnapshot = false
     /// After `topUp`: each topic's archive lines and seam, and where its live lines resume.
     private var topped: [String: Topped] = [:]
+    /// What `session()` keeps between calls; nil starts it again (a top-up or a later snapshot,
+    /// which can change lines already read).
+    private var folds: Folds?
 
     struct Topped: Sendable {
         var lines: [StreamLine]
@@ -120,6 +123,7 @@ public struct LiveFeed: Sendable {
         inFirstSnapshot = streamStart == nil
         if streamStart == nil { streamStart = F1Values.sub(utc, Self.headStartMs) }
         state = TopicState()
+        folds = nil
     }
 
     private mutating func receiveSnapshot(_ m: RecordedMessage) {
@@ -171,30 +175,76 @@ public struct LiveFeed: Sendable {
             + (type == "Race" ? ["LapCount"] : []) + ["ExtrapolatedClock", "WeatherData"]
     }
 
+    /// The topics `session()` reads.
+    static let sessionTopics = ["Position.z", "TimingData", "TimingAppData", "LapCount", "ExtrapolatedClock",
+                                "WeatherData", "TrackStatus", "RaceControlMessages", "SessionStatus"]
+    /// The topics whose timelines `session()` keeps between calls (the costly ones: the rest are
+    /// a few hundred lines a race and are built afresh).
+    static let foldedTopics = ["Position.z", "TimingData", "TimingAppData"]
+
     /// The session so far, built by the archive's parsers. `drivers` and `info`, when given,
     /// stand in for the feed's own DriverList and SessionInfo. Nil before the first snapshot
     /// or without session info. Unlike the archive, a session without car positions is still
     /// returned (empty `positions`): the timing works, and the app says F1 isn't sending them.
-    /// Every timeline is rebuilt on each call, so the caller decides how often (Android: 10 s).
-    public func session(drivers: [String: DriverInfo]? = nil, info: TimingSessionInfo? = nil) -> LoadedSession? {
+    ///
+    /// Car positions, timing and stints are kept between calls, and each call adds only the
+    /// lines that came since the last (lines only ever add up, except at a top-up, a later
+    /// snapshot or a new session, which start them again): the session is the one a fresh
+    /// feed would build, at a cost that doesn't grow with the race. The caller still decides
+    /// how often (Android: 10 s).
+    public mutating func session(drivers: [String: DriverInfo]? = nil, info: TimingSessionInfo? = nil) -> LoadedSession? {
         guard let start = streamStart,
               let info = info ?? TimingSessionInfo.parse(state.topics["SessionInfo"] ?? .null)
         else { return nil }
+        var topics: [String: [StreamLine]] = [:]
+        for topic in Self.sessionTopics { topics[topic] = lines(topic) }
+        func of(_ topic: String) -> [StreamLine] { topics[topic] ?? [] }
+        // Taken out while it is added to, so its histories are changed in place.
+        var kept = folds ?? Folds(streamStart: start)
+        folds = nil
+        kept.positions.take(of("Position.z"))
+        kept.timing.take(of("TimingData"))
+        kept.stints.take(of("TimingAppData"))
+        folds = kept
         let optional = Self.optionalTopics(type: info.type)
         return LoadedSession(
             info: info,
             drivers: drivers ?? Drivers.parse(state.topics["DriverList"] ?? .null),
             streamStart: start,
-            positions: PositionSeries.parse(lines: lines("Position.z")),
-            timing: TimingTimeline.build(lines: lines("TimingData"), streamStart: start),
-            stints: StintTimeline.build(lines: lines("TimingAppData"), streamStart: start),
-            header: HeaderTimeline.build(lapCount: lines("LapCount"), clock: lines("ExtrapolatedClock"),
-                                         weather: lines("WeatherData"), streamStart: start),
-            flags: TrackFlags.build(trackStatus: lines("TrackStatus"), raceControl: lines("RaceControlMessages"),
+            positions: kept.positions.builder.series,
+            timing: kept.timing.builder.timeline,
+            stints: kept.stints.builder.timeline,
+            header: HeaderTimeline.build(lapCount: of("LapCount"), clock: of("ExtrapolatedClock"),
+                                         weather: of("WeatherData"), streamStart: start),
+            flags: TrackFlags.build(trackStatus: of("TrackStatus"), raceControl: of("RaceControlMessages"),
                                     streamStart: start, gmtOffsetSeconds: info.gmtOffsetSeconds),
-            sessionStatus: SessionStatusTimeline.build(lines: lines("SessionStatus"), streamStart: start),
-            missing: optional.filter { lines($0).isEmpty }
+            sessionStatus: SessionStatusTimeline.build(lines: of("SessionStatus"), streamStart: start),
+            missing: optional.filter { of($0).isEmpty }
         )
+    }
+
+    /// How many of `topic`'s lines `session()` has read since it last started that topic again
+    /// (for checks: each line once).
+    func folded(_ topic: String) -> Int {
+        switch topic {
+        case "Position.z": return folds?.positions.added ?? 0
+        case "TimingData": return folds?.timing.added ?? 0
+        case "TimingAppData": return folds?.stints.added ?? 0
+        default: return 0
+        }
+    }
+
+    /// The timelines `session()` keeps, each with the lines it has read.
+    struct Folds: Sendable {
+        var positions: LineFold<PositionSeries.Builder>
+        var timing: LineFold<TimingTimeline.Builder>
+        var stints: LineFold<StintTimeline.Builder>
+
+        init(streamStart: UTCms) {
+            positions = LineFold(streamStart: streamStart)
+            timing = LineFold(streamStart: streamStart)
+            stints = LineFold(streamStart: streamStart)
+        }
     }
 
     /// How far apart in time a live change and its archive line may be found (the archive's
@@ -250,6 +300,8 @@ public struct LiveFeed: Sendable {
     /// Called again with a fuller archive, the newer lines replace the older.
     public mutating func topUp(archive: [String: [StreamLine]], archiveStart: UTCms) {
         guard let start = streamStart, let joined = joinedAt else { return }
+        // The lines before the join change: `session()` reads every topic afresh.
+        folds = nil
         for (topic, archived) in archive where LiveRecording.records(topic) {
             let archiveLines = Backfill.rebase(archived, archiveStart: archiveStart, newStart: start, until: .max)
             let live = deltas[topic] ?? []
@@ -358,6 +410,40 @@ public struct LiveFeed: Sendable {
     }
 }
 
+/// A parser that takes a topic's lines one at a time (`PositionSeries.Builder`,
+/// `TimingTimeline.Builder`, `StintTimeline.Builder`).
+protocol LineFolder: Sendable {
+    init(streamStart: UTCms)
+    mutating func add(_ line: StreamLine)
+}
+
+/// A `LineFolder` and how far into a topic's lines it has read. Given the lines again, it reads
+/// only those past the ones it has; if those aren't the lines it read (fewer, or the last one
+/// differs), it starts again from the first.
+struct LineFold<Builder: LineFolder>: Sendable {
+    let streamStart: UTCms
+    private(set) var builder: Builder
+    /// Lines read: the first `consumed` of the lines last given.
+    private(set) var consumed = 0
+    /// Lines read since it last started (for checks).
+    private(set) var added = 0
+    private var last: StreamLine?
+
+    init(streamStart: UTCms) {
+        self.streamStart = streamStart
+        builder = Builder(streamStart: streamStart)
+    }
+
+    mutating func take(_ lines: [StreamLine]) {
+        if lines.count < consumed || (consumed > 0 && lines[consumed - 1] != last) {
+            self = LineFold(streamStart: streamStart)
+        }
+        for line in lines[consumed...] { builder.add(line) }
+        added += lines.count - consumed
+        consumed = lines.count
+        last = lines.last
+    }
+}
 
 /// The smallest F1-style delta that `TopicMerge.merge` turns one state into another with:
 /// `merge(old, delta(from: old, to: new)!) == new` for any `new` that `merge(.null, _)` leaves

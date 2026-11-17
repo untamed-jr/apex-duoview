@@ -61,6 +61,14 @@ struct ArchiveReplay {
     }
 }
 
+extension LiveFeed {
+    /// `session()` on a copy: for expectations, which can't call a mutating method.
+    func built(drivers: [String: DriverInfo]? = nil, info: TimingSessionInfo? = nil) -> LoadedSession? {
+        var copy = self
+        return copy.session(drivers: drivers, info: info)
+    }
+}
+
 struct LiveFeedTests {
     static let lightsOut = Fixture.raceLightsOut
     /// The fixture's window, 00:51:44.576 to 01:05:44.576, every 20 s.
@@ -92,7 +100,7 @@ struct LiveFeedTests {
         let archive = try await ArchiveReplay.archiveSession()
         var feed = LiveFeed()
         for m in replay.opening + replay.changes { feed.apply(m) }
-        let live = try #require(feed.session())
+        let live = try #require(feed.built())
 
         #expect(feed.joinedAt == replay.opening[0].utc)
         #expect(live.streamStart == replay.opening[0].utc - LiveFeed.headStartMs)
@@ -122,7 +130,7 @@ struct LiveFeedTests {
         for m in replay.opening + changes[..<k] { feed.apply(m) }
         let atReconnect = feed.lines("TimingData").count
         for m in replay.snapshot(at: reconnect, through: reconnect) + changes[k...] { feed.apply(m) }
-        let live = try #require(feed.session())
+        let live = try #require(feed.built())
 
         // Nothing the lines already held came again.
         #expect(feed.lines("TimingData").count == atReconnect + changes[k...].filter { $0.topic == "TimingData" }.count)
@@ -140,7 +148,7 @@ struct LiveFeedTests {
             android.apply(m)
         }
         for m in changes[k...] { android.apply(m) }
-        let doubled = try #require(android.session())
+        let doubled = try #require(android.built())
         #expect(doubled.flags.sectorFlags.count > archive.flags.sectorFlags.count)
     }
 
@@ -152,7 +160,7 @@ struct LiveFeedTests {
         var feed = LiveFeed()
         for m in replay.opening + replay.changes.filter({ $0.utc <= dropped }) { feed.apply(m) }
         for m in replay.snapshot(at: back, through: back) + replay.changes.filter({ $0.utc > back }) { feed.apply(m) }
-        let live = try #require(feed.session())
+        let live = try #require(feed.built())
 
         // Laps crossed while disconnected show once, at the reconnect; none twice.
         let lost = crossings(archive.timing).filter { entry in
@@ -196,7 +204,7 @@ struct LiveFeedTests {
             m("RaceControlMessages", t0 + 1_000, #"{"Messages":[{"Utc":"2026-11-08T16:56:40","Flag":"YELLOW","Scope":"Sector","Sector":3}]}"#),
             m("WeatherData", t0 + 30_000, #"{"AirTemp":"21.0"}"#, opening: false),
         ] { feed.apply(msg) }
-        #expect(Set(try #require(feed.session()).drivers.keys) == ["1", "4", "81"])
+        #expect(Set(try #require(feed.built()).drivers.keys) == ["1", "4", "81"])
         #expect(feed.lines("RaceControlMessages").count == 1)
         #expect(feed.lines("WeatherData").count == 2)
 
@@ -206,7 +214,7 @@ struct LiveFeedTests {
         #expect(feed.state.topics["WeatherData"] == nil)
         #expect(feed.state.topics["RaceControlMessages"] == nil)
         #expect(Set(feed.state.topics.keys) == ["DriverList", "SessionInfo"])
-        let live = try #require(feed.session())
+        let live = try #require(feed.built())
         #expect(Set(live.drivers.keys) == ["4", "81"])
         // What happened before stays history.
         #expect(live.header.at(t0 + 40_000).airTemp == 21.0)
@@ -221,17 +229,17 @@ struct LiveFeedTests {
         var feed = LiveFeed()
         feed.apply(RecordedMessage(topic: "LapCount", utc: 1_000, opening: false, json: .object(["CurrentLap": .number(3)])))
         #expect(feed.streamStart == nil)
-        #expect(feed.session() == nil)
+        #expect(feed.built() == nil)
         #expect(feed.lines("LapCount").isEmpty)
         feed.apply(RecordedMessage(topic: "LapCount", utc: 2_000, opening: true, json: .object(["CurrentLap": .number(3), "TotalLaps": .number(71)])))
         feed.apply(RecordedMessage(topic: "LapCount", utc: 3_000, opening: false, json: .object(["CurrentLap": .number(4)])))
         #expect(feed.streamStart == 2_000 - LiveFeed.headStartMs)
         #expect(feed.lines("LapCount").map(\.offsetMs) == [0, LiveFeed.headStartMs + 1_000])
         // No SessionInfo yet: no session, unless the caller gives it.
-        #expect(feed.session() == nil)
+        #expect(feed.built() == nil)
         let info = TimingSessionInfo(key: 1, name: "Race", type: "Race", path: "x/", start: nil, gmtOffsetSeconds: 0,
                                      circuitKey: nil, meetingName: "", year: nil)
-        let session = try #require(feed.session(drivers: ["4": DriverInfo(number: "4", tla: "NOR", firstName: "", lastName: "", teamName: "", teamColour: "")], info: info))
+        let session = try #require(feed.built(drivers: ["4": DriverInfo(number: "4", tla: "NOR", firstName: "", lastName: "", teamName: "", teamColour: "")], info: info))
         #expect(session.header.at(2_500).lap == 3)
         #expect(session.header.at(3_000).lap == 4)
         #expect(session.drivers.keys.sorted() == ["4"])
@@ -278,7 +286,7 @@ struct LiveFeedTests {
         var feed = LiveFeed()
         for m in replay.snapshot(at: joined, through: joined) + replay.changes.filter({ $0.utc > joined }) { feed.apply(m) }
         #expect(feed.joinedAt == joined)
-        let before = try #require(feed.session())
+        let before = try #require(feed.built())
         // Before the join, the opening state stands in for everything.
         #expect(before.timing.at(Self.lightsOut + 60_000).mapValues(\.numberOfLaps) == archive.timing.at(joined).mapValues(\.numberOfLaps))
         #expect(before.timing.at(Self.lightsOut + 60_000).mapValues(\.numberOfLaps) != archive.timing.at(Self.lightsOut + 60_000).mapValues(\.numberOfLaps))
@@ -287,7 +295,7 @@ struct LiveFeedTests {
         let lagging = replay.streams.mapValues { $0.filter { replay.utc($0) <= joined - 300_000 } }
         var partial = feed
         partial.topUp(archive: lagging, archiveStart: replay.start)
-        let early = try #require(partial.session())
+        let early = try #require(partial.built())
         // Up to the archive's end, less the last seconds, where a car's next sample is missing.
         expectSame(early, archive, at: Self.times.filter { $0 < joined - 310_000 })
         for t in Self.times where t >= joined {
@@ -301,7 +309,7 @@ struct LiveFeedTests {
 
         // The whole archive: the same session as the replay's, before the join and after.
         feed.topUp(archive: replay.streams, archiveStart: replay.start)
-        let full = try #require(feed.session())
+        let full = try #require(feed.built())
         expectSame(full, archive)
         #expect(crossings(full.timing) == crossings(archive.timing))
         #expect(full.flags.sectorFlags.count == archive.flags.sectorFlags.count)
@@ -320,7 +328,7 @@ struct LiveFeedTests {
         var feed = LiveFeed()
         for m in replay.snapshot(at: joined, through: state) + replay.changes.filter({ $0.utc > state }) { feed.apply(m) }
         feed.topUp(archive: replay.streams, archiveStart: replay.start)
-        let live = try #require(feed.session())
+        let live = try #require(feed.built())
         #expect(crossings(live.timing) == crossings(archive.timing))
         #expect(live.flags.sectorFlags.count == archive.flags.sectorFlags.count)
         expectSame(live, archive)
@@ -340,7 +348,7 @@ struct LiveFeedTests {
             var feed = LiveFeed()
             for m in replay.snapshot(at: joined, through: state) + replay.changes.filter({ $0.utc > state }) { feed.apply(m) }
             feed.topUp(archive: replay.streams, archiveStart: replay.start)
-            let live = try #require(feed.session())
+            let live = try #require(feed.built())
             #expect(crossings(live.timing) == crossings(archive.timing), "joined \(joined)")
             #expect(live.flags.sectorFlags.count == archive.flags.sectorFlags.count, "joined \(joined)")
             #expect(TrackFlags.controlMessages(feed.lines("RaceControlMessages"), streamStart: live.streamStart).count
@@ -368,7 +376,7 @@ struct LiveFeedTests {
         feed.topUp(archive: ["RaceControlMessages": archive], archiveStart: archiveStart)
         let messages = TrackFlags.controlMessages(feed.lines("RaceControlMessages"), streamStart: start)
         #expect(messages.map { $0.message["Flag"].string }.sorted() == ["CLEAR", "YELLOW"])
-        let session = try #require(feed.session())
+        let session = try #require(feed.built())
         #expect(session.flags.at(t0 - 30_000).yellowSectors == [3: 1])
         #expect(session.flags.at(t0).yellowSectors.isEmpty)
     }
@@ -392,11 +400,11 @@ struct LiveFeedTests {
     }
 
     func carCrossings(_ feed: LiveFeed) throws -> [UTCms] {
-        try #require(feed.session()).timing.lineCrossings(upTo: .max).filter { $0.car == "3" }.map(\.at)
+        try #require(feed.built()).timing.lineCrossings(upTo: .max).filter { $0.car == "3" }.map(\.at)
     }
 
     func laps(_ feed: LiveFeed, at t: UTCms) throws -> Int? {
-        try #require(feed.session()).timing.state(of: "3", at: t)?.numberOfLaps
+        try #require(feed.built()).timing.state(of: "3", at: t)?.numberOfLaps
     }
 
     @Test func topUpFromAnArchiveEndingJustBeforeTheJoin() throws {
@@ -455,7 +463,7 @@ struct LiveFeedTests {
             // only line from the join on is the live change, and the car stays third.
             #expect(wrong.lines("TimingData").filter { $0.offsetMs >= LiveFeed.headStartMs }
                 .map { $0.offsetMs + start } == [change], "change at \(change - join)")
-            #expect(try #require(wrong.session()).timing.state(of: "3", at: join + 11_000)?.position == 3, "change at \(change - join)")
+            #expect(try #require(wrong.built()).timing.state(of: "3", at: join + 11_000)?.position == 3, "change at \(change - join)")
         }
     }
 
@@ -553,7 +561,7 @@ struct LiveFeedTests {
         // out: live timing is the authority there.
         #expect(feed.lines("TimingData").map { $0.offsetMs + start }
                 == [join - 20_000, join - 15_000, join - 10_000, join, join + 5_000])
-        #expect(try #require(feed.session()).timing.state(of: "3", at: join + 11_000)?.position == 3)
+        #expect(try #require(feed.built()).timing.state(of: "3", at: join + 11_000)?.position == 3)
     }
 
     @Test func topUpMatchingTheArchivesFirstLine() throws {
@@ -596,7 +604,7 @@ struct LiveFeedTests {
         var live = try feed()
         let start = try #require(live.streamStart)
         #expect(live.lines("WeatherData").first?.offsetMs == reconnect - start)
-        let session = try #require(live.session())
+        let session = try #require(live.built())
         #expect(session.header.at(t0 + 100_000).airTemp == nil)
         #expect(session.header.at(reconnect).airTemp == 20.0)
         #expect(session.header.at(reconnect + 60_000).airTemp == 21.0)
@@ -609,7 +617,7 @@ struct LiveFeedTests {
         }
         live.topUp(archive: ["WeatherData": [try w(t0 - 30_000, #"{"AirTemp":"18.0","TrackTemp":"30.0","Rainfall":"0"}"#),
                                              try w(t0 + 1_200_000, #"{"AirTemp":"19.0"}"#)]], archiveStart: t0)
-        let lagging = try #require(live.session())
+        let lagging = try #require(live.built())
         #expect(lagging.header.at(t0 + 100_000).airTemp == 18.0)
         #expect(lagging.header.at(t0 + 1_300_000).airTemp == 19.0)
         #expect(lagging.header.at(reconnect).airTemp == 20.0)
@@ -622,7 +630,7 @@ struct LiveFeedTests {
                                              try w(reconnect - 30_000, #"{"AirTemp":"20.0","TrackTemp":"35.0"}"#),
                                              try w(reconnect + 60_000, #"{"AirTemp":"21.0"}"#)]], archiveStart: t0)
         #expect(full.lines("WeatherData").map(\.offsetMs) == [t0 - 30_000 - start, reconnect - 30_000 - start, reconnect + 60_000 - start])
-        #expect(try #require(full.session()).header.at(reconnect - 10_000).airTemp == 20.0)
+        #expect(try #require(full.built()).header.at(reconnect - 10_000).airTemp == 20.0)
     }
 
     @Test func newSessionPathStartsAfresh() throws {
@@ -656,7 +664,7 @@ struct LiveFeedTests {
         #expect(feed.sessionPath == "2026/race/")
         #expect(feed.joinedAt == t1)
         #expect(feed.lines("LapCount").map(\.offsetMs) == [0, LiveFeed.headStartMs + 90_000])
-        let session = try #require(feed.session())
+        let session = try #require(feed.built())
         #expect(session.info.path == "2026/race/")
         #expect(Set(session.drivers.keys) == ["4"])
         #expect(session.header.at(t1).totalLaps == 71)
@@ -665,12 +673,12 @@ struct LiveFeedTests {
         feed.apply(try m("SessionInfo", t1 + 100_000, #"{"Path":"2026/post/"}"#, opening: false))
         #expect(feed.sessionPath == "2026/post/")
         #expect(feed.streamStart == nil)
-        #expect(feed.session() == nil)
+        #expect(feed.built() == nil)
         feed.apply(try m("LapCount", t1 + 110_000, #"{"CurrentLap":3}"#, opening: false))
         #expect(feed.lines("LapCount").isEmpty)
         feed.apply(try m("SessionInfo", t1 + 120_000, #"{"Key":1,"Type":"Practice","Name":"Post","Path":"2026/post/"}"#))
         #expect(feed.joinedAt == t1 + 120_000)
-        #expect(feed.session()?.info.path == "2026/post/")
+        #expect(feed.built()?.info.path == "2026/post/")
     }
 
     @Test func topicPatchRebuildsTheNewState() throws {
