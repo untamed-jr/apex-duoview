@@ -1,12 +1,15 @@
 import LiveTiming
 import SwiftUI
 
-/// The map panel's body: the track map at picture time, or why there is none yet. Its header
-/// controls (−1 s / +1 s, ⟲ ⟳) are `MapPanelControls`, in the floating panel's header.
+/// The map panel's body: the track map at picture time, or why there is none yet; in a race, the
+/// pit circle instead when the header's switch says so (`PitCircleView`). Its header controls
+/// (Map / Pit circle, −1 s / +1 s, ⟲ ⟳) are `MapPanelControls`, in the floating panel's header
+/// and over the docked map. The note over the top: a live status line, "Timing catching up", or
+/// "Timing estimated — nudge until the cars match" (`TimingController.mapNote`).
 struct MapPanel: View {
     let timing: TimingController
-    /// A car's dot was tapped (its racing number): opens its onboard. Holding a dot does nothing
-    /// yet (its pit window comes with the pit circle).
+    /// A car's dot was tapped (its racing number): opens its onboard. Holding a dot shows its pit
+    /// window (races).
     let onCar: @MainActor (String) -> Void
     /// Race Engineer's mini map: only this car (a racing number) is drawn in full, the others as
     /// small grey dots. Nil for the full map.
@@ -16,8 +19,8 @@ struct MapPanel: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .top) {
-                if timing.status == .estimated {
-                    MapPanelNote(text: TimingController.estimatedNote)
+                if let note = timing.mapNote {
+                    MapPanelNote(text: note)
                 }
             }
     }
@@ -26,7 +29,9 @@ struct MapPanel: View {
     private var content: some View {
         switch timing.status {
         case .ready, .estimated:
-            if let map = timing.map {
+            if highlight == nil, timing.isRace, timing.mapMode == .pitCircle {
+                PitCircleView(timing: timing)
+            } else if let map = timing.map {
                 MapCanvas(timing: timing, map: map, turn: timing.mapTurn, highlight: highlight, onCar: onCar)
             } else if let message = timing.mapMessage {
                 MapPanelMessage(text: message, busy: false)
@@ -34,7 +39,7 @@ struct MapPanel: View {
                 MapPanelMessage(text: "Loading the map…", busy: true)
             }
         case .loading:
-            MapPanelMessage(text: "Loading timing…", busy: true)
+            MapPanelMessage(text: timing.loadingText, busy: true)
         case .unavailable(let reason):
             MapPanelMessage(text: reason, busy: false)
         case .idle:
@@ -51,9 +56,17 @@ struct MapPanelControls: View {
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
+        let circle = timing.isRace && timing.mapMode == .pitCircle
         HStack(spacing: 0) {
             if let rival = timing.battleRival {
                 BattleChip(rival: rival) { onCar(rival.number) }
+            }
+            if timing.isRace {
+                // Map / Pit circle: names the other view.
+                PanelTextButton(title: circle ? "Map" : "Pit circle",
+                                accessibility: circle ? "Show the map" : "Show the pit circle") {
+                    timing.setMapMode(circle ? .map : .pitCircle)
+                }
             }
             PanelTextButton(title: "\u{2212}1 s", accessibility: "Timing one second earlier") { timing.nudge(-1) }
             Text(OffsetText.text(timing.offsetMs))
@@ -64,13 +77,16 @@ struct MapPanelControls: View {
                 .fixedSize()
                 .accessibilityLabel("Timing offset \(OffsetText.text(timing.offsetMs))")
             PanelTextButton(title: "+1 s", accessibility: "Timing one second later") { timing.nudge(1) }
-            PanelIconButton(systemImage: "rotate.left", accessibility: "Turn the map left") {
-                timing.turnMap(by: -TimingController.turnStep)
+            // The circle doesn't turn: the finish is always at the top.
+            if !circle {
+                PanelIconButton(systemImage: "rotate.left", accessibility: "Turn the map left") {
+                    timing.turnMap(by: -TimingController.turnStep)
+                }
+                PanelIconButton(systemImage: "rotate.right", accessibility: "Turn the map right") {
+                    timing.turnMap(by: TimingController.turnStep)
+                }
             }
-            PanelIconButton(systemImage: "rotate.right", accessibility: "Turn the map right") {
-                timing.turnMap(by: TimingController.turnStep)
-            }
-            if timing.mapTurn != 0 {
+            if !circle, timing.mapTurn != 0 {
                 PanelIconButton(systemImage: "arrow.uturn.backward", accessibility: "Reset the map's turn") {
                     timing.resetMapTurn()
                 }
@@ -132,8 +148,9 @@ private struct MapCaption: View {
     }
 }
 
-/// A line over the top of the map ("Timing estimated — nudge until the cars match").
-private struct MapPanelNote: View {
+/// A line over the top of the map ("Timing estimated — nudge until the cars match"), or a held
+/// car's pit window over its foot.
+struct MapPanelNote: View {
     let text: String
 
     var body: some View {
@@ -150,8 +167,8 @@ private struct MapPanelNote: View {
     }
 }
 
-/// Instead of the map: loading, or why there is none.
-private struct MapPanelMessage: View {
+/// Instead of the map (or the pit circle): loading, or why there is none.
+struct MapPanelMessage: View {
     let text: String
     let busy: Bool
 
@@ -179,6 +196,18 @@ private struct MapCanvas: View {
     let highlight: String?
     let onCar: @MainActor (String) -> Void
 
+    /// A held car's pit window, shown for a few seconds after the hold.
+    @State private var held: HeldWindow?
+
+    private struct HeldWindow: Equatable {
+        let id = UUID()
+        let number: String
+        let text: String
+    }
+
+    /// How long a held car's pit window stays.
+    static let heldSeconds = 4.0
+
     var body: some View {
         GeometryReader { proxy in
             let transform = map.geometry.fit(in: proxy.size, inset: MapDrawing.inset, userTurnDegrees: turn)
@@ -191,23 +220,53 @@ private struct MapCanvas: View {
                                     highlight: highlight)
                 }
                 .overlay(alignment: .bottom) {
-                    MapCaption(caption: state.caption, red: state.flags.status == .red)
+                    VStack(spacing: 4) {
+                        if let held {
+                            MapPanelNote(text: held.text)
+                        }
+                        MapCaption(caption: state.caption, red: state.flags.status == .red)
+                    }
                 }
             }
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { location in
                 tapped(at: location, transform: transform)
             }
+            // Holding a car (races): its pit window.
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+                    .onChanged { value in
+                        if case .second(true, let drag?) = value {
+                            hold(at: drag.startLocation, transform: transform)
+                        }
+                    })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(map.traced ? "Track map, traced from the cars" : "Track map")
         }
+        .task(id: held) {
+            guard held != nil else { return }
+            try? await Task.sleep(for: .seconds(Self.heldSeconds))
+            if !Task.isCancelled { held = nil }
+        }
     }
 
-    /// The car whose dot is within 22 pt of the tap (a 44 pt target), at this moment.
-    private func tapped(at location: CGPoint, transform: MapTransform) {
-        guard let t = timing.pictureTime else { return }
+    /// The car whose dot is within 22 pt of `location` (a 44 pt target), at this moment.
+    private func car(at location: CGPoint, transform: MapTransform) -> String? {
+        guard let t = timing.pictureTime else { return nil }
         let dots = timing.mapState(at: t).cars.map { (number: $0.number, at: transform.point($0.point)) }
-        if let number = MapHitTest.car(at: location, among: dots) { onCar(number) }
+        return MapHitTest.car(at: location, among: dots)
+    }
+
+    private func tapped(at location: CGPoint, transform: MapTransform) {
+        if let number = car(at: location, transform: transform) { onCar(number) }
+    }
+
+    private func hold(at location: CGPoint, transform: MapTransform) {
+        // The gesture reports every move of the finger: one reading per car held.
+        guard let number = car(at: location, transform: transform), held?.number != number,
+              let text = timing.pitWindowText(car: number) else { return }
+        held = HeldWindow(number: number, text: text)
     }
 }
 

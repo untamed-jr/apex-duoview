@@ -588,6 +588,25 @@ enum PitCircleText {
 
 /// Where things sit on the circle: the finish at the top, clockwise in the direction of travel.
 enum PitCircleGeometry {
+    /// Room kept outside the ring for the cars' codes and gaps.
+    static let labelRoom = 40.0
+    /// The pit lane's inner arc, as a share of the ring's radius.
+    static let laneShare = 0.72
+
+    /// The ring's radius in a `width` × `height` box: as large as fits with the labels outside.
+    static func radius(width: Double, height: Double) -> Double {
+        max(min(width, height) / 2 - labelRoom, 12)
+    }
+
+    /// Each car's dot on the ring (the lane's arc for a car in the pits), in the box's space.
+    static func dots(_ circle: PitCircleState, width: Double, height: Double) -> [(number: String, x: Double, y: Double)] {
+        let r = radius(width: width, height: height)
+        return circle.cars.map { car in
+            let p = point(angle: car.angle, radius: car.inPit ? r * laneShare : r, cx: width / 2, cy: height / 2)
+            return (car.number, p.x, p.y)
+        }
+    }
+
     /// The point at `angle` degrees (0 at the top, clockwise) on a circle of `radius` round
     /// (`cx`, `cy`), in a y-down space.
     static func point(angle: Double, radius: Double, cx: Double, cy: Double) -> (x: Double, y: Double) {
