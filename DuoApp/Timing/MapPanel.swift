@@ -8,6 +8,9 @@ struct MapPanel: View {
     /// A car's dot was tapped (its racing number): opens its onboard. Holding a dot does nothing
     /// yet (its pit window comes with the pit circle).
     let onCar: @MainActor (String) -> Void
+    /// Race Engineer's mini map: only this car (a racing number) is drawn in full, the others as
+    /// small grey dots. Nil for the full map.
+    var highlight: String? = nil
 
     var body: some View {
         content
@@ -24,7 +27,7 @@ struct MapPanel: View {
         switch timing.status {
         case .ready, .estimated:
             if let map = timing.map {
-                MapCanvas(timing: timing, map: map, turn: timing.mapTurn, onCar: onCar)
+                MapCanvas(timing: timing, map: map, turn: timing.mapTurn, highlight: highlight, onCar: onCar)
             } else if let message = timing.mapMessage {
                 MapPanelMessage(text: message, busy: false)
             } else {
@@ -173,6 +176,7 @@ private struct MapCanvas: View {
     let timing: TimingController
     let map: TrackMap
     let turn: Double
+    let highlight: String?
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
@@ -183,7 +187,8 @@ private struct MapCanvas: View {
                 let state: MapState = timing.pictureTime.map { timing.mapState(at: $0) } ?? .empty
                 let phase = context.date.timeIntervalSinceReferenceDate
                 Canvas { graphics, _ in
-                    MapDrawing.draw(in: &graphics, projected: projected, state: state, transform: transform, phase: phase)
+                    MapDrawing.draw(in: &graphics, projected: projected, state: state, transform: transform, phase: phase,
+                                    highlight: highlight)
                 }
                 .overlay(alignment: .bottom) {
                     MapCaption(caption: state.caption, red: state.flags.status == .red)
@@ -214,7 +219,7 @@ enum MapDrawing {
     static let dimmedDotRadius: CGFloat = 4.5
 
     static func draw(in graphics: inout GraphicsContext, projected: ProjectedMap, state: MapState,
-                     transform: MapTransform, phase: Double) {
+                     transform: MapTransform, phase: Double, highlight: String? = nil) {
         guard projected.outline.count >= 2 else { return }
         let round = StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
         var track = Path()
@@ -256,8 +261,18 @@ enum MapDrawing {
                           at: corner.at)
         }
 
-        for car in state.cars {
-            drawCar(car, in: &graphics, transform: transform)
+        if let highlight {
+            // The mini map: every other car a small grey dot, this one on top with a white ring.
+            for car in state.cars where car.number != highlight {
+                drawBackgroundCar(car, in: &graphics, transform: transform)
+            }
+            for car in state.cars where car.number == highlight {
+                drawCar(car, in: &graphics, transform: transform, ringed: true)
+            }
+        } else {
+            for car in state.cars {
+                drawCar(car, in: &graphics, transform: transform)
+            }
         }
 
         if let safetyCar = state.safetyCar {
@@ -270,13 +285,19 @@ enum MapDrawing {
         }
     }
 
-    private static func drawCar(_ car: MapCar, in graphics: inout GraphicsContext, transform: MapTransform) {
+    private static func drawCar(_ car: MapCar, in graphics: inout GraphicsContext, transform: MapTransform,
+                                ringed: Bool = false) {
         let p = transform.point(car.point)
         let r = car.dimmed ? dimmedDotRadius : dotRadius
         let dot = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r))
         let colour = Theme.teamColour(car.colour)
         graphics.fill(dot, with: .color(car.dimmed ? colour.opacity(0.45) : colour))
         graphics.stroke(dot, with: .color(Theme.mapCasing), lineWidth: 1.5)
+        if ringed {
+            let ring = r + 3
+            graphics.stroke(Path(ellipseIn: CGRect(x: p.x - ring, y: p.y - ring, width: 2 * ring, height: 2 * ring)),
+                            with: .color(Color.white), lineWidth: 2)
+        }
         if car.flyingRing {
             let ring = r + 2.5
             graphics.stroke(Path(ellipseIn: CGRect(x: p.x - ring, y: p.y - ring, width: 2 * ring, height: 2 * ring)),
@@ -288,6 +309,14 @@ enum MapDrawing {
             .fontWidth(.condensed)
             .foregroundStyle(car.dimmed ? Theme.textTertiary : Theme.textPrimary)
         graphics.draw(code, at: CGPoint(x: p.x + r + 2, y: p.y), anchor: .leading)
+    }
+
+    /// A car other than the mini map's own: a small grey dot, no code.
+    private static func drawBackgroundCar(_ car: MapCar, in graphics: inout GraphicsContext, transform: MapTransform) {
+        let p = transform.point(car.point)
+        let r: CGFloat = 3
+        graphics.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: 2 * r, height: 2 * r)),
+                      with: .color(Theme.textTertiary.opacity(car.dimmed ? 0.4 : 0.8)))
     }
 
     private static func label(_ text: String) -> Text {

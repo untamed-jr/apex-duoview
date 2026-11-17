@@ -22,8 +22,11 @@ import SwiftUI
 /// Once the session's timing is loaded, ⟳ also offers the posture's data layouts (Director's
 /// Desk, the book data screen, Race Engineer, Scrub Deck): their map and tower are drawn in the
 /// layout's own regions (`LayoutEngine.dataRegions`, `DockedMapPanel`, `DockedTowerPanel`), and
-/// the floating copy of a panel the layout shows hides meanwhile. Race Engineer's console and the
-/// Scrub Deck are labelled placeholders until the next build. Regions glide with the tiles (the
+/// the floating copy of a panel the layout shows hides meanwhile. Race Engineer's console
+/// (`RaceEngineerConsole`) and the Scrub Deck (`ScrubDeck`) fill the laptop's bottom screen: the
+/// controller hears which shows (`setRaceViews`), puts an onboard on the top screen for Race
+/// Engineer (or "Tap a car to pick an onboard" shows over the main feed), and in Race Engineer a
+/// tapped car becomes the top onboard. Regions glide with the tiles (the
 /// same views, frames animated); a region the layout doesn't have is not drawn at all. Without
 /// timing a remembered data layout shows the posture's default, and on the laptop with one feed
 /// the bottom half says why ("Loading timing…", "No timing for this session"). Regions and that
@@ -173,6 +176,15 @@ struct MultiviewView: View {
                     ForEach(layout.tiles) { placed in
                         tile(placed, in: layout)
                     }
+                    // Race Engineer with no onboard to put on top: over the main feed.
+                    if controller.errorText == nil, layout.regions.console != nil,
+                       controller.slots[0]?.isOnboard != true,
+                       let main = layout.tiles.first(where: { $0.entry.slot == 0 && $0.frame.visible }) {
+                        PickOnboardNote()
+                            .position(x: main.frame.rect.midX, y: main.frame.rect.minY + 36)
+                            .zIndex(3)
+                            .transition(.opacity)
+                    }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 // Frames glide; the drag itself isn't part of this value, so it tracks the finger.
@@ -185,6 +197,11 @@ struct MultiviewView: View {
                 // floating copies.
                 .onChange(of: Self.dockedPanels(layout.regions), initial: true) { _, docked in
                     controller.setDockedPanels(docked)
+                }
+                // Race Engineer's console and the Scrub Deck: the controller puts an onboard on
+                // top for the console, and the timing builds what they show.
+                .onChange(of: RaceViews(layout.regions), initial: true) { _, shown in
+                    controller.setRaceViews(console: shown.console, deck: shown.deck)
                 }
                 .overlay {
                     if controller.errorText == nil {
@@ -244,16 +261,27 @@ struct MultiviewView: View {
                 .transition(.opacity)
         }
         if let rect = regions.console {
-            DataRegionPlaceholder(caption: DataRegionPlaceholder.raceEngineer)
+            RaceEngineerConsole(timing: controller.timing, onCar: { number in carTapped(number) })
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)
                 .transition(.opacity)
         }
         if let rect = regions.deck {
-            DataRegionPlaceholder(caption: DataRegionPlaceholder.scrubDeck)
+            ScrubDeck(controller: controller, onCar: { number in carTapped(number) })
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)
                 .transition(.opacity)
+        }
+    }
+
+    /// Which race views the layout draws.
+    private struct RaceViews: Equatable {
+        var console: Bool
+        var deck: Bool
+
+        init(_ regions: DataRegions) {
+            console = regions.console != nil
+            deck = regions.deck != nil
         }
     }
 
@@ -265,12 +293,18 @@ struct MultiviewView: View {
         return docked
     }
 
-    /// A car tapped on the map or the tower (floating or in the layout), or the Battle chip: its
-    /// onboard.
+    /// A car tapped on the map or the tower (floating or in the layout), the Battle chip, Race
+    /// Engineer's console or the Scrub Deck's "Open onboard": its onboard. In Race Engineer it
+    /// becomes the top onboard.
     private func carTapped(_ number: String) {
         noteInteraction()
         // Racing numbers are whole numbers; anything else has no onboard.
-        if let racingNumber = Int(number) { controller.showOnboard(racingNumber: racingNumber) }
+        guard let racingNumber = Int(number) else { return }
+        if controller.raceEngineerShown {
+            controller.showOnboardOnTop(racingNumber: racingNumber)
+        } else {
+            controller.showOnboard(racingNumber: racingNumber)
+        }
     }
 
     /// The channel ids of the tiles this layout shows.
@@ -586,5 +620,19 @@ struct MultiviewView: View {
                 .padding(24)
             }
         }
+    }
+}
+
+/// Race Engineer with no onboard among the feeds: a capsule over the main feed. Not interactive:
+/// a car tapped on the console's mini map (or the map and tower) picks one.
+private struct PickOnboardNote: View {
+    var body: some View {
+        Text(ConsoleText.pickOnboard)
+            .font(.footnote)
+            .foregroundStyle(Theme.textPrimary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Theme.background.opacity(0.8), in: Capsule())
+            .allowsHitTesting(false)
     }
 }

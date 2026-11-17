@@ -1,10 +1,11 @@
 import LiveTiming
 import SwiftUI
 
-/// Settings › Track map: the timing offset with "Reset to −7 s", "Show the whole race on the
-/// Scrub Deck" (off by default: no data ahead of the picture; it also shows every flag period on
-/// the multiview timeline), and "Speed readouts on mobile data" (on by default). The values live in `TimingSettings`, through the timing controller so
-/// an open map follows at once.
+/// Settings › Track map: the timing offset with "Reset to −7 s", "Show the whole race" (off by
+/// default: no data ahead of the picture; on, the Scrub Deck shows the whole race and the
+/// multiview timeline every flag period), and "Speed readouts on mobile data" (on by default).
+/// The values live in `TimingSettings`, through the timing controller so an open map follows at
+/// once.
 struct TimingSettingsSection: View {
     let timing: TimingController
 
@@ -18,7 +19,7 @@ struct TimingSettingsSection: View {
                 timing.resetOffset()
             }
             .disabled(timing.offsetMs == PictureClock.defaultOffsetMs)
-            Toggle("Show the whole race on the Scrub Deck", isOn: Binding(
+            Toggle("Show the whole race", isOn: Binding(
                 get: { timing.showWholeRace },
                 set: { timing.setShowWholeRace($0) }))
             .tint(Theme.accent)
@@ -31,9 +32,9 @@ struct TimingSettingsSection: View {
         } footer: {
             Text("Timing follows the picture: the stream's own clock less 7 s, as F1 stamps its video "
                 + "about 7 s after its timing. If the cars on the map run ahead of the video or behind "
-                + "it, move the offset here or with the map's \u{2212}1 s and +1 s. Safety car and red "
-                + "flag periods show on the timeline only as far as you've watched, unless you show "
-                + "the whole race (for rewatching).")
+                + "it, move the offset here or with the map's \u{2212}1 s and +1 s. The Scrub Deck's lap "
+                + "chart and events, and the safety car and red flag periods on the timeline, show only "
+                + "as far as you've watched. Show the whole race (for rewatching) to see all of them.")
         }
     }
 }

@@ -1,10 +1,10 @@
 import SwiftUI
 
 // The data layouts' regions (`LayoutEngine.dataRegions`), drawn in place by the multiview: the
-// map with its header controls, the tower, and until the next build the Race Engineer console
-// and the Scrub Deck as labelled placeholders (the beta.2 rule: space kept for later is drawn and
-// labelled). Each is placed by the multiview with `.frame` and `.position`, like a tile, so a
-// layout or fold change glides the same view to its new frame.
+// map with its header controls and the tower here; Race Engineer's console
+// (`RaceEngineerConsole`) and the Scrub Deck (`ScrubDeck`) in their own files. Each is placed by
+// the multiview with `.frame` and `.position`, like a tile, so a layout or fold change glides the
+// same view to its new frame.
 
 /// The map in a data layout: the floating panel's header controls (Battle, −1 s / +1 s, ⟲ ⟳)
 /// over the map. No title, close or drag: the layout owns its place.
@@ -47,12 +47,10 @@ struct DockedTowerPanel: View {
     }
 }
 
-/// A region kept for the next build, drawn and labelled: a dashed outline with its caption. Not
-/// interactive, so a tap on it reaches the background (and shows or hides the controls).
+/// Space kept for a later beta, drawn and labelled (the beta.2 rule): a dashed outline with its
+/// caption, such as Race Engineer's "Saved for beta.4: team radio". Not interactive, so a tap on
+/// it reaches what is under it.
 struct DataRegionPlaceholder: View {
-    static let raceEngineer = "Race Engineer \u{2014} next build"
-    static let scrubDeck = "Scrub Deck \u{2014} next build"
-
     let caption: String
 
     var body: some View {
@@ -71,9 +69,9 @@ struct DataRegionPlaceholder: View {
     }
 }
 
-/// The look the map and tower regions share: the floating panels' surface and hairline, fully
-/// opaque (nothing is under it).
-private struct DataRegionFrame<Content: View>: View {
+/// The look every data region shares (map, tower, console, deck): the floating panels' surface and
+/// hairline, fully opaque (nothing is under it).
+struct DataRegionFrame<Content: View>: View {
     let content: Content
 
     init(@ViewBuilder content: () -> Content) {
