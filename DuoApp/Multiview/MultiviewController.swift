@@ -504,9 +504,10 @@ final class MultiviewController {
     }
 
     /// The timing panels the layout shows in its data regions (the view reports them): the timing
-    /// reads them like floating panels and hides the floating copies.
+    /// reads them like floating panels and hides the floating copies. Always handed on, even when
+    /// unchanged here: the timing's own copy may have been cleared meanwhile (a detach, another
+    /// player's attach), and it ignores a report that changes nothing, or that isn't its owner's.
     func setDockedPanels(_ docked: Set<TimingPanel>) {
-        guard dockedPanels != docked else { return }
         dockedPanels = docked
         timing.setDockedPanels(docked, owner: self)
     }
