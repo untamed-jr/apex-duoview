@@ -426,15 +426,49 @@ struct LiveFeedTests {
         #expect(try carCrossings(short) == [join - 15_000, join])
         #expect(try laps(short, at: join + 6_000) == 12)
 
-        // The archive reaches past the change but lacks its copy, and holds an earlier one:
-        // the match is wrong, and the difference to the snapshot's state keeps the lap.
-        let wrong = try seamFeed(
+        // The archive lacks the change's copy and holds an earlier one, 20 s before. Whether it
+        // reaches past the change, ends 1 s short of it, or ends 0.3 s short (inside the
+        // tolerance), the match doesn't check out: every archive line keeps its own time, the
+        // lap is crossed once, when it was, and never shows before.
+        let snapshot = #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#
+        let cases: [(change: UTCms, archive: [(UTCms, String)])] = [
+            (join + 5_000, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80),
+                            (join + 10_000, #"{"Lines":{"3":{"Position":"3"}}}"#)]),
+            (join + 500, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 500, status80)]),
+            (join + 200, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 100, status80)]),
+        ]
+        for (change, archive) in cases {
+            let wrong = try seamFeed(snapshot: snapshot, changes: [(change, status64)], archive: archive)
+            #expect(try carCrossings(wrong) == [join - 15_000], "change at \(change - join)")
+            #expect(try laps(wrong, at: join - 18_000) == 10, "change at \(change - join)")
+            #expect(try laps(wrong, at: join - 15_000) == 11, "change at \(change - join)")
+            #expect(try laps(wrong, at: change + 1_000) == 11, "change at \(change - join)")
+            // Every archive line before the join is there (Status 64 at −20 s and 80 at the
+            // end, which cancel out, included), and nothing else is.
+            let start = try #require(wrong.streamStart)
+            #expect(wrong.lines("TimingData").filter { $0.offsetMs < LiveFeed.headStartMs }
+                .map { $0.offsetMs + start } == archive.map(\.0).filter { $0 < join }, "change at \(change - join)")
+        }
+    }
+
+    @Test func topUpMatchingAnEarlierCopyAtTheArchivesFirstLine() throws {
+        let join = Self.seamJoin
+        let status64 = #"{"Lines":{"3":{"Status":64}}}"#
+        // The archive starts with an earlier copy of the first live change, then goes on
+        // before the change: not the change itself, so its lines are kept at their times.
+        let feed = try seamFeed(
             snapshot: #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#,
             changes: [(join + 5_000, status64)],
-            archive: [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80),
-                      (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
-        #expect(try carCrossings(wrong).count == 1)
-        #expect(try laps(wrong, at: join + 6_000) == 11)
+            archive: [(join - 20_000, status64),
+                      (join - 15_000, #"{"Lines":{"3":{"NumberOfLaps":11}}}"#),
+                      (join - 10_000, #"{"Lines":{"3":{"Status":80}}}"#),
+                      (join + 10_000, #"{"Lines":{"3":{"Position":"3"}}}"#)])
+        #expect(try carCrossings(feed) == [join - 15_000])
+        #expect(try laps(feed, at: join - 18_000) == nil)
+        #expect(try laps(feed, at: join - 15_000) == 11)
+        #expect(try laps(feed, at: join + 6_000) == 11)
+        let start = try #require(feed.streamStart)
+        #expect(feed.lines("TimingData").prefix(3).map { $0.offsetMs + start } == [join - 20_000, join - 15_000, join - 10_000])
     }
 
     @Test func topUpMatchingTheArchivesFirstLine() throws {
