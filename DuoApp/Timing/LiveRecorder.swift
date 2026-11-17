@@ -18,6 +18,8 @@ actor LiveRecorder {
     /// Lines not yet written, the append prefix first.
     private var pending = ""
     private var flushTask: Task<Void, Never>?
+    /// Which flush task is current: bumped for each one started.
+    private var flushTicket = 0
 
     /// `directory`: where the files go; Caches/live unless a check says otherwise.
     init(directory: URL? = LiveRecorder.defaultDirectory) {
@@ -65,9 +67,15 @@ actor LiveRecorder {
         guard !text.isEmpty else { return }
         pending += text
         guard flushTask == nil else { return }
+        flushTicket &+= 1
+        let ticket = flushTicket
         flushTask = Task { [weak self] in
-            try? await Task.sleep(for: LiveRecordingFiles.flushInterval)
-            await self?.flushDue()
+            do {
+                try await Task.sleep(for: LiveRecordingFiles.flushInterval)
+            } catch {
+                return  // cancelled: `flush` has written the lines already
+            }
+            await self?.flushDue(ticket)
         }
     }
 
@@ -77,7 +85,10 @@ actor LiveRecorder {
         file = nil
     }
 
-    private func flushDue() {
+    /// The flush task `ticket` is due; a task that has been replaced since does nothing (it must
+    /// never clear a newer task's handle).
+    private func flushDue(_ ticket: Int) {
+        guard ticket == flushTicket, !Task.isCancelled else { return }
         flushTask = nil
         flush()
     }
