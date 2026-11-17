@@ -77,6 +77,12 @@ pre.cmd { margin: 8px 0 0; background: var(--code-bg); border-radius: 8px; paddi
 .cmdrow { display: flex; align-items: start; gap: 8px; }
 .cmdrow pre { flex: 1; min-width: 0; }
 .copy { font: inherit; font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+details.steps { margin-top: 8px; }
+details.steps > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); }
+details.steps ol { margin: 8px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+details.steps ol li::marker { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.pass { margin: 8px 0 0; font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--ok-bg); color: var(--fg); }
+.pass b { color: var(--ok); }
 .foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
 .empty { padding: 14px 16px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
 @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .filters { margin-left: 0; } }
@@ -201,6 +207,11 @@ let state = {};          // id -> {s, n}
 let filter = "all";
 let db = null, local = false;
 const openNotes = new Set();
+const openSteps = new Set();
+document.addEventListener("toggle", e => {
+  const id = e.target.dataset?.steps; if (!id) return;
+  if (e.target.open) openSteps.add(id); else openSteps.delete(id);
+}, true);
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function st(id) { return state[id] || { s: "todo", n: "" }; }
@@ -228,7 +239,8 @@ function render() {
       return `<div class="item" data-s="${v.s}">
         <div class="it-text"><div class="it-title">${esc(i.t)}</div>${i.h ? `<div class="it-how">${esc(i.h)}</div>` : ""}
           ${i.cmd ? `<pre class="cmd">${esc(i.cmd)}</pre><button class="copy" type="button" data-copy="${esc(i.id)}">Copy commands</button>` : ""}
-          ${tags ? `<div class="tags">${tags}</div>` : ""}</div>
+          ${tags ? `<div class="tags">${tags}</div>` : ""}
+          ${i.steps ? `<details class="steps" data-steps="${i.id}" ${openSteps.has(i.id) ? "open" : ""}><summary>How to test</summary><ol>${i.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>${i.pass ? `<p class="pass"><b>Works if:</b> ${esc(i.pass)}</p>` : ""}</details>` : ""}</div>
         <div class="seg" role="group" aria-label="Result for ${esc(i.t)}">${["todo", "ok", "bad"].map(s => `<button type="button" data-id="${i.id}" data-v="${s}" aria-pressed="${v.s === s}">${LABELS[s]}</button>`).join("")}</div>
         ${showNote ? `<div class="note"><label for="n-${i.id}">${v.s === "bad" ? "What went wrong?" : "Note"}</label><textarea id="n-${i.id}" data-note="${i.id}" placeholder="${v.s === "bad" ? "What you did, what you saw" : "Optional"}">${esc(v.n || "")}</textarea></div>` : `<button class="addnote" type="button" data-addnote="${i.id}">Add a note</button>`}
       </div>`;
