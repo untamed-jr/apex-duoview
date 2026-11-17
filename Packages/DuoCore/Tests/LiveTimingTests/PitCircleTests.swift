@@ -22,7 +22,12 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
     @Test func referenceUsesLastFiveGreen() throws {
         #expect(PitCircle.referenceLapMs(leaderGreenLaps: [99_000, 91_000, 92_000, 93_000, 94_000, 95_000],
                                          typicalLapMs: 80_000, lastLapMs: 70_000) == 93_000)
-        #expect(PitCircle.referenceLapMs(leaderGreenLaps: [91_000, 92_001], typicalLapMs: 80_000, lastLapMs: nil) == 91_500)
+        #expect(PitCircle.referenceLapMs(leaderGreenLaps: [91_000, 92_000, 93_000, 94_000, 95_001],
+                                         typicalLapMs: 80_000, lastLapMs: nil) == 93_000)
+        // Before 5 green laps the spec's fallback applies: typical, then last; no average of fewer.
+        #expect(PitCircle.referenceLapMs(leaderGreenLaps: [91_000, 92_000, 93_000, 94_000],
+                                         typicalLapMs: 80_000, lastLapMs: 70_000) == 80_000)
+        #expect(PitCircle.referenceLapMs(leaderGreenLaps: [91_000], typicalLapMs: nil, lastLapMs: 70_000) == 70_000)
 
         // The race at lights out + 10 min. spike/race_checks.py: the leader is 12
         // (check:raceLeaderAtLightsOutPlus10min), its laps between crossings are
@@ -58,19 +63,20 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
 
         // 0.98: joined live part-way, the opening snapshot already has the leader on lap 30 with a
         // last lap of 1:26.500, but no crossing has been seen here. Once it crosses, its last lap
-        // stands in until two crossings make a lap; then the green lap takes over.
+        // stands in until two crossings make a lap; then its typical lap (86 s between crossings,
+        // not F1's 1:25.800) takes over until it has 5 green laps.
         let s: UTCms = 1_000_000
         let joined = RaceFixture.synthetic(timing: [
             timingLine("00:00:00.000", [("1", #""Position":"1","NumberOfLaps":30,"LastLapTime":{"Value":"1:26.500"},"GapToLeader":"LAP 31""#),
                                         ("4", #""Position":"2","NumberOfLaps":30,"GapToLeader":"+3.000","IntervalToPositionAhead":{"Value":"+3.000"}"#)]),
             timingLine("00:00:40.000", [("1", #""NumberOfLaps":31,"LastLapTime":{"Value":"1:26.900"}"#)]),
-            timingLine("00:02:06.000", [("1", #""NumberOfLaps":32,"LastLapTime":{"Value":"1:26.000"}"#)]),
+            timingLine("00:02:06.000", [("1", #""NumberOfLaps":32,"LastLapTime":{"Value":"1:25.800"}"#)]),
         ], start: s)
         #expect(PitCircle.layout(at: s + 39_999, session: joined) == nil)
         #expect(PitCircle.layout(at: s + 40_000, session: joined)?.referenceLapMs == 86_900)
         #expect(PitCircle.layout(at: s + 40_000, session: joined)?.greenLaps == 0)
         #expect(PitCircle.layout(at: s + 126_000, session: joined)?.referenceLapMs == 86_000)
-        #expect(PitCircle.layout(at: s + 126_000, session: joined)?.greenLaps == 1)
+        #expect(PitCircle.layout(at: s + 126_000, session: joined)?.greenLaps == 0)
 
         // Every lap so far under a safety car: none green, so the typical lap (the median of the
         // last 5) stands in.

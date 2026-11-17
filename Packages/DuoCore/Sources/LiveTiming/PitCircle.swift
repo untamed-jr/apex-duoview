@@ -40,8 +40,8 @@ public struct PitCircleCar: Sendable, Equatable {
 public struct PitCircleState: Sendable, Equatable {
     /// One lap round the circle, in ms.
     public var referenceLapMs: Int
-    /// How many green laps `referenceLapMs` averages (up to 5); 0 when there are none yet and it
-    /// is the leader's typical lap or last lap (the 0.98 fallback).
+    /// How many green laps `referenceLapMs` averages: 5, or 0 before the leader has 5 and it is
+    /// their typical lap or last lap (the 0.98 fallback).
     public var greenLaps: Int
     /// What a stop costs (`PitCircle.pitLossMs`).
     public var pitLossMs: Int
@@ -116,13 +116,13 @@ public enum PitCircle {
     // MARK: Reference lap and pit loss
 
     /// One lap round the circle: the average of the leader's last 5 green laps (ms, oldest
-    /// first; fewer when that's all there are). Before any: their typical lap, then their last
+    /// first). Before the leader has 5 green laps (the spec): their typical lap, then their last
     /// timed lap, as F1 gives it (the 0.98 fix for joining live part-way, when no lap has been
     /// timed here yet). Nil when there is none of those.
     public static func referenceLapMs(leaderGreenLaps: [Int], typicalLapMs: Int?, lastLapMs: Int?) -> Int? {
+        guard leaderGreenLaps.count >= referenceLaps else { return typicalLapMs ?? lastLapMs }
         let green = leaderGreenLaps.suffix(referenceLaps)
-        if !green.isEmpty { return green.reduce(0, +) / green.count }
-        return typicalLapMs ?? lastLapMs
+        return green.reduce(0, +) / green.count
     }
 
     /// What a stop costs: the median of this session's clean stops (`sessionStops`), else the
@@ -174,7 +174,7 @@ public enum PitCircle {
         }
         guard let ms = referenceLapMs(leaderGreenLaps: Array(green), typicalLapMs: typicalLapMs(of: leader, at: t, session: session),
                                       lastLapMs: last) else { return nil }
-        return (ms, green.count)
+        return (ms, green.count >= referenceLaps ? referenceLaps : 0)
     }
 
     /// What each clean stop finished by `t` cost, in ms, in the order made: the laps it spans
