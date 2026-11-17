@@ -101,6 +101,9 @@ final class TimingController {
     @ObservationIgnored private var cardFeeds: [Int: String] = [:]
     /// The speed readouts' car data, once a card has shown.
     @ObservationIgnored private var carData: CarDataLoader?
+    /// The attached item is a live broadcast: its car data will come from the live connection,
+    /// so the archive's is never downloaded.
+    @ObservationIgnored private var contentIsLive = false
     /// Your driver's last name (Settings › Multiview › My driver), for the battle highlight.
     @ObservationIgnored private var favouriteDriver: String?
 
@@ -161,6 +164,7 @@ final class TimingController {
         ownerID = owner.map(ObjectIdentifier.init)
         wantsMarks = timelineMarks
         contentId = item.contentId
+        contentIsLive = item.isLive
         guard let ref = item.timingRef, ref.isSession else {
             status = .unavailable(Self.noTiming)
             return
@@ -197,6 +201,7 @@ final class TimingController {
         lapStates = nil
         archiveSession = nil
         cardFeeds = [:]
+        contentIsLive = false
         carData?.cancel()
         carData = nil
         if status != .idle { status = .idle }
@@ -359,15 +364,19 @@ final class TimingController {
     }
 
     /// The car data downloads once a card shows (spec: as soon as an onboard is showing), and
-    /// goes on to the end of the file once started.
+    /// goes on to the end of the file once started (topping it up while the session isn't known
+    /// to be over). Never for a live item (`CarDataPolicy`).
     private func startCarDataIfShown() {
         guard carData == nil, loaded != nil, !cardCars.isEmpty, let archiveSession, let loaded else { return }
+        let plan = CarDataPolicy.plan(live: contentIsLive, status: loaded.sessionStatus)
+        guard plan != .skip else { return }
         let loader = CarDataLoader(
             archive: archive,
             sessionPath: archiveSession.path,
             cacheName: CarDataLoader.cacheName(key: archiveSession.key, path: archiveSession.path),
             streamStart: loaded.streamStart,
-            allowsExpensive: speedOnMobileData)
+            allowsExpensive: speedOnMobileData,
+            finished: plan == .whole)
         carData = loader
         loader.start()
     }

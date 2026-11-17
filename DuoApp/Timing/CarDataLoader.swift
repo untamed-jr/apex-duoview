@@ -11,7 +11,12 @@ import Network
 ///
 /// - The download goes through `TimingArchive.byteRange` (the token, the archive's host only, a
 ///   refusal never signs anyone out), 1 MiB at a time. A server that ignores the range answers
-///   with the whole file (a 200, no Content-Range): that one download is kept and the ranges stop.
+///   with the whole file (a 200, no Content-Range): that download is kept instead.
+/// - Only a session known to be over (`CarDataPolicy`: its SessionStatus reached "Finalised" or
+///   "Ends") has its file promoted to whole and reused without asking. Until then the archive's
+///   file may still grow: the download keeps the `.part`, and once it reaches the end it asks
+///   again from there every 60 s while it runs, and on the next attach. Live items skip the
+///   archive's car data (live car data comes from the live connection).
 /// - A refusal or a missing file (401/403/404) stops it quietly: the readouts stay hidden. A
 ///   network failure tries the same piece again after 3, 10, 30 and 60 s, then every 60 s.
 /// - With "Speed readouts on mobile data" off, it waits between pieces while the connection is
@@ -35,6 +40,9 @@ final class CarDataLoader {
     nonisolated static let keepFor: TimeInterval = 7 * 24 * 3600
     /// The waits between tries of a piece that failed; the last repeats (as the timing load's).
     nonisolated static let retryDelays: [Duration] = [.seconds(3), .seconds(10), .seconds(30), .seconds(60)]
+    /// How often a download that reached the end of a session's file (not yet known finished)
+    /// asks whether it has grown.
+    nonisolated static let reprobeInterval: Duration = .seconds(60)
 
     private let download: CarDataDownload
     private let streamStart: UTCms
@@ -54,11 +62,14 @@ final class CarDataLoader {
 
     /// `cacheName`: the session's key (its folder path when F1 gives none), the file's name.
     /// `directory`: where the files go; Caches/cardata unless a test says otherwise.
+    /// `finished`: the session is known to be over (`CarDataPolicy.plan` said `.whole`), so the
+    /// file can be made whole and reused; otherwise it stays a part file that is topped up.
     init(archive: TimingArchive, sessionPath: String, cacheName: String, streamStart: UTCms, allowsExpensive: Bool,
-         directory: URL? = CarDataLoader.defaultDirectory) {
+         finished: Bool, directory: URL? = CarDataLoader.defaultDirectory) {
         self.streamStart = streamStart
         self.allowsExpensive = allowsExpensive
-        download = CarDataDownload(archive: archive, sessionPath: sessionPath, cacheName: cacheName, directory: directory)
+        download = CarDataDownload(archive: archive, sessionPath: sessionPath, cacheName: cacheName, directory: directory,
+                                   finished: finished)
     }
 
     isolated deinit {
@@ -165,10 +176,13 @@ final class CarDataLoader {
                 CarDataWindowFile.load(file: file, lines: lines, offsets: offsets)
             }.value
             guard let self, !Task.isCancelled else { return }
+            self.windowTask = nil
+            // The file couldn't be read (a rename under way, say): keep the old window, and the
+            // next tick tries again.
+            guard let cars else { return }
             self.window = CarDataWindowCache(
                 offsets: offsets, lineCount: lines.count, complete: complete,
                 reachesEnd: (lines.last?.offsetMs ?? .min) < offsets.upperBound, cars: cars)
-            self.windowTask = nil
         }
     }
 
@@ -248,11 +262,37 @@ enum CarDataIndex {
     }
 }
 
+/// Whether and how the archive's car data is downloaded for a session. Plain functions.
+enum CarDataPolicy {
+    enum Plan: Equatable, Sendable {
+        /// A live item: its car data comes from the live connection, never the archive.
+        case skip
+        /// The session may not be over: the file may still grow, so it stays a part file and
+        /// is topped up from its end.
+        case topUp
+        /// The session is over: once the end is reached the file is whole, and reused as it is.
+        case whole
+    }
+
+    /// F1's session statuses that mean it is over for good (its archive files are final).
+    static let finishedStatuses: Set<String> = ["Finalised", "Ends"]
+
+    /// The loaded SessionStatus reached "Finalised" or "Ends" at any point.
+    static func sessionFinished(_ status: SessionStatusTimeline) -> Bool {
+        status.changes.contains { finishedStatuses.contains($0.status) }
+    }
+
+    static func plan(live: Bool, status: SessionStatusTimeline) -> Plan {
+        if live { return .skip }
+        return sessionFinished(status) ? .whole : .topUp
+    }
+}
+
 /// Reads one window of lines from the file. Plain functions, for a detached task.
 enum CarDataWindowFile {
     /// The samples of the lines whose offset lies in `offsets` (`lines` in file order, which is
-    /// time order); empty when the file can't be read.
-    static func load(file: URL, lines: [CarDataLine], offsets: ClosedRange<Int64>) -> [String: [CarSample]] {
+    /// time order): empty when no line lies there, nil when the file can't be read.
+    static func load(file: URL, lines: [CarDataLine], offsets: ClosedRange<Int64>) -> [String: [CarSample]]? {
         var lo = 0, hi = lines.count
         while lo < hi {
             let mid = (lo + hi) / 2
@@ -264,11 +304,12 @@ enum CarDataWindowFile {
             picked.append(lines[i])
             i += 1
         }
-        guard let first = picked.first, let last = picked.last, last.end > first.start,
-              let handle = try? FileHandle(forReadingFrom: file) else { return [:] }
+        guard let first = picked.first, let last = picked.last, last.end > first.start else { return [:] }
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
         guard (try? handle.seek(toOffset: UInt64(first.start))) != nil,
-              let bytes = try? handle.read(upToCount: last.end - first.start) else { return [:] }
+              let bytes = try? handle.read(upToCount: last.end - first.start),
+              bytes.count == last.end - first.start else { return nil }
         let buffer = [UInt8](bytes)
         let parsed = picked.compactMap { line -> StreamLine? in
             let a = line.start - first.start, b = line.end - first.start
@@ -286,6 +327,9 @@ actor CarDataDownload {
     private let sessionPath: String
     private let directory: URL?
     private let chunkBytes: Int
+    /// The session is over: reaching the end makes the file whole.
+    private let finished: Bool
+    private let reprobe: Duration
     private let fileURL: URL?
     private let partURL: URL?
     private var lines: [CarDataLine] = []
@@ -295,28 +339,41 @@ actor CarDataDownload {
     private var scanned = 0
     private var tail = Data()
 
-    init(archive: TimingArchive, sessionPath: String, cacheName: String, directory: URL?,
-         chunkBytes: Int = CarDataLoader.chunkBytes) {
+    init(archive: TimingArchive, sessionPath: String, cacheName: String, directory: URL?, finished: Bool,
+         chunkBytes: Int = CarDataLoader.chunkBytes, reprobe: Duration = CarDataLoader.reprobeInterval) {
         self.archive = archive
         self.sessionPath = sessionPath
         self.directory = directory
+        self.finished = finished
+        self.reprobe = reprobe
         self.chunkBytes = max(chunkBytes, 1)
         fileURL = directory?.appendingPathComponent(cacheName + ".jsonStream")
         partURL = directory?.appendingPathComponent(cacheName + ".jsonStream.part")
     }
 
-    /// Runs until the file is whole, refused or missing, or the task is cancelled. `allowed` is
-    /// asked before each piece (false waits); `publish` gets the index after each piece.
+    /// Runs until the file is whole (a finished session), refused or missing, or the task is
+    /// cancelled. A session not known to be over never ends that way: at the end of the
+    /// archive's file it waits `reprobe` and asks again from there. `allowed` is asked before each
+    /// piece (false waits); `publish` gets the index after each piece.
     func run(allowed: @escaping @Sendable () async -> Bool,
              publish: @escaping @Sendable (CarDataProgress) async -> Void) async {
         guard let fileURL, let partURL, let directory else { return }
         let manager = FileManager.default
         try? manager.createDirectory(at: directory, withIntermediateDirectories: true)
         Self.deleteOld(in: directory, now: Date())
-        if let whole = try? Data(contentsOf: fileURL) {
+        if finished, let whole = try? Data(contentsOf: fileURL) {
             append(whole)
             await publish(CarDataProgress(file: fileURL, lines: lines, complete: true))
             return
+        }
+        // A whole file kept while the session wasn't known to be over (build 12 did that) may
+        // have stopped short: it becomes the part file, to be topped up.
+        if !finished, manager.fileExists(atPath: fileURL.path) {
+            if manager.fileExists(atPath: partURL.path) {
+                try? manager.removeItem(at: fileURL)
+            } else {
+                try? manager.moveItem(at: fileURL, to: partURL)
+            }
         }
         if let part = try? Data(contentsOf: partURL) {
             append(part)
@@ -335,25 +392,39 @@ actor CarDataDownload {
             switch answer {
             case .partial(let data):
                 attempt = 0
-                guard !data.isEmpty else { return await finish(publish) }
-                guard write(data, to: partURL, replacing: false) else { return }
-                append(data)
-                if data.count < chunkBytes { return await finish(publish) }
-                await publish(CarDataProgress(file: partURL, lines: lines, complete: false))
+                if !data.isEmpty {
+                    guard write(data, to: partURL, replacing: false) else { return }
+                    append(data)
+                }
+                if data.count < chunkBytes {
+                    // The end of the archive's file, as it is now.
+                    if finished { return await finish(publish) }
+                    if !data.isEmpty { await publish(CarDataProgress(file: partURL, lines: lines, complete: false)) }
+                    guard await Self.sleep(reprobe) else { return }
+                } else {
+                    await publish(CarDataProgress(file: partURL, lines: lines, complete: false))
+                }
             case .whole(let data):
-                // The range was ignored: this is the whole file. Ranges stop here.
-                guard write(data, to: partURL, replacing: true) else { return }
-                lines = []
-                size = 0
-                scanned = 0
-                tail = Data()
-                append(data)
-                return await finish(publish)
+                // The range was ignored: this is the whole file as it is now. Kept when longer
+                // than what is on disk.
+                attempt = 0
+                if data.count > size {
+                    guard write(data, to: partURL, replacing: true) else { return }
+                    lines = []
+                    size = 0
+                    scanned = 0
+                    tail = Data()
+                    append(data)
+                    if !finished { await publish(CarDataProgress(file: partURL, lines: lines, complete: false)) }
+                }
+                if finished { return await finish(publish) }
+                guard await Self.sleep(reprobe) else { return }
             case .unavailable(let status):
-                // Past the end of a file already part-written: it is whole. Otherwise refused or
-                // missing: no readouts, and nothing to try again.
-                if status == 416, size > 0 { return await finish(publish) }
-                return
+                // Past the end of a file already part-written: the end, as it is now. Otherwise
+                // refused or missing: no readouts, and nothing to try again.
+                guard status == 416, size > 0 else { return }
+                if finished { return await finish(publish) }
+                guard await Self.sleep(reprobe) else { return }
             case .failed:
                 let delays = CarDataLoader.retryDelays
                 guard await Self.sleep(delays[min(attempt, delays.count - 1)]) else { return }
