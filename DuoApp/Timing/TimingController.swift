@@ -40,7 +40,8 @@ import Observation
 ///   feed leaves out) feeds the readouts and the console. The status lines: "Connecting to live
 ///   timing…" until the first session, then as a note over the map "Live timing dropped —
 ///   reconnecting…", "Live timing is connected, but F1 isn't sending car positions" and, for
-///   picture times before the join that the archive hasn't filled in, "Timing catching up". The
+///   picture times before the join that the archive hasn't filled in, or inside a gap in the
+///   recording (a reconnect, the session reopened after a break), "Timing catching up". The
 ///   archive top-up (`Backfill`) runs every 2 min, up to 180 times, until the archive reaches
 ///   within 30 s of the join; a new session (SessionInfo `Path`) starts it again. A feed
 ///   for another session than the video's is "No timing for this session".
@@ -187,6 +188,8 @@ final class TimingController {
     @ObservationIgnored private var liveEverSubscribed = false
     @ObservationIgnored private var liveJoinedAt: UTCms?
     @ObservationIgnored private var liveArchiveReach: UTCms?
+    /// The recording's gaps (a reconnect, the session reopened): shown as catching up.
+    @ObservationIgnored private var liveGaps: [LiveGap] = []
     /// The live feed is another session than the video's.
     @ObservationIgnored private var liveWrongSession = false
     /// The live car data within a minute of picture time, by car.
@@ -869,6 +872,7 @@ final class TimingController {
         liveEverSubscribed = false
         liveJoinedAt = nil
         liveArchiveReach = nil
+        liveGaps = []
         liveWrongSession = false
         liveCars = [:]
         if liveNote != nil { liveNote = nil }
@@ -884,6 +888,7 @@ final class TimingController {
         liveEverSubscribed = r.everSubscribed
         liveJoinedAt = r.joinedAt
         liveArchiveReach = r.archiveReach
+        liveGaps = r.gaps
         liveCars = r.cars
         let wrong = liveRef.map { !LiveSessionMatch.matches(feedKey: r.sessionKey, ref: $0) } ?? false
         if wrong != liveWrongSession {
@@ -965,7 +970,8 @@ final class TimingController {
         if liveBuilder != nil, !liveWrongSession {
             note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed,
                                  hasPositions: loaded.map { !$0.positions.cars.isEmpty } ?? true,
-                                 pictureTime: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach)
+                                 pictureTime: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach,
+                                 gaps: liveGaps)
         }
         if liveNote != note { liveNote = note }
     }

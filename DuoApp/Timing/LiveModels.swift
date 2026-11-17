@@ -137,22 +137,80 @@ enum LiveNote {
         }
     }
 
-    /// Picture time `t` is before the feed joined (`joinedAt`) and after what the archive has
-    /// filled in (`archiveReach`, the archive's last car position; nil before any top-up).
-    static func catchingUp(at t: UTCms, joinedAt: UTCms?, archiveReach: UTCms?) -> Bool {
-        guard let joinedAt, t < joinedAt else { return false }
-        guard let archiveReach else { return true }
-        return t > archiveReach
+    /// Picture time `t` shows timing the feed never received:
+    /// - before the feed joined (`joinedAt`, where the state on joining stands in), until the
+    ///   archive top-up reaches it (`archiveReach`, the archive's last car position; nil before
+    ///   any top-up);
+    /// - inside a recording gap (`gaps`: a reconnect, or the same session reopened, where the
+    ///   last state before it stands in). `LiveFeed.topUp` puts the archive only before the
+    ///   join (each topic up to its first live line), so a gap after the join is never filled
+    ///   and stays labelled, whatever the archive's reach.
+    static func catchingUp(at t: UTCms, joinedAt: UTCms?, archiveReach: UTCms?, gaps: [LiveGap] = []) -> Bool {
+        if let joinedAt, t < joinedAt { return archiveReach.map { t > $0 } ?? true }
+        return gaps.contains { $0.contains(t) }
     }
 
     /// The note over the live map, most important first: the link, then no car positions, then
     /// catching up. Nil when all is well.
     static func note(phase: LiveLinkPhase, everSubscribed: Bool, hasPositions: Bool, pictureTime: UTCms?,
-                     joinedAt: UTCms?, archiveReach: UTCms?) -> String? {
+                     joinedAt: UTCms?, archiveReach: UTCms?, gaps: [LiveGap] = []) -> String? {
         if let line = link(phase, everSubscribed: everSubscribed) { return line }
         if phase == .subscribed, !hasPositions { return noPositions }
-        if let t = pictureTime, catchingUp(at: t, joinedAt: joinedAt, archiveReach: archiveReach) { return catchingUp }
+        if let t = pictureTime, catchingUp(at: t, joinedAt: joinedAt, archiveReach: archiveReach, gaps: gaps) {
+            return catchingUp
+        }
         return nil
+    }
+}
+
+/// A stretch the live feed holds no messages for: from the last message before a later
+/// snapshot (a reconnect, or the same session reopened) to that snapshot. The state from before
+/// it stands in until the archive fills it in.
+struct LiveGap: Equatable, Sendable {
+    /// Shorter than this is no gap (the snapshot is stamped by the phone, changes by F1).
+    static let minimumMs: Int64 = 3_000
+
+    var from: UTCms
+    var to: UTCms
+
+    func contains(_ t: UTCms) -> Bool {
+        t > from && t < to
+    }
+}
+
+/// Finds the recording gaps in the messages as a `LiveFeed` takes them: a snapshot (a run of
+/// opening messages) after the first starts a gap from the last message before it. A new
+/// session (another SessionInfo `Path`) forgets them: its feed starts afresh.
+struct LiveGapFinder: Equatable, Sendable {
+    private(set) var gaps: [LiveGap] = []
+    /// The newest message's time.
+    private var last: UTCms?
+    /// The topics of the opening run being received; nil once a change follows it.
+    private var run: Set<String>?
+    private var sawSnapshot = false
+
+    /// Notes a message (recorded topics only) before the feed applies it.
+    mutating func note(_ m: RecordedMessage) {
+        if m.opening {
+            let newRun = run.map { $0.contains(m.topic) } ?? true
+            if newRun {
+                if sawSnapshot, let last, LiveMath.sub(m.utc, last) > LiveGap.minimumMs {
+                    gaps.append(LiveGap(from: last, to: m.utc))
+                }
+                run = []
+                sawSnapshot = true
+            }
+            run?.insert(m.topic)
+        } else {
+            run = nil
+        }
+        last = max(last ?? m.utc, m.utc)
+    }
+
+    /// The feed moved on to another session, or emptied: no gaps from the one before.
+    mutating func newSession() {
+        gaps = []
+        if run == nil { sawSnapshot = false }
     }
 }
 
@@ -294,6 +352,8 @@ struct LiveRefresh: Sendable {
     var archiveReach: UTCms?
     /// The car data within a minute of picture time.
     var cars: [String: [CarSample]]
+    /// The recording's gaps (reconnects, the session reopened), oldest first.
+    var gaps: [LiveGap] = []
 }
 
 /// Owns one attach's `LiveFeed` off the main actor: every message is applied here, in order,
@@ -309,6 +369,7 @@ actor LiveSessionBuilder {
     private var everSubscribed = false
     private var archiveReach: UTCms?
     private var lastPath: String?
+    private var gapFinder = LiveGapFinder()
     /// The feed had a session at the last rebuild (so emptying it is reported once).
     private var hadSession = false
     private let now: @Sendable () -> Int64
@@ -337,6 +398,7 @@ actor LiveSessionBuilder {
             }
             guard LiveRecording.records(m.topic) else { return }
             let started = feed.streamStart != nil
+            gapFinder.note(m)
             feed.apply(m)
             changed = true
             if !started, feed.streamStart != nil { urgent = true }
@@ -344,6 +406,7 @@ actor LiveSessionBuilder {
                 // Another session: the top-up starts again for it.
                 lastPath = feed.sessionPath
                 archiveReach = nil
+                gapFinder.newSession()
                 urgent = true
             }
         }
@@ -387,7 +450,7 @@ actor LiveSessionBuilder {
         return LiveRefresh(
             session: update, phase: phase, everSubscribed: everSubscribed, joinedAt: feed.joinedAt,
             sessionPath: feed.sessionPath, sessionKey: info?.key, archiveReach: archiveReach,
-            cars: pictureTime.map { carData.window(around: $0) } ?? [:])
+            cars: pictureTime.map { carData.window(around: $0) } ?? [:], gaps: gapFinder.gaps)
     }
 }
 
