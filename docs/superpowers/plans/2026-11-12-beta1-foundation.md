@@ -47,7 +47,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 ---
 
 ### Task 1: Fixture recording option in the stream check
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Modify: `spike/stream_check.py`
@@ -62,7 +62,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 4:** Commit `spike/stream_check.py` and `spike/.gitignore`, then push.
 
 ### Task 2: DuoCore package, HTTP layer and URL building
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Package.swift` with library products `F1TV` and `Library` and test targets `F1TVTests` and `LibraryTests`.
@@ -100,7 +100,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 6:** Commit and push. Then confirm the CI run is green with the GitHub MCP tool `actions_list` (`list_workflow_runs`, branch `ios`). If Actions is disabled on the fork, report it to the orchestrator; don't work around it.
 
 ### Task 3: Sign-in exchange, account and cookie decoding
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/F1TV/LoginCookie.swift`, `Session.swift`, `JSON.swift`
@@ -143,7 +143,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push.
 
 ### Task 4: Catalogue models and parsers (needs O-A fixtures)
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/F1TV/Models.swift`, `Parsers.swift`, `Schedule.swift`
@@ -193,7 +193,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push.
 
 ### Task 5: Catalogue calls and the play coordinator
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/F1TV/Catalogue.swift`, `PlayCoordinator.swift`
@@ -231,7 +231,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push.
 
 ### Task 6: Library: bookmarks, recents and watch history
-**Model:** Haiku 5.5
+**Model:** fast tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/Library/WatchBookmark.swift`, `RecentsStore.swift`, `WatchHistory.swift`, `KeyValueStore.swift`
@@ -269,7 +269,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push.
 
 ### Task 7: Resume decision
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/Library/ResumePlan.swift`
@@ -294,7 +294,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push.
 
 ### Task 8: App project, configuration and networking (needs O-B)
-**Model:** Sonnet 5.5. Verification is by the owner's local Mac session.
+**Model:** standard tier. Verification is by the owner's local Mac session.
 
 **Files:**
 - Create: `project.yml`
@@ -336,7 +336,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 5:** Commit and push. Do not commit `Signing.local.xcconfig`.
 
 ### Task 9: Sign-in screens
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/SignIn/SignInView.swift`, `WebSignInView.swift`, `TokenPasteView.swift`, `PlanSheet.swift`
@@ -355,7 +355,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 6:** Commit and push.
 
 ### Task 10: Rooms
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create:
@@ -385,7 +385,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 8:** Commit and push.
 
 ### Task 11: Player and resume
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/Player/PlayerView.swift`, `PlayerController.swift`, `ResumeBanner.swift`
@@ -429,7 +429,7 @@ These are done by the owner, guided by Claude. Tasks that need them say so.
 - [ ] **Step 6:** Commit and push.
 
 ### Task 12: Fold adapter and Settings (needs O-C)
-**Model:** Opus 5.5
+**Model:** most capable tier
 
 **Files:**
 - Create: `DuoApp/Fold/FoldState.swift`, `SystemFoldProvider.swift`, `FakeFoldProvider.swift`, `DuoApp/Support/SettingsView.swift`
@@ -466,7 +466,7 @@ SDK=$(xcrun --sdk iphoneos --show-sdk-path); for m in SwiftUI UIKit; do f=$(find
 - [ ] **Step 6:** Commit and push.
 
 ### Task 12b: Style (added 2026-11-13, owner approved)
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/Style/Theme.swift` (colours, fonts, shared modifiers such as `liveBadge()` and `sectionLabel()`)
@@ -480,7 +480,7 @@ SDK=$(xcrun --sdk iphoneos --show-sdk-path); for m in SwiftUI UIKit; do f=$(find
 - [ ] **Step 5:** Commit and push.
 
 ### Task 13: Multiview probe (debug)
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/Debug/MultiviewProbeView.swift`
@@ -500,7 +500,7 @@ SDK=$(xcrun --sdk iphoneos --show-sdk-path); for m in SwiftUI UIKit; do f=$(find
 - [ ] **Step 3:** Commit and push.
 
 ### Task 14: Review and release v1.0-beta.1
-**Model:** Opus 5.5 reviews. Haiku 5.5 writes the changelog.
+**Model:** most capable tier reviews. fast tier writes the changelog.
 
 - [ ] **Step 1:** Opus reviews the whole branch against the spec and this plan's Review Focus, and fixes what it finds.
 - [ ] **Step 2:** The owner runs the exit test in the simulator (owner's change, 2026-11-13; it was the 15 Pro Max): sign in, play the São Paulo race replay, close the app, reopen it, tap Resume, and it resumes at the same moment. Pass or fail is the owner's call.

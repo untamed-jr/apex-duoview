@@ -277,9 +277,9 @@ comes from a `BETA_LABEL` build setting in the same file.
 
 | Task | Model |
 |---|---|
-| Plan for this beta, fold adapter, review before release | Opus 5.5 |
-| F1TV and Library port with tests, XcodeGen project, sign-in, rooms, player | Sonnet 5.5 |
-| Fixture recording option in the stream check, ScheduleTest port, CI file, changelog | Haiku 5.5 |
+| Plan for this beta, fold adapter, review before release | most capable tier |
+| F1TV and Library port with tests, XcodeGen project, sign-in, rooms, player | standard tier |
+| Fixture recording option in the stream check, ScheduleTest port, CI file, changelog | fast tier |
 
 ## Open items
 

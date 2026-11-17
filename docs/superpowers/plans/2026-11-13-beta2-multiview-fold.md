@@ -48,7 +48,7 @@
 ---
 
 ### Task 1: Multiview request check and fixtures in the stream check
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Modify: `spike/stream_check.py`
@@ -66,7 +66,7 @@
 ---
 
 ### Task 2: Multiview PLAY in the F1TV library
-**Model:** Sonnet 5.5
+**Model:** standard tier
 **Needs:** O-A's `play-1000010431-multiview-WEB_DASH.json` copied into `Packages/DuoCore/Tests/F1TVTests/Fixtures/`.
 
 **Files:**
@@ -94,7 +94,7 @@
 ---
 
 ### Task 3: Multiview target, feed identity and slot resolution
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Modify: `Packages/DuoCore/Package.swift` (new target `Multiview` depending on `F1TV` and `Library`; product `Multiview`; test target `MultiviewTests` with `resources: [.copy("Fixtures")]`)
@@ -124,7 +124,7 @@
 ---
 
 ### Task 4: Layout engine
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/Multiview/LayoutEngine.swift`
@@ -157,7 +157,7 @@
 ---
 
 ### Task 5: Picks, presets and preferences store
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/Multiview/MultiviewStore.swift`
@@ -182,7 +182,7 @@
 ---
 
 ### Task 6: Sync and struggle rules
-**Model:** Haiku 5.5
+**Model:** fast tier
 
 **Files:**
 - Create: `Packages/DuoCore/Sources/Multiview/SyncPolicy.swift`
@@ -203,7 +203,7 @@
 ---
 
 ### Task 7: Multiview player (fixed flat layout)
-**Model:** Opus 5.5
+**Model:** most capable tier
 
 **Files:**
 - Create: `DuoApp/Multiview/MultiviewController.swift`, `DuoApp/Multiview/MultiviewView.swift`, `DuoApp/Multiview/FeedTile.swift`
@@ -238,7 +238,7 @@
 ---
 
 ### Task 8: Fold-driven layouts, switching and gestures
-**Model:** Opus 5.5
+**Model:** most capable tier
 
 **Files:**
 - Modify: `DuoApp/Multiview/MultiviewView.swift`, `DuoApp/Multiview/MultiviewController.swift`
@@ -259,7 +259,7 @@
 ---
 
 ### Task 9: Feeds editor, presets and the fewer-feeds prompt
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/Multiview/FeedsEditor.swift`, `DuoApp/Multiview/PresetsView.swift`, `DuoApp/Multiview/FewerFeedsPrompt.swift`
@@ -279,7 +279,7 @@
 ---
 
 ### Task 10: Controls, speed and audio
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Create: `DuoApp/Multiview/MultiviewControls.swift`
@@ -293,7 +293,7 @@
 ---
 
 ### Task 11: Picture in picture
-**Model:** Opus 5.5
+**Model:** most capable tier
 
 **Files:**
 - Modify: `DuoApp/Multiview/MultiviewController.swift`, `DuoApp/Multiview/FeedTile.swift`, `DuoApp/Player/PlayerView.swift`, `DuoApp/Player/PlayerController.swift`
@@ -305,7 +305,7 @@
 ---
 
 ### Task 12: Resume and the live start choice
-**Model:** Sonnet 5.5
+**Model:** standard tier
 
 **Files:**
 - Modify: `Packages/DuoCore/Sources/Library/WatchBookmark.swift` (add `public var multiview: Bool`, decoded as `false` when absent)
@@ -321,7 +321,7 @@
 ---
 
 ### Task 13: Clean-up and release notes
-**Model:** Haiku 5.5
+**Model:** fast tier
 
 **Files:**
 - Delete: `DuoApp/Debug/MultiviewProbeView.swift` and its Settings › Debug link
