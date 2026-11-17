@@ -112,6 +112,8 @@ public enum PitCircle {
     /// A stop's time in the pit lane, and what it cost, outside these isn't an ordinary stop.
     static let laneRangeMs: ClosedRange<Int64> = 12_000...60_000
     static let lossRangeMs: ClosedRange<Int> = 10_000...45_000
+    /// The furthest round the lap the leader is drawn before it crosses the line.
+    static let leaderHold = 0.999
 
     // MARK: Reference lap and pit loss
 
@@ -224,7 +226,9 @@ public enum PitCircle {
               let crossed = states[leader]?.lineCrossedAt,
               let reference = reference(leader: leader, at: t, session: session) else { return nil }
         let ref = Double(reference.ms)
-        let leaderAt = fraction(Double(F1Values.sub(t, crossed)) / ref)
+        // A lap slower than the reference (a safety car, a stop, a red flag) holds the leader
+        // just short of the line until it crosses, instead of wrapping the field round.
+        let leaderAt = fraction(min(Double(F1Values.sub(t, crossed)) / ref, leaderHold))
         let gaps = gapsToLeader(states)
         let placed = ordered(gaps).map { (number: $0.key, gap: $0.value, at: fraction(leaderAt - Double($0.value) / ref)) }
         let stops = sessionStops(until: t, session: session)

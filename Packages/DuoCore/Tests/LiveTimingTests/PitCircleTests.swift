@@ -86,6 +86,26 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         #expect(underSC.greenLaps == 0)
     }
 
+    @Test func circleHoldsLeaderOnASlowLap() throws {
+        // Five green 90 s laps (lines at 100 … 550 s), then a 150 s lap (a safety car, a stop or
+        // a red flag): the leader is held just short of the line until it crosses at 700 s,
+        // instead of wrapping round and jumping back.
+        let s: UTCms = 1_000_000
+        let session = RaceFixture.synthetic(timing: laps(6, more: [timingLine("00:11:40.000", [("1", #""NumberOfLaps":7"#)])]),
+                                            start: s)
+        func leader(_ u: UTCms) throws -> Double { try #require(PitCircle.layout(at: u, session: session)?.cars.first?.fraction) }
+        #expect(PitCircle.layout(at: s + 595_000, session: session)?.referenceLapMs == 90_000)
+        #expect(abs(try leader(s + 595_000) - 0.5) < 1e-9)
+        #expect(try leader(s + 640_000) == 0.999)
+        #expect(try leader(s + 699_999) == 0.999)
+        // A red flag that runs on: still held, never spinning.
+        #expect(try leader(s + 3_600_000) == 0.999)
+        #expect(try leader(s + 700_000) == 0)
+        // The others keep their gap behind the held leader.
+        let held = try #require(PitCircle.layout(at: s + 690_000, session: session))
+        #expect(abs(try #require(held.cars.last?.fraction) - (0.999 - 2.0 / 90)) < 1e-9)
+    }
+
     @Test func pitLossMedianThenStoredThen22s() {
         #expect(PitCircle.pitLossMs(sessionStops: [25_000, 21_000, 20_000], storedMs: 19_000) == 21_000)
         #expect(PitCircle.pitLossMs(sessionStops: [20_000, 24_000], storedMs: nil) == 24_000)
