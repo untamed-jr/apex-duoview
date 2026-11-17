@@ -169,6 +169,22 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         let flagged = RaceFixture.synthetic(timing: timing, trackStatus: lines(#"00:08:20.000{"Status":"6"}"#, #"00:08:30.000{"Status":"1"}"#), start: s)
         #expect(PitCircle.sessionStops(until: s + 576_000, session: flagged).isEmpty)
         #expect(PitCircle.layout(at: s + 576_000, session: flagged)?.pitLossMs == 22_000)
+
+        // The baseline is green pace only: two 150 s safety-car laps (lines at 100, 190, 340,
+        // 490, 580 s; SC 200–480 s) don't count, so the stop (in 655 s, line in the lane 675 s,
+        // out 680 s, next line 786 s: 95 + 111 s) still costs 206 − 2 × 90 = 26 s. With every
+        // lap as the baseline the median would be 150 s and the stop would be thrown out.
+        let slow = RaceFixture.synthetic(
+            timing: [timingLine("00:00:00.000", [("44", #""Position":"1""#)])]
+                + ["00:01:40.000", "00:03:10.000", "00:05:40.000", "00:08:10.000", "00:09:40.000"].enumerated().map {
+                    timingLine($0.element, [("44", #""NumberOfLaps":\#($0.offset + 1)"#)])
+                }
+                + [timingLine("00:10:55.000", [("44", #""InPit":true"#)]),
+                   timingLine("00:11:15.000", [("44", #""NumberOfLaps":6"#)]),
+                   timingLine("00:11:20.000", [("44", #""InPit":false,"PitOut":true"#)]),
+                   timingLine("00:13:06.000", [("44", #""NumberOfLaps":7"#)])],
+            trackStatus: lines(#"00:03:20.000{"Status":"4"}"#, #"00:08:00.000{"Status":"1"}"#), start: s)
+        #expect(PitCircle.sessionStops(until: s + 786_000, session: slow) == [26_000])
     }
 
     @Test func circleNilBeforeFirstLap() throws {

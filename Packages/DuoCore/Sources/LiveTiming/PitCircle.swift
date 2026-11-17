@@ -181,7 +181,8 @@ public enum PitCircle {
 
     /// What each clean stop finished by `t` cost, in ms, in the order made: the laps it spans
     /// (from the line before it went in to the line after it came out) less as many of the car's
-    /// typical laps before the stop. A stop is clean when no safety car, VSC or red flag overlaps
+    /// green pace before the stop (the median of its last 5 green laps; a stop with no green lap
+    /// before it isn't measured). A stop is clean when no safety car, VSC or red flag overlaps
     /// those laps and its time in the lane (12–60 s) and its cost (10–45 s) look like one ordinary
     /// stop. Races only. Nothing after `t` is read.
     public static func sessionStops(until t: UTCms, session: LoadedSession) -> [Int] {
@@ -194,7 +195,7 @@ public enum PitCircle {
                       let before = line.last(where: { $0 <= stop.in }),
                       let after = line.first(where: { $0 >= exit }) else { continue }
                 let spanned = line.filter { $0 > before && $0 <= after }.count
-                let earlier = windows(line.filter { $0 <= before }).suffix(referenceLaps).map { Int($0.end - $0.start) }.sorted()
+                let earlier = greenLaps(of: number, at: before, session: session).suffix(referenceLaps).sorted()
                 guard spanned > 0, !earlier.isEmpty else { continue }
                 let typical = earlier[earlier.count / 2]
                 let loss = Int(after - before) - spanned * typical
