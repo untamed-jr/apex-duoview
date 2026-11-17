@@ -52,6 +52,8 @@ struct DockedTowerPanel: View {
 /// it reaches what is under it.
 struct DataRegionPlaceholder: View {
     let caption: String
+    /// Room round the caption: less in a small spot.
+    var inset: CGFloat = 16
 
     var body: some View {
         ZStack {
@@ -62,7 +64,8 @@ struct DataRegionPlaceholder: View {
                 .fontWidth(.condensed)
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
-                .padding(16)
+                .minimumScaleFactor(0.8)
+                .padding(inset)
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .combine)

@@ -40,8 +40,8 @@ struct RaceEngineerConsole: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Theme.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        DataRegionPlaceholder(caption: ConsoleText.radio)
-                            .frame(height: 44)
+                        DataRegionPlaceholder(caption: ConsoleText.radio, inset: 6)
+                            .frame(height: 48)
                     }
                     .frame(width: max(proxy.size.width * 0.38, 0))
                 }

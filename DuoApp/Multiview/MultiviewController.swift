@@ -551,14 +551,24 @@ final class MultiviewController {
 
     /// Race Engineer: a car tapped (ahead or behind on the console, its mini map, the map or the
     /// tower) opens its onboard with the tap-a-car rules (`showOnboard`), and that onboard becomes
-    /// the top one (the main feed). The sound stays where it is. Returns the notice, as
-    /// `showOnboard` does.
+    /// the top one (the main feed). With no free spot, the top onboard itself gives way to it
+    /// (`RaceEngineerTop.placement`; never the feed with the sound). The sound stays where it is.
+    /// Returns the notice, as `showOnboard` does.
     @discardableResult
     func showOnboardOnTop(racingNumber: Int) -> String? {
-        let message = showOnboard(racingNumber: racingNumber)
-        guard message == nil, raceEngineerShown else { return message }
+        guard raceEngineerShown else { return showOnboard(racingNumber: racingNumber) }
+        guard currentItem != nil, !refreshing, errorText == nil else { return nil }
         // The viewer's own choice: nothing to undo on leaving.
         topSwap = nil
+        let placement = RaceEngineerTop.placement(
+            racingNumber: racingNumber, slots: slots, channels: channels, audioChannelId: audioChannelId,
+            lapStates: timing.lapStatesNow(), placedAt: placedAt)
+        if case .replace(let slot, let channel) = placement, slot == 0 {
+            setFeed(channel, at: 0)
+            return nil
+        }
+        let message = showOnboard(racingNumber: racingNumber)
+        guard message == nil else { return message }
         if let slot = slots.firstIndex(where: { $0?.isOnboard == true && $0?.racingNumber == racingNumber }), slot > 0 {
             makeMain(slot: slot)
         }
@@ -586,6 +596,17 @@ final class MultiviewController {
         guard slots[0]?.id == swap.onboard, let slot = slots.firstIndex(where: { $0?.id == swap.main }), slot > 0,
               canBeMain(channelId: swap.main) else { return }
         makeMain(slot: slot)
+    }
+
+    /// The feeds to remember as last used: the picks, except that Race Engineer's own swap is
+    /// remembered undone, so closing from Race Engineer doesn't open next time with the onboard as
+    /// the main feed (and the sound on it).
+    private func rememberedPicks() -> [FeedPick?] {
+        guard let swap = topSwap, let a = slots.firstIndex(where: { $0?.id == swap.onboard }),
+              let b = slots.firstIndex(where: { $0?.id == swap.main }) else { return picks }
+        var remembered = picks
+        remembered.swapAt(a, b)
+        return remembered
     }
 
     /// The timing hears whether the console and the deck show, and the top onboard's car.
@@ -784,14 +805,14 @@ final class MultiviewController {
         // Held at this speed: the others freeze again (or come back, if the number of feeds
         // changed to one this speed never struggled with).
         updateSpeedHold()
-        store.lastUsed = picks
-        notePlacements()
-        updateCards()
-        // Race Engineer: a swap of its own is forgotten once anything else moved the slots, and
-        // the top screen gets an onboard again if the main feed stopped being one.
+        // Race Engineer: a swap of its own is forgotten once anything else moved the slots.
         if let swap = topSwap, slots[0]?.id != swap.onboard || !slots.contains(where: { $0?.id == swap.main }) {
             topSwap = nil
         }
+        store.lastUsed = rememberedPicks()
+        notePlacements()
+        updateCards()
+        // The top screen gets an onboard again if the main feed stopped being one.
         chooseTopOnboard()
         sendRaceViews()
     }

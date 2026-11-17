@@ -1,5 +1,7 @@
 import CoreGraphics
 import F1TV
+import Foundation
+import LiveTiming
 import Multiview
 
 /// What the multiview lays its tiles out by: the layout engine's posture, the fold it can use,
@@ -185,5 +187,24 @@ enum RaceEngineerTop {
             }
         }
         return slots.indices.first(where: available)
+    }
+}
+
+extension RaceEngineerTop {
+    /// Where a car tapped in Race Engineer goes: tap-a-car's own placement (`OnboardPlacement`),
+    /// except that with no free spot the top onboard itself (the main feed) gives way, as long as
+    /// it isn't the feed with the sound. With Race Engineer's own swap and the default feeds (an
+    /// onboard on top, then the world feed with the sound, the tracker and the data feed) nothing
+    /// else can be replaced, and the car ahead or behind must still come up on top.
+    static func placement(racingNumber: Int, slots: [Channel?], channels: [Channel], audioChannelId: Int?,
+                          lapStates: [String: LapState], placedAt: [Int: Date]) -> Placement {
+        let placement = OnboardPlacement.place(
+            racingNumber: racingNumber, slots: slots, channels: channels, audioChannelId: audioChannelId,
+            lapStates: lapStates, placedAt: placedAt)
+        guard placement == .noFreeSpot, let main = slots.first ?? nil, main.isOnboard, let mainId = main.id,
+              mainId != audioChannelId,
+              let onboard = channels.first(where: { $0.isOnboard && $0.racingNumber == racingNumber && $0.id != nil })
+        else { return placement }
+        return .replace(slot: 0, channel: onboard)
     }
 }
