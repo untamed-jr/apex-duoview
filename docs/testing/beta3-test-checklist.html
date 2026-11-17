@@ -1,0 +1,302 @@
+<title>Beta 3 Test Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a sticky progress strip; sections as timing-sheet groups, rows as checks. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4;            /* timing purple */
+  --ok: #138a4b; --ok-bg: #e3f5ea;
+  --bad: #c2410c; --bad-bg: #fdebe0;
+  --todo: #8a8f9a;
+  --code-bg: #eef0f4;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a1f10;
+  --todo: #6b7280; --code-bg: #20242c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a1f10;
+  --todo: #6b7280; --code-bg: #20242c; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; letter-spacing: .01em; }
+h2 { font-size: 19px; letter-spacing: .02em; }
+.lede { color: var(--muted); margin: 6px 0 0; max-width: 62ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.meter { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.meter span { display: block; height: 100%; transition: width .3s; }
+.meter .m-ok { background: var(--ok); } .meter .m-bad { background: var(--bad); }
+.barrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.barrow b { color: var(--fg); font-weight: 600; }
+.filters { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip:focus-visible, .seg button:focus-visible, textarea:focus-visible, .copy:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.saved { font-size: 12px; }
+
+section.group { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+section.group > details > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+section.group > details > summary::-webkit-details-marker { display: none; }
+.count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+.gnote { font-size: 13px; color: var(--muted); padding: 0 16px 10px; margin: 0; }
+
+.item { border-top: 1px solid var(--line); padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; }
+.item[data-s="ok"] { box-shadow: inset 3px 0 0 var(--ok); }
+.item[data-s="bad"] { box-shadow: inset 3px 0 0 var(--bad); }
+.it-text { min-width: 0; }
+.it-title { font-weight: 600; }
+.it-how { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tag { font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--code-bg); color: var(--muted); }
+.tag.code { color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; align-self: start; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 10px; border: 0; background: var(--surface); color: var(--muted); cursor: pointer; min-height: 36px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"][data-v="todo"] { background: var(--code-bg); color: var(--fg); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="ok"] { background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="bad"] { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+.note { grid-column: 1 / -1; }
+.note textarea { width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.note label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.addnote { grid-column: 1 / -1; justify-self: start; font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+
+pre.cmd { margin: 8px 0 0; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-family: var(--f-mono); font-size: 13px; line-height: 1.6; }
+.cmdrow { display: flex; align-items: start; gap: 8px; }
+.cmdrow pre { flex: 1; min-width: 0; }
+.copy { font: inherit; font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.empty { padding: 14px 16px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 520px) { .item { grid-template-columns: 1fr; } .filters { margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) { .meter span { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · v1.0-beta.3</div>
+    <h1>Beta 3 test run</h1>
+    <p class="lede">Everything built so far that only your Mac, the simulator, or a live weekend can check. Mark each row <b>Works</b> or <b>Problem</b>; for a problem, say what you saw in the note. Claude can read this page's results back.</p>
+  </header>
+
+  <div class="bar" role="region" aria-label="Progress">
+    <div class="meter" aria-hidden="true"><span class="m-ok" id="mOk"></span><span class="m-bad" id="mBad"></span></div>
+    <div class="barrow">
+      <span><b id="cOk">0</b> work</span><span><b id="cBad">0</b> problems</span><span><b id="cTodo">0</b> to try</span>
+      <span class="saved" id="saved">Loading your results…</span>
+      <div class="filters" role="group" aria-label="Show">
+        <button class="chip" data-f="all" aria-pressed="true">All</button>
+        <button class="chip" data-f="todo" aria-pressed="false">To try</button>
+        <button class="chip" data-f="bad" aria-pressed="false">Problems</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="groups" class="wrap" style="gap:14px"></main>
+
+  <div class="foot">
+    <button class="copy" id="copyProblems" type="button">Copy problems as text</button>
+    <span id="copyMsg" aria-live="polite"></span>
+  </div>
+</div>
+
+<script>
+const GROUPS = [
+  { id: "setup", title: "Get it running", open: true,
+    note: "Builds 12, 13 and 14 added and removed files, so regenerate the project before building.",
+    items: [
+      { id: "s-pull", t: "Get the latest code", h: "In Terminal, on your Mac:", cmd: "cd ~/apexview-duo\ngit pull" },
+      { id: "s-gen", t: "Regenerate the Xcode project", h: "Needed after every pull in beta 3 (new and removed files).", cmd: "xcodegen generate\nopen DuoApp.xcodeproj" },
+      { id: "s-build", t: "Build with zero warnings", h: "Product › Build. Any warning or error: save the build log and send it to Claude, like build_beta2_9.txt.", tags: ["Mac"] },
+      { id: "s-run", t: "Run it on the iPhone Duo simulator and sign in", h: "The About screen should say v1.0-beta.3, build 14.", tags: ["Simulator"] },
+    ]},
+  { id: "b14", title: "Build 14 · Race Engineer and Scrub Deck", note: "Open the phone like a laptop on the São Paulo 2026 race replay.",
+    items: [
+      { id: "b14-tb4", t: "Race Engineer follows the top onboard; dragging the Scrub Deck moves every feed", code: "T-B4" },
+      { id: "b14-top", t: "The right onboard goes on top", h: "The main feed if it's an onboard, else My driver's, else the first onboard. The sound stays where it was. With no onboard: \"Tap a car to pick an onboard\"." },
+      { id: "b14-taps", t: "Tapping the car ahead or behind (or one on the mini map) puts it on top", h: "With four feeds it replaces the top onboard; the sound stays on the world feed." },
+      { id: "b14-leave", t: "Leaving Race Engineer puts things back", h: "⟳ or a fold change brings back the main feed from before. Close and reopen: starts on the world feed with the sound. A preset saved in Race Engineer keeps that order." },
+      { id: "b14-readouts", t: "Readouts match the onboard picture", h: "Speed, gear, revs, throttle and brake. Grey after 5 s without data; \"—\" for anything F1 doesn't send." },
+      { id: "b14-aero", t: "No Aero light on São Paulo 2026", h: "That race has no channel 45. The rule is a guess until a 2026 session sends it." },
+      { id: "b14-fog", t: "Scrub Deck shows nothing past the picture", h: "Fills in as the race plays and after a drag. With Settings › Show the whole race on, no fog." },
+      { id: "b14-markers", t: "Tapping a marker lands 5 s before the event", h: "Lights out, a pit stop, the start of a band. Also after a −1 s / +1 s nudge." },
+      { id: "b14-openonboard", t: "Tap a lap-chart line, then \"Open onboard\"", h: "With one feed this adds a feed and the Scrub Deck stays." },
+      { id: "b14-fit", t: "Nothing covers the console or the deck", h: "The bottom control bar stays clear; the console fits the bottom screen." },
+      { id: "b14-quali", t: "Qualifying and practice show the strip by time, with no lap chart" },
+      { id: "b14-prerace", t: "Opened before lights out, the deck stays fogged until lights out" },
+      { id: "b14-smooth", t: "Smooth late in a long race with the console or deck open", h: "Scrub to lap 60+ and watch the mini map for stutter.", tags: ["Simulator", "Phone"] },
+      { id: "b14-voiceover", t: "VoiceOver on the Scrub Deck", h: "The chart is one element (swipe up or down moves 30 s); a highlighted driver's \"Open onboard\" can be reached." },
+    ]},
+  { id: "b13", title: "Build 13 · Fold layouts with data",
+    items: [
+      { id: "b13-layouts", t: "Each fold's data layout, with 1 to 4 feeds", h: "Flat: Director's Desk. Book: data screen. Laptop: Race Engineer and Scrub Deck. Use ⟳ to reach them.", code: "T-B3" },
+      { id: "b13-glides", t: "Glides between layouts and folds", h: "The same videos slide into place; none restart." },
+      { id: "b13-docked", t: "Map and tower inside a layout work", h: "Tap cars and rows, the Battle chip. In Director's Desk the map header fits and the narrow tower drops two columns." },
+      { id: "b13-floating", t: "Floating panels step aside", h: "A floating panel hides while the layout shows it. The Map button hides when the layout shows both map and tower." },
+      { id: "b13-notiming", t: "Laptop with one feed and no timing", h: "\"Loading timing…\" while loading; \"No timing for this session\" on a highlights video." },
+      { id: "b13-error", t: "An error hides the layout's map and tower" },
+      { id: "b13-fallback", t: "A remembered data layout steps back without timing", h: "Comes back on a replay with timing." },
+      { id: "b13-delay", t: "Tracker delay (Settings › Multiview)", h: "TRACKER and DATA hold that far behind the world feed. Also with TRACKER as the main feed, and after picture in picture." },
+    ]},
+  { id: "b12", title: "Build 12 · Tower, driver cards, tap a car",
+    items: [
+      { id: "b12-tap", t: "Tap a car on the map or the tower: its onboard opens", h: "The card shows the lap time and the speed.", code: "T-B2" },
+      { id: "b12-multitap", t: "Tap a car in multiview", h: "A car already showing becomes the main feed; an empty spot fills; otherwise the least interesting onboard is replaced; a notice when nothing can give way." },
+      { id: "b12-single", t: "Tap a car in a single feed", h: "The onboard starts at the same moment as the feed before it." },
+      { id: "b12-card", t: "Driver card controls", h: "Long-press \"Hide card\" beside the tile's own press-and-drag; \"Show card\" brings it back; the card fits small tiles and stays clear of the speaker button." },
+      { id: "b12-units", t: "Speed units follow your region", h: "mph with the phone set to the US or UK, km/h elsewhere." },
+      { id: "b12-speed", t: "Speed only shows for the moment on screen", h: "Hidden before the data reaches the picture and after seeking past it. Pauses on mobile data with the switch off." },
+      { id: "b12-tower", t: "Tower looks right", h: "Columns fit the panel; battle glow and chip in a race; knockout shading in qualifying." },
+      { id: "b12-ring", t: "Yellow ring on a qualifying flying lap" },
+      { id: "b12-growing", t: "A replay watched soon after a session keeps getting speed data", h: "As F1's file grows, until the session is marked final." },
+      { id: "b12-notices", t: "Onboard notices", h: "\"Couldn't load this session's onboards…\" (single feed, offline) and \"Car N's onboard has stopped…\" (multiview)." },
+    ]},
+  { id: "b11", title: "Build 11 · Map on replays",
+    items: [
+      { id: "b11-map", t: "The map moves with the São Paulo replay", h: "Dots stay within about a second of the cars." },
+      { id: "b11-nudge", t: "−1 s / +1 s moves the dots" },
+      { id: "b11-tracker", t: "How far is the TRACKER tile ahead of the world feed?", h: "Write the seconds in the note. It becomes the tracker delay default.", code: "T-B1" },
+      { id: "b11-token", t: "Timing loads with your F1 TV sign-in", h: "If \"Map\" appears and then disappears on São Paulo, F1 refused the app's sign-in. Say so in the note." },
+      { id: "b11-offline", t: "Offline: the retry line shows, and timing comes back online" },
+      { id: "b11-panels", t: "Floating panels", h: "Drag, resize and pinch; each fold remembers its own panel places." },
+      { id: "b11-avkit", t: "Single-feed player controls still work with panels on and off" },
+      { id: "b11-marks", t: "Timeline marks sit right on the scrubber", h: "Lights out, chequered flag, safety car and red bands. Bands only up to the current moment." },
+    ]},
+  { id: "b15", title: "Build 15 · Live connection (coming)", note: "Build 15 is still being built: live timing, the pit circle, the next-live prompt. Its checks get added here when it lands.", items: [] },
+  { id: "live", title: "Live weekend only", note: "Next chance: Las Vegas, Nov 19–22.",
+    items: [
+      { id: "live-basics", t: "Live basics from beta 2", h: "LIVE badge, the drop back to 1× at the live edge, \"From the start\" / \"Watch live\", and the multiview layouts on a live race.", tags: ["Live"] },
+      { id: "live-pitmsg", t: "Late join: \"The pit circle appears when the leader next crosses the line.\"", tags: ["Live"] },
+    ]},
+  { id: "b2", title: "Beta 2 backlog", note: "Built and reviewed in beta 2 but not yet tried.",
+    items: [
+      { id: "b2-builds", t: "Builds 5 to 10 basics in the simulator", h: "Controls, picture in picture, resume and live start, clean-up." },
+      { id: "b2-pip", t: "Picture in picture comings and goings", h: "Leave the app, come back by the window and by the app icon, the window's close button, another app taking over." },
+      { id: "b2-resume", t: "Resume a multiview session after closing the app", h: "And the banner shows the right moment after a single feed's picture in picture is closed." },
+      { id: "b2-pipsingle", t: "Single-feed picture in picture from the player's button", h: "The player hides and the window brings it back; \"Watch multiview\" pressed while the window is open." },
+      { id: "b2-piphidden", t: "Picture in picture when the feed with the sound is hidden", h: "Closed phone, across the fold, one feed per screen." },
+      { id: "b2-lang", t: "Commentary language menu and timeline scrubber in multiview" },
+      { id: "b2-expired", t: "Expired links after a long pause", h: "A swap or preset asks F1 TV once for fresh links and carries on." },
+      { id: "b2-speed", t: "Playback speed kept between videos", h: "A speed that struggled is remembered, with its note." },
+      { id: "b2-preset", t: "Feeds editor's preset row", h: "The menu and the tap share one row." },
+      { id: "b2-voiceover", t: "VoiceOver on the feeds" },
+      { id: "b2-exit", t: "Beta 2 exit test", h: "Four São Paulo feeds for 10 minutes without stalling; every fold keeps them in step." },
+      { id: "b2-device", t: "Everything above on a real iPhone Duo", tags: ["Phone"] },
+    ]},
+];
+
+const LABELS = { todo: "Not tried", ok: "Works", bad: "Problem" };
+let state = {};          // id -> {s, n}
+let filter = "all";
+let db = null, local = false;
+const openNotes = new Set();
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function st(id) { return state[id] || { s: "todo", n: "" }; }
+
+function render() {
+  const all = GROUPS.flatMap(g => g.items);
+  const ok = all.filter(i => st(i.id).s === "ok").length, bad = all.filter(i => st(i.id).s === "bad").length;
+  document.getElementById("cOk").textContent = ok;
+  document.getElementById("cBad").textContent = bad;
+  document.getElementById("cTodo").textContent = all.length - ok - bad;
+  document.getElementById("mOk").style.width = (all.length ? ok / all.length * 100 : 0) + "%";
+  document.getElementById("mBad").style.width = (all.length ? bad / all.length * 100 : 0) + "%";
+
+  const openGroups = new Set([...document.querySelectorAll("details[open]")].map(d => d.dataset.g));
+  const first = !document.querySelector("details");
+  const focusId = document.activeElement?.id;
+  const main = document.getElementById("groups");
+  main.innerHTML = GROUPS.map(g => {
+    const items = g.items.filter(i => filter === "all" || st(i.id).s === filter);
+    const done = g.items.filter(i => st(i.id).s !== "todo").length;
+    const isOpen = first ? (g.open || g.items.length === 0) : openGroups.has(g.id) || filter !== "all";
+    const rows = items.map(i => {
+      const v = st(i.id), showNote = v.s === "bad" || v.n || openNotes.has(i.id);
+      const tags = [...(i.code ? [`<span class="tag code">${esc(i.code)}</span>`] : []), ...(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`)].join("");
+      return `<div class="item" data-s="${v.s}">
+        <div class="it-text"><div class="it-title">${esc(i.t)}</div>${i.h ? `<div class="it-how">${esc(i.h)}</div>` : ""}
+          ${i.cmd ? `<pre class="cmd">${esc(i.cmd)}</pre><button class="copy" type="button" data-copy="${esc(i.id)}">Copy commands</button>` : ""}
+          ${tags ? `<div class="tags">${tags}</div>` : ""}</div>
+        <div class="seg" role="group" aria-label="Result for ${esc(i.t)}">${["todo", "ok", "bad"].map(s => `<button type="button" data-id="${i.id}" data-v="${s}" aria-pressed="${v.s === s}">${LABELS[s]}</button>`).join("")}</div>
+        ${showNote ? `<div class="note"><label for="n-${i.id}">${v.s === "bad" ? "What went wrong?" : "Note"}</label><textarea id="n-${i.id}" data-note="${i.id}" placeholder="${v.s === "bad" ? "What you did, what you saw" : "Optional"}">${esc(v.n || "")}</textarea></div>` : `<button class="addnote" type="button" data-addnote="${i.id}">Add a note</button>`}
+      </div>`;
+    }).join("");
+    const empty = g.items.length === 0 ? "" : (items.length === 0 ? `<div class="empty">Nothing here for this filter.</div>` : "");
+    return `<section class="group"><details data-g="${g.id}" ${isOpen ? "open" : ""}><summary><h2>${esc(g.title)}</h2><span class="count">${g.items.length ? `${done}/${g.items.length}` : "soon"}</span></summary>
+      ${g.note ? `<p class="gnote">${esc(g.note)}</p>` : ""}${rows}${empty}</details></section>`;
+  }).join("");
+  if (focusId) document.getElementById(focusId)?.focus();
+}
+
+async function save(id, patch) {
+  const next = { ...st(id), ...patch, at: new Date().toISOString() };
+  state[id] = next; render();
+  if (db) {
+    try { await db.collection("checks").doc(id).set({ s: next.s, n: next.n || "", at: next.at }); setSaved("Saved to your Claude account"); }
+    catch (e) { setSaved("Couldn't save just now. Your last change may not be kept."); }
+  } else {
+    try { localStorage.setItem("beta3-checks", JSON.stringify(state)); } catch {}
+  }
+}
+function setSaved(t) { document.getElementById("saved").textContent = t; }
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.f) { filter = b.dataset.f; document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c === b)); render(); return; }
+  if (b.dataset.v && b.dataset.id) { if (st(b.dataset.id).s !== b.dataset.v) save(b.dataset.id, { s: b.dataset.v }); return; }
+  if (b.dataset.addnote) { openNotes.add(b.dataset.addnote); render(); document.getElementById("n-" + b.dataset.addnote)?.focus(); return; }
+  if (b.dataset.copy) { const i = GROUPS.flatMap(g => g.items).find(x => x.id === b.dataset.copy); copyText(i.cmd, b); return; }
+  if (b.id === "copyProblems") {
+    const lines = GROUPS.flatMap(g => g.items.filter(i => st(i.id).s === "bad").map(i => `- [${g.title}] ${i.t}${st(i.id).n ? ": " + st(i.id).n : ""}`));
+    copyText(lines.length ? "Problems found in the beta 3 test run:\n" + lines.join("\n") : "No problems marked yet.", b, document.getElementById("copyMsg"));
+  }
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const id = e.target.dataset?.note; if (!id) return;
+  const val = e.target.value; state[id] = { ...st(id), n: val };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => save(id, { n: val }), 900);
+});
+document.addEventListener("focusout", e => {
+  const id = e.target.dataset?.note; if (!id) return;
+  if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; save(id, { n: e.target.value }); }
+});
+async function copyText(text, btn, msgEl) {
+  const old = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; if (msgEl) msgEl.textContent = ""; }
+  catch { if (msgEl) { msgEl.textContent = text; } else { btn.textContent = "Select the text above to copy"; } }
+  setTimeout(() => { btn.textContent = old; }, 1600);
+}
+
+render();
+(async () => {
+  db = await (window.claude?.use ? window.claude.use("db") : null);
+  if (!db) {
+    local = true;
+    try { state = JSON.parse(localStorage.getItem("beta3-checks") || "{}") || {}; } catch { state = {}; }
+    setSaved("Saved on this device only"); render(); return;
+  }
+  const timer = setTimeout(() => setSaved("Can't reach your saved results yet."), 10000);
+  db.collection("checks").onSnapshot(snap => {
+    const next = {};
+    snap.docs.forEach(d => { const v = d.data(); next[d.id] = { s: v.s || "todo", n: v.n || "" }; });
+    const editing = document.activeElement?.dataset?.note;
+    if (editing && state[editing]) next[editing] = { ...next[editing], n: state[editing].n };
+    state = next;
+    if (!snap.metadata.fromCache) { clearTimeout(timer); setSaved("Saved to your Claude account"); }
+    render();
+  }, () => { clearTimeout(timer); setSaved("Saving is unavailable right now."); });
+})();
+</script>
