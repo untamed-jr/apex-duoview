@@ -508,6 +508,27 @@ struct LiveFeedTests {
                                             (join + 20_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
         #expect(try times(behind) == [join - 100_000, join + 5_000])
         #expect(try carCrossings(behind) == [join + 5_000])
+
+        // The same when that copy is the archive's last line and the snapshot is older than
+        // its stamp (the lap comes live 2 s before it): an archive 0.8 s behind still reaches
+        // the change. Taken as short of it, the archive's copy and the live one would both
+        // show, and the lap twice.
+        let last = try seamFeed(snapshot: snapshot, changes: [(join - 2_000, crossed)],
+                                archive: [(join - 100_000, first), (join - 2_800, crossed)])
+        #expect(try times(last) == [join - 100_000, join - 2_000])
+        #expect(try carCrossings(last) == [join - 2_000])
+        #expect(try laps(last, at: join - 2_400) == 10)
+
+        // An earlier copy inside the tolerance (0.8 s before, the archive's next lines after
+        // it too) passes on times; what the archive holds before it tells. Here the snapshot
+        // has a lap the archive's lines before the copy don't: not the change, so the lap
+        // comes with the snapshot's state at the join.
+        let near = try seamFeed(snapshot: #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#,
+                                changes: [(join + 5_000, status64)],
+                                archive: [(join - 100_000, first), (join + 4_200, status64), (join + 4_600, crossed),
+                                          (join + 4_800, status80)])
+        #expect(try times(near) == [join - 100_000, join, join + 5_000])
+        #expect(try laps(near, at: join + 6_000) == 11)
     }
 
     @Test func topUpMatchingAnEarlierCopyAtTheArchivesFirstLine() throws {
