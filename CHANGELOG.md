@@ -4,6 +4,51 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.3, build 16 — final fixes from the beta.3 review
+
+- **Live timing stays light late in a race.** Each rebuild now reads only what arrived since the
+  last one: about 20 ms at the end of a full race instead of over 4 s (measured on a computer,
+  not yet on the phone). A top-up from F1's archive or a reconnect still rebuilds in full once.
+- **Nothing from after the moment you joined shows before it.** On a live race you joined
+  part-way, rewinding more than 90 s before the join hides the tower, header, cards, console,
+  deck, pit circle, flags and marks behind "Timing catching up" until F1's archive fills that part
+  in. Within 90 s of the join the state on joining shows, with the same label on every panel, not
+  only the map. ("Show the whole race" doesn't override this: that timing isn't there yet.)
+- **Joining live after the start** no longer puts lights out at the start of what the stream
+  keeps; the real one comes with F1's archive.
+- **Leaving a single feed for multiview** on a live session keeps the live connection: it stays up
+  15 s after nothing uses it.
+- **When F1 keeps refusing the account,** the note says so after three tries: "F1 isn't letting
+  this account into live timing — trying again every minute".
+- The tower and the laptop and multiview data regions show the same loading line as the map
+  ("Connecting to live timing…" on a live session).
+- **Rewinding** clears the console, deck and pit circle built for a later moment at once, and
+  picking another car clears the console at once.
+- A live map made before enough cars crossed the line gets its start/finish line later on.
+- A live feed for another session no longer rebuilds in the background.
+- The map stops redrawing while the picture is paused (battery).
+- **Sturdier against bad data from F1:** a 0 ms lap no longer crashes the pit circle; positions
+  outside 1–99, laps outside 0–999, temperatures outside −50 to 100 °C and wild map coordinates
+  are ignored.
+
+### Untested — check later (build 16)
+
+- The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
+- Live, joined part-way (Las Vegas): "From the start" or a rewind more than 90 s before the join
+  shows empty panels with "Timing catching up"; within 90 s the state on joining with the label;
+  the Scrub Deck's lap axis stays empty until F1's archive arrives.
+- Live: single feed → multiview without "Connecting to live timing…" again.
+- Live: the refused-account note (only if F1 refuses; unlikely with a working account).
+- The map pausing with the picture: it may take up to half a second to move again after play,
+  and buffering counts as paused; the flying-lap ring's pulse freezes while paused.
+- How warm the phone gets and how smooth the feeds stay late in a long live race (the rebuild
+  figures above come from a computer).
+- Data use when joining late: each top-up try downloads the archive topics whole (up to about
+  17 MB late in a race), on mobile data too.
+- Known, not fixed: after a reconnect, a lap count that rose while disconnected may be read as a
+  line crossing at the reconnect, so that car's lap clock and lap window can be off until its next
+  crossing.
+
 ### v1.0-beta.3, build 15 — Live timing, recording, pit circle, next live programme
 
 - **Live timing.** A live session's map, tower, cards, header, console and deck now come from F1's
