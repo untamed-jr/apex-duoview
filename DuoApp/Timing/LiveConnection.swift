@@ -109,7 +109,7 @@ actor LiveConnection {
         }
         if runTask == nil { start() }
         // Just started, the run's first try hasn't begun yet: it is connecting all the same.
-        continuation.yield(.link(link.phase == .idle ? .connecting : link.phase, everSubscribed: link.everSubscribed))
+        continuation.yield(.link(link.reported == .idle ? .connecting : link.reported, everSubscribed: link.everSubscribed))
         return stream
     }
 
@@ -149,7 +149,7 @@ actor LiveConnection {
     }
 
     private func broadcastLink() {
-        broadcast(.link(link.phase, everSubscribed: link.everSubscribed))
+        broadcast(.link(link.reported, everSubscribed: link.everSubscribed))
     }
 
     // MARK: The run
@@ -169,14 +169,17 @@ actor LiveConnection {
     }
 
     private func run() async {
+        var restart = false
         while !Task.isCancelled {
-            let attempt = link.connecting()
-            broadcastLink()
+            let attempt = link.connecting(restart: restart)
+            // A planned restart says nothing: listeners still hear subscribed.
+            if !link.restarting { broadcastLink() }
+            // The try closes its own socket: a run superseded while it waited (its listeners
+            // gone, a new run started) must never close the new run's.
             let ending = await connect(attempt: attempt)
-            socket?.close()
-            socket = nil
             guard !Task.isCancelled, link.attempt == attempt else { return }
-            if ending == .restart { continue }
+            restart = ending == .restart
+            if restart { continue }
             guard let delay = link.dropped(attempt: attempt, refused: ending == .refused) else { return }
             broadcastLink()
             do {
@@ -211,6 +214,11 @@ actor LiveConnection {
             return .failed
         }
         self.socket = socket
+        defer {
+            socket.close()
+            // Cleared only while this try is current: a newer one may hold its own by now.
+            if link.attempt == attempt { self.socket = nil }
+        }
         lastHeard = now()
         let carData = wantsCarData
         subscribedCarData = carData

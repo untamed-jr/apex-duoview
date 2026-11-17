@@ -968,7 +968,7 @@ final class TimingController {
     private func updateLiveNote(pictureTime t: UTCms?) {
         var note: String?
         if liveBuilder != nil, !liveWrongSession {
-            note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed,
+            note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed, hasSession: loaded != nil,
                                  hasPositions: loaded.map { !$0.positions.cars.isEmpty } ?? true,
                                  pictureTime: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach,
                                  gaps: liveGaps)

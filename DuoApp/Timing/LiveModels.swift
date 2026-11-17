@@ -75,11 +75,22 @@ struct LiveLink: Equatable, Sendable {
     private(set) var everSubscribed = false
     /// Refusals in a row, reset by a subscribe result.
     private(set) var refusals = 0
+    /// A planned new try after a subscribe result (the car data choice changed, or a new session
+    /// came as a change): listeners keep hearing subscribed until it subscribes or drops, so the
+    /// map never flashes "dropped" for it.
+    private(set) var restarting = false
 
-    /// A new try starts; returns its number.
-    mutating func connecting() -> Int {
+    /// What listeners hear: the phase, except subscribed through a planned restart.
+    var reported: LiveLinkPhase {
+        restarting ? .subscribed : phase
+    }
+
+    /// A new try starts (`restart`: a planned one, straight after the last); returns its number.
+    mutating func connecting(restart: Bool = false) -> Int {
+        let quiet = phase == .subscribed || restarting
         attempt += 1
         phase = .connecting
+        restarting = restart && quiet
         return attempt
     }
 
@@ -90,6 +101,7 @@ struct LiveLink: Equatable, Sendable {
         phase = .subscribed
         everSubscribed = true
         refusals = 0
+        restarting = false
         return true
     }
 
@@ -98,6 +110,7 @@ struct LiveLink: Equatable, Sendable {
     mutating func dropped(attempt: Int, refused: Bool = false) -> Duration? {
         guard attempt == self.attempt, phase != .idle else { return nil }
         phase = .dropped
+        restarting = false
         if refused { refusals += 1 }
         return refusals >= Self.refusalsBeforeSlowing ? Self.refusedDelay : Self.reconnectDelay
     }
@@ -108,6 +121,7 @@ struct LiveLink: Equatable, Sendable {
         phase = .idle
         everSubscribed = false
         refusals = 0
+        restarting = false
     }
 
     /// Whether a socket last heard from at `lastHeard` is dead at `now` (both UTC ms).
@@ -150,11 +164,13 @@ enum LiveNote {
         return gaps.contains { $0.contains(t) }
     }
 
-    /// The note over the live map, most important first: the link, then no car positions, then
-    /// catching up. Nil when all is well.
-    static func note(phase: LiveLinkPhase, everSubscribed: Bool, hasPositions: Bool, pictureTime: UTCms?,
-                     joinedAt: UTCms?, archiveReach: UTCms?, gaps: [LiveGap] = []) -> String? {
+    /// The note over the live map, most important first: the link, then (`hasSession` false: no
+    /// session built yet, even after the subscribe result) connecting, then no car positions,
+    /// then catching up. Nil when all is well.
+    static func note(phase: LiveLinkPhase, everSubscribed: Bool, hasSession: Bool = true, hasPositions: Bool,
+                     pictureTime: UTCms?, joinedAt: UTCms?, archiveReach: UTCms?, gaps: [LiveGap] = []) -> String? {
         if let line = link(phase, everSubscribed: everSubscribed) { return line }
+        if !hasSession { return connecting }
         if phase == .subscribed, !hasPositions { return noPositions }
         if let t = pictureTime, catchingUp(at: t, joinedAt: joinedAt, archiveReach: archiveReach, gaps: gaps) {
             return catchingUp
