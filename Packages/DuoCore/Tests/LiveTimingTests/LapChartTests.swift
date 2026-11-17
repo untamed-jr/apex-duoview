@@ -89,7 +89,8 @@ enum RaceFixture {
         let sixth = Fixture.raceStart + 3_748_850
         #expect(LapChart.rows(until: sixth - 1, session: race).allSatisfy { $0.positions.count == 5 })
         #expect(LapChart.rows(until: sixth, session: race).allSatisfy { $0.positions.count == 6 })
-        // Before the first crossing (3316923): a row per car, no laps.
+        // Before the first crossing (3316923): a row per car with timing
+        // (check:raceCarsWithTimingBeforeFirstCrossing = 22), no laps.
         let early = LapChart.rows(until: Fixture.raceStart + 3_316_922, session: race)
         #expect(early.count == 22 && early.allSatisfy { $0.positions.isEmpty })
 

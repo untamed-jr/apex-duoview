@@ -198,6 +198,16 @@ def pit_circle_checks(states, hist, t10):
     with open(os.path.join(RACE, "DriverList.json"), encoding="utf-8-sig") as f:
         drivers = json.load(f)
     check("raceTlas11_16_44", [drivers[n]["Tla"] for n in ("11", "16", "44")])
+    check("raceTlas12_23_87", [drivers[n]["Tla"] for n in ("12", "23", "87")])
+    # The leader's lap in progress, from LapCount (independent of TimingData's lap counts).
+    current = None
+    for o, j in read_stream(os.path.join(RACE, "LapCount.jsonStream")):
+        if o <= t10 and "CurrentLap" in j:
+            current = j["CurrentLap"]
+    check("raceLapCountCurrentLapAtLightsOutPlus10min", current)
+    # Cars with any timing just before the leader's first crossing.
+    first = min(o for o, _, c in hist[leader] if c)
+    check("raceCarsWithTimingBeforeFirstCrossing", sum(1 for h in states.values() if h[0][0] < first))
 
 
 def completed_laps(lines, car):

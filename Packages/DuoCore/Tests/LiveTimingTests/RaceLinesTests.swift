@@ -13,11 +13,11 @@ import F1TV
         // check:raceLines44TrendBehind. Both gaps shrink.
         let hamilton = try #require(RaceLines.at(t, car: "44", session: race))
         #expect(hamilton.position == 10)
-        #expect(hamilton.ahead?.tla == "ALB")
+        #expect(hamilton.ahead?.tla == "ALB")  // check:raceTlas12_23_87
         #expect(hamilton.ahead?.gap == "+1.0s")
         #expect(hamilton.ahead?.closing == true)
         #expect(hamilton.aheadNumber == "23")
-        #expect(hamilton.behind?.tla == "BEA")  // DriverList.json: 87 is BEA
+        #expect(hamilton.behind?.tla == "BEA")  // check:raceTlas12_23_87 (23 ALB, 87 BEA)
         #expect(hamilton.behindNumber == "87")
         #expect(hamilton.behind?.gap == "-1.3s")
         #expect(hamilton.behind?.closing == true)
@@ -34,7 +34,7 @@ import F1TV
         // check:raceLines1TrendBehind).
         let second = try #require(RaceLines.at(t, car: "1", session: race))
         #expect(second.position == 2)
-        #expect(second.ahead?.tla == "ANT" && second.ahead?.gap == "+4.4s" && second.ahead?.closing == false)
+        #expect(second.ahead?.tla == "ANT" && second.ahead?.gap == "+4.4s" && second.ahead?.closing == false)  // check:raceTlas12_23_87
         #expect(second.behindNumber == "6" && second.behind?.gap == "-1.8s" && second.behind?.closing == false)
         // The leader has no car ahead.
         let leader = try #require(RaceLines.at(t, car: "12", session: race))

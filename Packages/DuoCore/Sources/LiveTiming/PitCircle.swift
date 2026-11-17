@@ -162,14 +162,15 @@ public enum PitCircle {
 
     /// The reference lap at `t`, from the leader's laps; with how many green laps it averages.
     /// F1 sends no time for a race's first lap (São Paulo 2026), so until the leader's second
-    /// crossing its last lap is the time from lights out to its first.
+    /// crossing its last lap is the time from lights out to its first, when that could be a lap
+    /// run on track (40–240 s; not across a red flag or an aborted start).
     static func reference(leader: String, at t: UTCms, session: LoadedSession) -> (ms: Int, green: Int)? {
         let green = greenLaps(of: leader, at: t, session: session).suffix(referenceLaps)
         let state = session.timing.state(of: leader, at: t)
         var last = state?.lastLapMs
         if last == nil, state?.numberOfLaps == 1, let crossed = state?.lineCrossedAt,
-           let start = session.sessionStatus.started, start < crossed {
-            last = Int(clamping: F1Values.sub(crossed, start))
+           let start = session.sessionStatus.started, lapRangeMs.contains(F1Values.sub(crossed, start)) {
+            last = Int(F1Values.sub(crossed, start))
         }
         guard let ms = referenceLapMs(leaderGreenLaps: Array(green), typicalLapMs: typicalLapMs(of: leader, at: t, session: session),
                                       lastLapMs: last) else { return nil }

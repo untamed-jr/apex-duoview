@@ -123,6 +123,21 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         #expect(start.cars.first?.number == "12")
         #expect(start.cars.first?.angle == 0)
         #expect(PitCircle.layout(at: RaceFixture.raceT, session: try RaceFixture.quali()) == nil)
+        // A first lap that can't have been run on track (5 minutes from lights out: a red flag on
+        // lap 1) isn't a reference: the circle waits for a lap between two crossings.
+        let s: UTCms = 1_000_000
+        let redLapOne = RaceFixture.synthetic(
+            timing: [timingLine("00:00:00.000", [("1", #""Position":"1""#)]),
+                     timingLine("00:05:10.000", [("1", #""NumberOfLaps":1"#)]),
+                     timingLine("00:06:40.000", [("1", #""NumberOfLaps":2"#)])],
+            sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#), start: s)
+        #expect(PitCircle.layout(at: s + 310_000, session: redLapOne) == nil)
+        #expect(PitCircle.layout(at: s + 400_000, session: redLapOne)?.referenceLapMs == 90_000)
+        let quickLapOne = RaceFixture.synthetic(
+            timing: [timingLine("00:00:00.000", [("1", #""Position":"1""#)]),
+                     timingLine("00:01:45.000", [("1", #""NumberOfLaps":1"#)])],
+            sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#), start: s)
+        #expect(PitCircle.layout(at: s + 105_000, session: quickLapOne)?.referenceLapMs == 95_000)
 
         // At lights out + 10 min: check:raceLeaderFractionAtLightsOutPlus10min,
         // check:raceCar1FractionAtLightsOutPlus10min, check:raceCar44FractionAtLightsOutPlus10min,
@@ -130,7 +145,7 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         let t = RaceFixture.raceT
         let circle = try #require(PitCircle.layout(at: t, session: race))
         #expect(circle.leader == "12")
-        #expect(circle.lap == 7)
+        #expect(circle.lap == 7)  // check:raceLapCountCurrentLapAtLightsOutPlus10min
         #expect(circle.pitLossMs == 22_000 && circle.measuredStops == 0)
         #expect(circle.cars.map(\.number).joined(separator: ",") == "12,1,6,30,63,27,3,81,23,44,87,41,16,14,55,10,43,51,18,5,11")
         #expect(circle.cars.map(\.gapToLeaderMs).prefix(3) == [0, 4_401, 6_236])
@@ -170,7 +185,7 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         // The leader with a stop shorter than its lead stays ahead: 4.401 s over 1, less 1 s.
         let lead = try #require(PitCircle.rejoin(car: "12", at: t, session: race, pitLossMs: 1_000))
         #expect(lead == Rejoin(position: 1, behind: nil, gapMs: 3_401))
-        #expect(lead.text(car: "12", session: race) == "If ANT stops now, out in the lead")
+        #expect(lead.text(car: "12", session: race) == "If ANT stops now, out in the lead")  // check:raceTlas12_23_87
         #expect(lead.consoleText(session: race) == "Pit now → P1")
         // A retired car, a car with no timing and a non-race session have none.
         #expect(PitCircle.rejoin(car: "77", at: t, session: race, pitLossMs: 22_000) == nil)
