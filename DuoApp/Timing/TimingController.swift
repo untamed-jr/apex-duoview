@@ -824,6 +824,12 @@ final class TimingController {
         let toLeader = pitGapsToLeader
         let key = PitCircleKey(session: loadedRevision, t: t, storedPitLossMs: stored, selected: selected,
                                toLeader: toLeader)
+        // Rewound past the circle shown: it holds a later moment, so it goes now, not at the
+        // next build.
+        if let built = pitCircleBuild, built.key.t > t {
+            pitCircleBuild = nil
+            if pitCircle != nil { pitCircle = nil }
+        }
         if let built = pitCircleBuild, built.key == key {
             if pitCircle != built.state { pitCircle = built.state }
             return
@@ -1118,6 +1124,12 @@ final class TimingController {
         let stored = storedPitLossMs
         let key = ConsoleKey(session: loadedRevision, car: car, t: t, samples: samples.count,
                              lastSample: samples.last?.t, channel45: meaning, storedPitLossMs: stored)
+        // The console shown is another car's, or from later than the picture (a rewind): it goes
+        // now, not when the next build lands.
+        if let built = consoleBuild, built.key.car != car || built.key.t > t {
+            consoleBuild = nil
+            if console != nil { console = nil }
+        }
         if let built = consoleBuild, built.key == key {
             if console != built.state { console = built.state }
             return
@@ -1156,6 +1168,12 @@ final class TimingController {
         let favourite = favouriteDriver.flatMap { Tower.carNumber(forDriver: $0, in: loaded) }
         let whole = showWholeRace
         let key = DeckKey(session: loadedRevision, cut: whole ? nil : t, favourite: favourite)
+        // The deck shown is cut later than the picture (a rewind), or is the whole race with
+        // "Show the whole race" now off: it goes now, not when the next build lands.
+        if let built = deckBuild, built.key.cut.map({ $0 > t }) ?? !whole {
+            deckBuild = nil
+            if deck != nil { deck = nil }
+        }
         if let built = deckBuild, built.key == key {
             var next = built.state
             next.pictureTime = t
