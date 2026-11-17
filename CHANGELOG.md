@@ -40,7 +40,9 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
     lap."; after joining a live race part-way, until the leader's next crossing: "The pit circle
     appears when the leader next crosses the line."
   - The pit loss is this race's median clean stop; once three or more are measured it is kept
-    for the circuit and used the next time before any stop is made there (else 22 s).
+    for the circuit and used the next time before any stop is made there (else 22 s). The race
+    that measured it never reads it back: rewound to before its stops, it shows what was kept
+    before it (or 22 s).
 - **Next live programme:** while you watch a live programme, F1 TV's "live now" list is checked
   every 60 s. A programme that has gone live since you opened yours (or any live one once yours
   has ended) is offered at the top of the video with "Switch" and "Not now"; "Switch" opens it at
@@ -81,8 +83,9 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   the gap toggle, tap or hold a car for its window, the arc a stop costs, cars in the pits on the
   inner ring; the map's hold (a long press on a dot) showing the window; whether the long press
   ever steals a tap meant to open an onboard.
-- The pit circle redraws at 2 Hz (the leader moves in small steps), and holding a car on the map
-  measures the race's stops once on the main thread (a short pause late in a long race).
+- The pit circle redraws at 2 Hz (the leader moves in small steps), built off the main thread;
+  holding a car on the map still measures the race's stops once on the main thread (a short
+  pause late in a long race).
 - Smoothness late in a long live race: each rebuild parses every message so far again (off the
   main thread); the interval stretches with the cost.
 - A rewind further back than 15 minutes on a live session shows no speed readouts (live car data

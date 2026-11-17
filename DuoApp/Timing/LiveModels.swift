@@ -620,7 +620,17 @@ enum MapPanelMode: String, Sendable {
     case pitCircle
 }
 
-/// What the pit circle view draws at picture time, built at the 2 Hz tick.
+/// What a pit circle build was made from: a build is kept while none of it changes.
+struct PitCircleKey: Equatable, Sendable {
+    /// `TimingController`'s loaded-session revision.
+    var session: Int
+    var t: UTCms
+    var storedPitLossMs: Int?
+    var selected: String?
+    var toLeader: Bool
+}
+
+/// What the pit circle view draws at picture time, built off the main actor at the 2 Hz tick.
 struct PitCircleViewState: Equatable, Sendable {
     /// The circle; nil with `message` saying why.
     var circle: PitCircleState?

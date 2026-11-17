@@ -45,8 +45,9 @@ import Observation
 ///   archive top-up (`Backfill`) runs every 2 min, up to 180 times, until the archive reaches
 ///   within 30 s of the join; a new session (SessionInfo `Path`) starts it again. A feed
 ///   for another session than the video's is "No timing for this session".
-/// - The map panel's second view is the pit circle (races), built at the tick while it shows;
-///   a measured pit loss of at least three stops is kept for the circuit.
+/// - The map panel's second view is the pit circle (races), built off the main actor at the tick
+///   while it shows; a measured pit loss of at least three stops is kept for the circuit, and
+///   the session that measured it never reads it back (a rewind shows no later stop).
 ///
 /// Never logs; the token goes only to F1's archive, inside `TimingArchive`, and to the live hub,
 /// inside `LiveConnection`.
@@ -198,6 +199,12 @@ final class TimingController {
     @ObservationIgnored private var pitCircleCar: String?
     /// The measured stops last offered to `TimingSettings.rememberPitLoss`.
     @ObservationIgnored private var rememberedStops = -1
+    /// The attached session's key: the pit loss it measures is stored under it, and never read
+    /// back by it.
+    @ObservationIgnored private var timingSessionKey: String?
+    /// The last pit circle built off the main actor, and the build under way.
+    @ObservationIgnored private var pitCircleBuild: (key: PitCircleKey, state: PitCircleViewState)?
+    @ObservationIgnored private var pitCircleTask: Task<Void, Never>?
 
     /// How often the live session is asked for (it rebuilds only when due).
     static let liveRefreshInterval: Duration = .seconds(1)
@@ -222,6 +229,7 @@ final class TimingController {
         liveListenTask?.cancel()
         liveRefreshTask?.cancel()
         backfillTask?.cancel()
+        pitCircleTask?.cancel()
     }
 
     /// The note over the map: a live line or "Timing catching up", else "Timing estimated —
@@ -298,6 +306,7 @@ final class TimingController {
             status = .unavailable(Self.noTiming)
             return
         }
+        timingSessionKey = ref.sessionKey
         status = .loading
         let mine = generation
         if item.isLive, let live {
@@ -341,9 +350,10 @@ final class TimingController {
         clearRaceViews()
         activeAeroSeen = false
         if mapMode != .map { mapMode = .map }
-        if pitCircle != nil { pitCircle = nil }
+        dropPitCircle()
         pitCircleCar = nil
         rememberedStops = -1
+        timingSessionKey = nil
         if isRace { isRace = false }
         if status != .idle { status = .idle }
         if snapshot != .empty { snapshot = .empty }
@@ -568,9 +578,17 @@ final class TimingController {
             ?? PitCircleText.noWindow(tla: loaded.drivers[car]?.tla ?? car)
     }
 
-    /// This circuit's stored pit loss.
+    /// This circuit's stored pit loss, never one the attached session measured itself (that
+    /// would bring its later stops into an earlier moment after a rewind).
     private var storedPitLossMs: Int? {
-        circuitKey.flatMap { settings.pitLossMs(circuitKey: $0) }.map { Int(clamping: $0) }
+        guard let circuitKey else { return nil }
+        let ms: Int64?
+        if let timingSessionKey {
+            ms = settings.pitLossMs(circuitKey: circuitKey, notFrom: timingSessionKey)
+        } else {
+            ms = settings.pitLossMs(circuitKey: circuitKey)
+        }
+        return ms.map { Int(clamping: $0) }
     }
 
     /// Settings › Multiview › My driver (a last name), for the battle highlight; nil turns it off.
@@ -801,21 +819,62 @@ final class TimingController {
         updateLiveNote(pictureTime: t)
     }
 
-    /// The pit circle, while the map panel shows it (floating or docked).
+    /// The pit circle, while the map panel shows it (floating or docked). Built off the main
+    /// actor (it walks every car's stops and the green laps), one build at a time; a kept build
+    /// serves while nothing it was made from changed.
     private func publishPitCircle(_ loaded: LoadedSession, at t: UTCms) {
         guard mapMode == .pitCircle, readPanels.contains(.map) else {
-            if pitCircle != nil { pitCircle = nil }
+            dropPitCircle()
             return
         }
-        let next = PitCircleViewState.make(at: t, session: loaded, storedPitLossMs: storedPitLossMs,
-                                           selected: pitCircleCar, toLeader: pitGapsToLeader)
+        let stored = storedPitLossMs
+        let selected = pitCircleCar
+        let toLeader = pitGapsToLeader
+        let key = PitCircleKey(session: loadedRevision, t: t, storedPitLossMs: stored, selected: selected,
+                               toLeader: toLeader)
+        if let built = pitCircleBuild, built.key == key {
+            if pitCircle != built.state { pitCircle = built.state }
+            return
+        }
+        // One build at a time: the next tick asks again with the newest moment.
+        guard pitCircleTask == nil else { return }
+        pitCircleTask = Task { [weak self] in
+            let state = await Task.detached(priority: .userInitiated) {
+                PitCircleViewState.make(at: t, session: loaded, storedPitLossMs: stored, selected: selected,
+                                        toLeader: toLeader)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.pitCircleTask = nil
+            self.adoptPitCircle(state, key: key)
+        }
+    }
+
+    /// A finished pit circle build, dropped when superseded: another session, the circle gone, or
+    /// the picture moved back before its moment (no data ahead of the picture).
+    private func adoptPitCircle(_ state: PitCircleViewState, key: PitCircleKey) {
+        guard mapMode == .pitCircle, readPanels.contains(.map), loadedRevision == key.session,
+              let now = pictureTime, key.t <= now else { return }
+        pitCircleBuild = (key, state)
+        if pitCircle != state { pitCircle = state }
         // The measured pit loss is kept for the circuit (three stops or more), each time the
         // count of measured stops changes.
-        if let circle = next.circle, let circuitKey, circle.measuredStops != rememberedStops {
+        if let circle = state.circle, let circuitKey, let sessionKey = timingSessionKey,
+           circle.measuredStops != rememberedStops {
             rememberedStops = circle.measuredStops
-            settings.rememberPitLoss(circle, circuitKey: circuitKey)
+            settings.rememberPitLoss(circle, circuitKey: circuitKey, sessionKey: sessionKey)
         }
-        if pitCircle != next { pitCircle = next }
+        // A tap or the toggle while it was built: build again now, not at the next tick.
+        if key.selected != pitCircleCar || key.toLeader != pitGapsToLeader || key.storedPitLossMs != storedPitLossMs,
+           let loaded, let t = pictureTime {
+            publishPitCircle(loaded, at: t)
+        }
+    }
+
+    private func dropPitCircle() {
+        pitCircleTask?.cancel()
+        pitCircleTask = nil
+        pitCircleBuild = nil
+        if pitCircle != nil { pitCircle = nil }
     }
 
     /// The speed readouts' and the console's samples: live car data for a live item, else the
@@ -960,7 +1019,7 @@ final class TimingController {
         if !timelineMarks.isEmpty { timelineMarks = [] }
         dropConsole()
         dropDeck()
-        if pitCircle != nil { pitCircle = nil }
+        dropPitCircle()
         rememberedStops = -1
     }
 

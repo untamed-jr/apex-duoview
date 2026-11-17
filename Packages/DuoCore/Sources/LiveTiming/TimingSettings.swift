@@ -27,6 +27,7 @@ public final class TimingSettings: @unchecked Sendable {
 
     static func mapTurnKey(_ circuitKey: Int) -> String { "timing.mapTurn.\(circuitKey)" }
     static func pitLossKey(_ circuitKey: Int) -> String { "timing.pitLossMs.\(circuitKey)" }
+    static func pitLossFromKey(_ circuitKey: Int) -> String { "timing.pitLossFrom.\(circuitKey)" }
     static func panelFrameKey(_ panel: String, posture: String) -> String { "timing.panelFrame.\(posture).\(panel)" }
 
     /// The tracker delay's range, in half-seconds (0 to 20 s).
@@ -86,10 +87,32 @@ public final class TimingSettings: @unchecked Sendable {
         return ms
     }
 
-    /// nil forgets it.
+    /// nil forgets it. A value set this way holds for every session (no session measured it).
     public func setPitLossMs(_ ms: Int64?, circuitKey: Int) {
         lock.lock(); defer { lock.unlock() }
         if let ms { write(ms, Self.pitLossKey(circuitKey)) } else { store.set(nil, forKey: Self.pitLossKey(circuitKey)) }
+        store.set(nil, forKey: Self.pitLossFromKey(circuitKey))
+    }
+
+    /// The circuit's stored pit loss as a fallback for session `sessionKey`: never a value that
+    /// session measured itself, which would carry its later stops into an earlier moment (a
+    /// rewind). For that session it is the value kept before it (another session's, or the
+    /// viewer's), or nil. A value with no session recorded (set by the viewer, or kept before
+    /// sessions were recorded) holds for every session.
+    public func pitLossMs(circuitKey: Int, notFrom sessionKey: String) -> Int64? {
+        lock.lock(); defer { lock.unlock() }
+        guard let from = read(PitLossFrom.self, Self.pitLossFromKey(circuitKey)), from.session == sessionKey else {
+            guard let ms = read(Int64.self, Self.pitLossKey(circuitKey)), ms >= 0 else { return nil }
+            return ms
+        }
+        guard let before = from.before, before >= 0 else { return nil }
+        return before
+    }
+
+    /// Which session measured the stored pit loss, and what was stored before its first value.
+    struct PitLossFrom: Codable, Equatable {
+        var session: String
+        var before: Int64?
     }
 
     /// A session's pit loss is kept for its circuit once it is the median of at least this many
@@ -97,18 +120,27 @@ public final class TimingSettings: @unchecked Sendable {
     /// too little about the next session there.
     public static let pitLossStopsToRemember = 3
 
-    /// Keeps the pit loss a session measured (`PitCircleState.pitLossMs` with its
+    /// Keeps the pit loss session `sessionKey` measured (`PitCircleState.pitLossMs` with its
     /// `measuredStops`) for its circuit, the next session's fallback before it has stops of its
     /// own. Only a measurement of at least `pitLossStopsToRemember` clean stops, within
-    /// `PitCircle`'s range for one ordinary stop (10–45 s), is kept; it replaces what was stored.
-    /// Returns whether the stored value changed (the store isn't written when it is the same).
+    /// `PitCircle`'s range for one ordinary stop (10–45 s), is kept; it replaces what was stored,
+    /// noting the session (and what was stored before its first value) so that the session itself
+    /// never reads it back (`pitLossMs(circuitKey:notFrom:)`). Returns whether the store changed
+    /// (it isn't written when the value and the session are the same).
     @discardableResult
-    public func rememberPitLoss(_ circle: PitCircleState, circuitKey: Int) -> Bool {
+    public func rememberPitLoss(_ circle: PitCircleState, circuitKey: Int, sessionKey: String) -> Bool {
         guard circle.measuredStops >= Self.pitLossStopsToRemember,
               PitCircle.lossRangeMs.contains(circle.pitLossMs) else { return false }
         let ms = Int64(circle.pitLossMs)
         lock.lock(); defer { lock.unlock() }
-        if read(Int64.self, Self.pitLossKey(circuitKey)) == ms { return false }
+        let stored = read(Int64.self, Self.pitLossKey(circuitKey)).flatMap { $0 >= 0 ? $0 : nil }
+        let from = read(PitLossFrom.self, Self.pitLossFromKey(circuitKey))
+        if from?.session == sessionKey {
+            if stored == ms { return false }
+        } else {
+            // This session's first value: what was there before is kept for it.
+            write(PitLossFrom(session: sessionKey, before: stored), Self.pitLossFromKey(circuitKey))
+        }
         write(ms, Self.pitLossKey(circuitKey))
         return true
     }
