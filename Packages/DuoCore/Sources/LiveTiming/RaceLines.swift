@@ -80,7 +80,7 @@ public enum RaceLines {
                       now != before else { return nil }
                 return now < before
             }
-            if let (number, _) = states.first(where: { $0.value.position == p - 1 }) {
+            if let (number, _) = states.first(where: { $0.value.position == p - 1 && !$0.value.retired && !$0.value.stopped }) {
                 aheadNumber = number
                 ahead = (PitCircle.tla(number, session), gapText(me.interval, sign: "+"), trend(front: number, back: car))
             }

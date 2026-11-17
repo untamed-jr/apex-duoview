@@ -58,6 +58,40 @@ import F1TV
         #expect(RaceLines.at(t, car: "1", session: cut) == second)
     }
 
+    @Test func carsWithoutDriverListFallBackToNumber() throws {
+        // No DriverList at all; 9 has retired at P4, directly ahead of 10.
+        let s: UTCms = 1_000_000
+        let session = RaceFixture.synthetic(timing: [
+            timingLine("00:00:00.000", [
+                ("1", #""Position":"1","GapToLeader":"","IntervalToPositionAhead":{"Value":""}"#),
+                ("44", #""Position":"2","GapToLeader":"+3.000","IntervalToPositionAhead":{"Value":"+3.000"}"#),
+                ("5", #""Position":"3","GapToLeader":"+4.000","IntervalToPositionAhead":{"Value":"+1.000"}"#),
+                ("9", #""Position":"4","GapToLeader":"+5.000","IntervalToPositionAhead":{"Value":"+1.000"},"Retired":true,"Stopped":true"#),
+                ("10", #""Position":"5","GapToLeader":"+6.000","IntervalToPositionAhead":{"Value":"+1.000"}"#),
+            ]),
+            timingLine("00:01:40.000", [("1", #""NumberOfLaps":1,"LastLapTime":{"Value":"1:30.000"}"#)]),
+        ], start: s)
+        let t = s + 110_000
+        let circle = try #require(PitCircle.layout(at: t, session: session))
+        #expect(circle.cars.map(\.number) == ["1", "44", "5", "10"])
+        #expect(circle.cars.map(\.tla) == ["1", "44", "5", "10"])
+        #expect(circle.cars.allSatisfy { $0.teamColour.isEmpty })
+
+        let rejoin = try #require(PitCircle.rejoin(car: "44", at: t, session: session, pitLossMs: 2_000))
+        #expect(rejoin == Rejoin(position: 3, behind: "5", gapMs: 1_000))
+        #expect(rejoin.text(car: "44", session: session) == "If 44 stops now, out 1.0 s behind 5")
+        #expect(rejoin.consoleText(session: session) == "Pit now → P3 behind 5")
+
+        let lines = try #require(RaceLines.at(t, car: "44", session: session))
+        #expect(lines.ahead?.tla == "1" && lines.ahead?.gap == "+3.0s")
+        #expect(lines.behind?.tla == "5" && lines.behind?.gap == "-1.0s")
+        #expect(lines.pitNow == "Pit now → P4 behind 10")
+        // The retired car directly ahead isn't the car ahead.
+        let last = try #require(RaceLines.at(t, car: "10", session: session))
+        #expect(last.ahead == nil && last.aheadNumber == nil)
+        #expect(RaceLines.at(t, car: "5", session: session)?.behind == nil)
+    }
+
     @Test func lastFiveLapsWithSectors() throws {
         let race = try RaceFixture.race()
         // check:raceLines44LastFiveLaps: newest first, LastLapTime and sector paces per lap.
