@@ -115,6 +115,45 @@ import Library
         #expect(mem.data(forKey: TimingSettings.pitLossKey(14)) == nil)
     }
 
+    private func circle(lossMs: Int, stops: Int) -> PitCircleState {
+        PitCircleState(referenceLapMs: 72_000, greenLaps: 5, pitLossMs: lossMs, measuredStops: stops, leader: "1",
+                       lap: 30, cars: [])
+    }
+
+    @Test func measuredPitLossIsKeptPerCircuit() {
+        let mem = MemoryStore()
+        let s = TimingSettings(store: mem)
+        // Too few stops: nothing kept.
+        #expect(s.rememberPitLoss(circle(lossMs: 21_000, stops: 0), circuitKey: 14) == false)
+        #expect(s.rememberPitLoss(circle(lossMs: 21_000, stops: 2), circuitKey: 14) == false)
+        #expect(s.pitLossMs(circuitKey: 14) == nil)
+        // Three clean stops: kept for that circuit only, and read back by a new instance.
+        #expect(s.rememberPitLoss(circle(lossMs: 21_400, stops: 3), circuitKey: 14))
+        #expect(TimingSettings(store: mem).pitLossMs(circuitKey: 14) == 21_400)
+        #expect(s.pitLossMs(circuitKey: 152) == nil)
+        // The same value again doesn't write; a new measurement replaces it.
+        #expect(s.rememberPitLoss(circle(lossMs: 21_400, stops: 4), circuitKey: 14) == false)
+        #expect(s.rememberPitLoss(circle(lossMs: 20_900, stops: 7), circuitKey: 14))
+        #expect(s.pitLossMs(circuitKey: 14) == 20_900)
+        // Outside one ordinary stop's range (10–45 s): left as it was.
+        #expect(s.rememberPitLoss(circle(lossMs: 9_999, stops: 9), circuitKey: 14) == false)
+        #expect(s.rememberPitLoss(circle(lossMs: 45_001, stops: 9), circuitKey: 14) == false)
+        #expect(s.pitLossMs(circuitKey: 14) == 20_900)
+        #expect(s.rememberPitLoss(circle(lossMs: 10_000, stops: 3), circuitKey: 7))
+        #expect(s.rememberPitLoss(circle(lossMs: 45_000, stops: 3), circuitKey: 8))
+        #expect(s.pitLossMs(circuitKey: 7) == 10_000 && s.pitLossMs(circuitKey: 8) == 45_000)
+    }
+
+    @Test func rememberedPitLossFeedsTheNextSession() throws {
+        // What São Paulo's race measured, kept, is the fallback a session without stops uses.
+        let s = TimingSettings(store: MemoryStore())
+        #expect(s.rememberPitLoss(circle(lossMs: 23_100, stops: 5), circuitKey: 14))
+        let stored = try #require(s.pitLossMs(circuitKey: 14))
+        #expect(PitCircle.pitLossMs(sessionStops: [], storedMs: Int(stored)) == 23_100)
+        // The session's own stops still win.
+        #expect(PitCircle.pitLossMs(sessionStops: [20_000], storedMs: Int(stored)) == 20_000)
+    }
+
     @Test func otherSettingsPersist() {
         let mem = MemoryStore()
         let s = TimingSettings(store: mem)

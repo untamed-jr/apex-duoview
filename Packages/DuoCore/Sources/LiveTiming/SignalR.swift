@@ -29,9 +29,13 @@ public enum SignalR {
 
     public static func handshake() -> Data { frame(#"{"protocol":"json","version":1}"#) }
 
-    public static func subscribe(invocationId: String) -> Data {
+    /// The Subscribe invocation for `topics` (all 14 unless told otherwise: the app leaves out
+    /// CarData.z while "Speed readouts on mobile data" is off on an expensive connection).
+    public static func subscribe(invocationId: String, topics: [String] = topics) -> Data {
         let id = (try? JSONEncoder().encode(invocationId)).map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
-        let list = topics.map { "\"\($0)\"" }.joined(separator: ",")
+        let list = topics.map { name in
+            (try? JSONEncoder().encode(name)).map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
+        }.joined(separator: ",")
         return frame(#"{"type":1,"invocationId":\#(id),"target":"Subscribe","arguments":[[\#(list)]]}"#)
     }
 

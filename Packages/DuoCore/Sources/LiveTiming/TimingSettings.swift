@@ -92,6 +92,27 @@ public final class TimingSettings: @unchecked Sendable {
         if let ms { write(ms, Self.pitLossKey(circuitKey)) } else { store.set(nil, forKey: Self.pitLossKey(circuitKey)) }
     }
 
+    /// A session's pit loss is kept for its circuit once it is the median of at least this many
+    /// clean stops: one or two odd stops (a slow wheel, a drive-through counted as a stop) say
+    /// too little about the next session there.
+    public static let pitLossStopsToRemember = 3
+
+    /// Keeps the pit loss a session measured (`PitCircleState.pitLossMs` with its
+    /// `measuredStops`) for its circuit, the next session's fallback before it has stops of its
+    /// own. Only a measurement of at least `pitLossStopsToRemember` clean stops, within
+    /// `PitCircle`'s range for one ordinary stop (10–45 s), is kept; it replaces what was stored.
+    /// Returns whether the stored value changed (the store isn't written when it is the same).
+    @discardableResult
+    public func rememberPitLoss(_ circle: PitCircleState, circuitKey: Int) -> Bool {
+        guard circle.measuredStops >= Self.pitLossStopsToRemember,
+              PitCircle.lossRangeMs.contains(circle.pitLossMs) else { return false }
+        let ms = Int64(circle.pitLossMs)
+        lock.lock(); defer { lock.unlock() }
+        if read(Int64.self, Self.pitLossKey(circuitKey)) == ms { return false }
+        write(ms, Self.pitLossKey(circuitKey))
+        return true
+    }
+
     // MARK: Panels
 
     /// Where the viewer put a panel ("map", "leaderboard", ...) in a posture ("portrait",

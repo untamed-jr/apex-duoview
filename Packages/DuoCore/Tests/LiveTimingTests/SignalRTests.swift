@@ -52,6 +52,18 @@ private func json(_ s: String) -> JSONValue { try! JSONValue.parse(Data(s.utf8))
         #expect(topics.first == "Heartbeat" && topics.last == "WeatherData")
     }
 
+    @Test func subscribeToChosenTopics() throws {
+        let chosen = SignalR.topics.filter { $0 != "CarData.z" }
+        let data = SignalR.subscribe(invocationId: "7", topics: chosen)
+        let msg = try #require(SignalR.frames(data).first)
+        #expect(msg["invocationId"].string == "7")
+        #expect(msg["arguments"][0].array.map(\.string) == chosen)
+        #expect(chosen.count == 13)
+        // A name that needs escaping still makes one JSON frame.
+        let odd = try #require(SignalR.frames(SignalR.subscribe(invocationId: "8", topics: ["a\"b"])).first)
+        #expect(odd["arguments"][0].array.map(\.string) == ["a\"b"])
+    }
+
     @Test func handshakeAndPing() {
         #expect(SignalR.handshake() == Data(#"{"protocol":"json","version":1}"#.utf8) + [0x1E])
         #expect(SignalR.ping() == Data(#"{"type":6}"#.utf8) + [0x1E])
