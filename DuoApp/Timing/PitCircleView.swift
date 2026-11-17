@@ -38,6 +38,10 @@ private struct PitCircleBoard: View {
     let state: PitCircleViewState
     let circle: PitCircleState
 
+    /// A hold is under way (or just ended): the tap SwiftUI may still deliver when the finger
+    /// lifts must not let the held car go again.
+    @State private var holding = false
+
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
@@ -46,6 +50,7 @@ private struct PitCircleBoard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { location in
+                guard !holding else { return }
                 let number = car(at: location, size: size)
                 timing.selectPitCar(number, toggle: number != nil)
             }
@@ -53,8 +58,15 @@ private struct PitCircleBoard: View {
                 LongPressGesture(minimumDuration: 0.4)
                     .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
                     .onChanged { value in
-                        if case .second(true, let drag?) = value, let number = car(at: drag.startLocation, size: size) {
-                            timing.selectPitCar(number)
+                        if case .second(true, let drag?) = value {
+                            holding = true
+                            if let number = car(at: drag.startLocation, size: size) { timing.selectPitCar(number) }
+                        }
+                    }
+                    .onEnded { _ in
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(150))
+                            holding = false
                         }
                     })
             .accessibilityElement(children: .ignore)

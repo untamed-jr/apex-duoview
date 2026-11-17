@@ -549,7 +549,10 @@ final class TimingController {
     /// A car tapped or held on the pit circle: every gap is measured to it and its pit window
     /// shows; tapping it again (or nil) lets it go.
     func selectPitCar(_ number: String?, toggle: Bool = false) {
-        pitCircleCar = toggle && number == pitCircleCar ? nil : number
+        let next = toggle && number == pitCircleCar ? nil : number
+        // A hold reports every move of the finger: rebuild only for a new choice.
+        guard next != pitCircleCar else { return }
+        pitCircleCar = next
         publish()
     }
 

@@ -296,12 +296,12 @@ actor LiveConnection {
 
     /// Keeps, records (in order) and hands on messages of the current session.
     private func take(_ records: [RecordedMessage]) async {
-        let kept = records.filter { LiveRecording.records($0.topic) }
-        if sessionPath != nil, !kept.isEmpty {
-            history.append(contentsOf: kept)
-            await recorder?.record(kept)
-        }
+        let kept = sessionPath == nil ? [] : records.filter { LiveRecording.records($0.topic) }
+        // Kept and handed on together, before any wait: a listener joining meanwhile gets each
+        // message once, from the history or live.
+        history.append(contentsOf: kept)
         for record in records { broadcast(.message(record)) }
+        if !kept.isEmpty { await recorder?.record(kept) }
     }
 
     /// The 15 s tick of try `attempt`: a ping, and the socket closed after 30 s of silence (its

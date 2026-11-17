@@ -198,6 +198,9 @@ private struct MapCanvas: View {
 
     /// A held car's pit window, shown for a few seconds after the hold.
     @State private var held: HeldWindow?
+    /// A hold is under way (or just ended): the tap SwiftUI may still deliver when the finger
+    /// lifts must not open the held car's onboard.
+    @State private var holding = false
 
     private struct HeldWindow: Equatable {
         let id = UUID()
@@ -238,8 +241,12 @@ private struct MapCanvas: View {
                     .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
                     .onChanged { value in
                         if case .second(true, let drag?) = value {
+                            holding = true
                             hold(at: drag.startLocation, transform: transform)
                         }
+                    }
+                    .onEnded { _ in
+                        releaseHold()
                     })
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(map.traced ? "Track map, traced from the cars" : "Track map")
@@ -259,7 +266,16 @@ private struct MapCanvas: View {
     }
 
     private func tapped(at location: CGPoint, transform: MapTransform) {
+        guard !holding else { return }
         if let number = car(at: location, transform: transform) { onCar(number) }
+    }
+
+    /// Lets taps through again a moment after a hold ends (after any tap it brings).
+    private func releaseHold() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            holding = false
+        }
     }
 
     private func hold(at location: CGPoint, transform: MapTransform) {
