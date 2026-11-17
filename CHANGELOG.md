@@ -29,7 +29,9 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   the editor." say when it can't.
 - **Speed readouts** come from F1's car data, downloaded in the background once an onboard
   shows (byte ranges when F1 serves them), kept on the phone for 7 days, and paused on mobile
-  data when "Speed readouts on mobile data" is off.
+  data when "Speed readouts on mobile data" is off. For a session F1 hasn't closed yet, the
+  download keeps asking for more every minute rather than stopping at what was there. Live
+  broadcasts don't use it (their car data comes with live timing in a later build).
 
 ### Untested — check later (build 12)
 
@@ -47,6 +49,10 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 - The tower's columns fitting the panel's default width, the battle glow and chip during a race,
   and the knockout shading in qualifying.
 - The yellow ring on a car's flying lap in qualifying (the trimmed fixtures stop before any).
+- A replay watched soon after the session: the speed keeps coming as F1's car data grows, and the
+  file isn't treated as complete until F1 marks the session finalised.
+- The notices "Couldn't load this session's onboards…" (single feed, offline) and "Car N's onboard
+  has stopped…" (multiview); cards only on the feeds the layout shows (e.g. closed, one tile).
 
 ### v1.0-beta.3, build 11 — data on replays
 
