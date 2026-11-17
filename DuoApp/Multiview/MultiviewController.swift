@@ -285,9 +285,12 @@ final class MultiviewController {
             return
         }
         guard generation == mine else { return }
+        // A live bookmark resumes at the live edge, so its item is live too: live timing, and the
+        // next-live check.
         let item = CatalogItem(
             contentId: bookmark.contentId,
             title: detail.title.isEmpty ? bookmark.title : detail.title,
+            subtype: bookmark.live ? "LIVE" : "",
             picturePath: bookmark.picturePath)
         let start = ResumePlan.make(
             bookmark: bookmark,

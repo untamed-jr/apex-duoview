@@ -268,10 +268,13 @@ final class PlayerController {
             isLiveNow: bookmark.live,
             durationMs: bookmark.durationMs)
         let channel = channels.first(where: { $0.id == plan.channelId }) ?? Channel(id: plan.channelId, isDefault: true)
-        // A bookmark keeps no metadata: the video's details say where its timing is.
+        // A bookmark keeps no metadata: the video's details say where its timing is. A live
+        // bookmark resumes as live (the live edge above), so its item is live too: live timing,
+        // and the next-live check.
         let item = CatalogItem(
             contentId: bookmark.contentId,
             title: detail.title.isEmpty ? bookmark.title : detail.title,
+            subtype: bookmark.live ? "LIVE" : "",
             picturePath: bookmark.picturePath,
             timingRef: detail.timingRef)
         await start(item: item, channel: channel, startAt: plan.start)
