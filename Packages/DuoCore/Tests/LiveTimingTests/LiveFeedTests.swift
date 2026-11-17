@@ -427,14 +427,14 @@ struct LiveFeedTests {
         #expect(try laps(short, at: join + 6_000) == 12)
 
         // The archive lacks the change's copy and holds an earlier one, 20 s before. Whether it
-        // reaches past the change, ends 1 s short of it, or ends 0.3 s short (inside the
+        // reaches past the change, ends 2 s short of it, or ends 0.3 s short (inside the 1 s
         // tolerance), the match doesn't check out: every archive line keeps its own time, the
         // lap is crossed once, when it was, and never shows before.
         let snapshot = #"{"Lines":{"3":{"NumberOfLaps":11,"Position":"3","Status":80}}}"#
         let cases: [(change: UTCms, archive: [(UTCms, String)])] = [
             (join + 5_000, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 10_000, status80),
-                            (join + 10_000, #"{"Lines":{"3":{"Position":"3"}}}"#)]),
-            (join + 500, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 500, status80)]),
+                            (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)]),
+            (join + 500, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 1_500, status80)]),
             (join + 200, [(join - 100_000, first), (join - 20_000, status64), (join - 15_000, crossed), (join - 100, status80)]),
         ]
         for (change, archive) in cases {
@@ -448,7 +448,66 @@ struct LiveFeedTests {
             let start = try #require(wrong.streamStart)
             #expect(wrong.lines("TimingData").filter { $0.offsetMs < LiveFeed.headStartMs }
                 .map { $0.offsetMs + start } == archive.map(\.0).filter { $0 < join }, "change at \(change - join)")
+            // From the join on, live timing is the authority: without a match to make one
+            // stream of the two, the archive's lines at or after the join are left out (taking
+            // them as well would count twice whatever live timing also sent). So the first
+            // case's archive line at +10 s, which live timing never sent, doesn't show: the
+            // only line from the join on is the live change, and the car stays third.
+            #expect(wrong.lines("TimingData").filter { $0.offsetMs >= LiveFeed.headStartMs }
+                .map { $0.offsetMs + start } == [change], "change at \(change - join)")
+            #expect(try #require(wrong.session()).timing.state(of: "3", at: join + 11_000)?.position == 3, "change at \(change - join)")
         }
+    }
+
+    @Test func topUpWhenAnEarlierCopysFollowingLinesCancelOut() throws {
+        let join = Self.seamJoin
+        let first = #"{"Lines":{"3":{"NumberOfLaps":10,"Position":"3","Status":80}}}"#
+        let status64 = #"{"Lines":{"3":{"Status":64}}}"#
+        let status80 = #"{"Lines":{"3":{"Status":80}}}"#
+        let snapshot = first
+        func times(_ feed: LiveFeed, _ topic: String = "TimingData") throws -> [UTCms] {
+            let start = try #require(feed.streamStart)
+            return feed.lines(topic).map { $0.offsetMs + start }
+        }
+        // The archive holds an earlier copy of the first live change, 20 s before it, and the
+        // line after it undoes it, so the archive up to the copy merges to the very state the
+        // snapshot holds. The copy is still too far back to be the change: every archive line
+        // keeps its time (the Status 64 → 80 blip shows), then the live change.
+        let reaching = try seamFeed(snapshot: snapshot, changes: [(join + 200, status64)],
+                                    archive: [(join - 100_000, first), (join - 20_000, status64), (join - 100, status80)])
+        #expect(try times(reaching) == [join - 100_000, join - 20_000, join - 100, join + 200])
+        #expect(reaching.lines("TimingData")[1].json["Lines"]["3"]["Status"].int == 64)
+
+        // The same when the archive goes on past the change: its lines after the copy lie
+        // before the change, so the copy isn't it.
+        let past = try seamFeed(snapshot: snapshot, changes: [(join + 5_000, status64)],
+                                archive: [(join - 100_000, first), (join - 20_000, status64), (join - 10_000, status80),
+                                          (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
+        #expect(try times(past) == [join - 100_000, join - 20_000, join - 10_000, join + 5_000])
+
+        // A topic first seen as a change (not in the snapshot) has no live state to compare
+        // the archive with: the times alone tell the earlier copy from the change.
+        func j(_ s: String) throws -> JSONValue { try JSONValue.parse(Data(s.utf8)) }
+        let clear = #"{"Status":"1","Message":"AllClear"}"#
+        let yellow = #"{"Status":"2","Message":"Yellow"}"#
+        var feed = LiveFeed()
+        feed.apply(RecordedMessage(topic: "SessionInfo", utc: join, opening: true,
+                                   json: try j(#"{"Key":11412,"Type":"Race","Name":"Race","Path":"2026/x/"}"#)))
+        feed.apply(RecordedMessage(topic: "TrackStatus", utc: join + 200, opening: false, json: try j(yellow)))
+        let archiveStart = join - 100_000
+        feed.topUp(archive: ["TrackStatus": [StreamLine(offsetMs: 0, json: try j(clear)),
+                                             StreamLine(offsetMs: 80_000, json: try j(yellow)),
+                                             StreamLine(offsetMs: 99_900, json: try j(clear))]], archiveStart: archiveStart)
+        #expect(try times(feed, "TrackStatus") == [join - 100_000, join - 20_000, join - 100, join + 200])
+
+        // The change's own copy, timed 0.8 s before it (the archive's clock behind), is still
+        // the change: one stream, the lap crossed once, at its live time.
+        let crossed = #"{"Lines":{"3":{"NumberOfLaps":11}}}"#
+        let behind = try seamFeed(snapshot: snapshot, changes: [(join + 5_000, crossed)],
+                                  archive: [(join - 100_000, first), (join + 4_200, crossed),
+                                            (join + 20_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
+        #expect(try times(behind) == [join - 100_000, join + 5_000])
+        #expect(try carCrossings(behind) == [join + 5_000])
     }
 
     @Test func topUpMatchingAnEarlierCopyAtTheArchivesFirstLine() throws {
@@ -462,13 +521,18 @@ struct LiveFeedTests {
             archive: [(join - 20_000, status64),
                       (join - 15_000, #"{"Lines":{"3":{"NumberOfLaps":11}}}"#),
                       (join - 10_000, #"{"Lines":{"3":{"Status":80}}}"#),
-                      (join + 10_000, #"{"Lines":{"3":{"Position":"3"}}}"#)])
+                      (join + 10_000, #"{"Lines":{"3":{"Position":"2"}}}"#)])
         #expect(try carCrossings(feed) == [join - 15_000])
         #expect(try laps(feed, at: join - 18_000) == nil)
         #expect(try laps(feed, at: join - 15_000) == 11)
         #expect(try laps(feed, at: join + 6_000) == 11)
         let start = try #require(feed.streamStart)
-        #expect(feed.lines("TimingData").prefix(3).map { $0.offsetMs + start } == [join - 20_000, join - 15_000, join - 10_000])
+        // Then the difference to the snapshot's state at the join (the position, which this
+        // archive never gave) and the live change. The archive's line after the join is left
+        // out: live timing is the authority there.
+        #expect(feed.lines("TimingData").map { $0.offsetMs + start }
+                == [join - 20_000, join - 15_000, join - 10_000, join, join + 5_000])
+        #expect(try #require(feed.session()).timing.state(of: "3", at: join + 11_000)?.position == 3)
     }
 
     @Test func topUpMatchingTheArchivesFirstLine() throws {

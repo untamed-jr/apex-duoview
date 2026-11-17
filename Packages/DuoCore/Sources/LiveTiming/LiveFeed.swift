@@ -200,15 +200,27 @@ public struct LiveFeed: Sendable {
     /// How far apart in time a live change and its archive line may be found (the archive's
     /// start is a heartbeat estimate; the snapshot is stamped by the phone).
     static let seamWindowMs = Backfill.completeGapMs
-    /// How far before a live change the archive's copy of it may be timed. The archive times a
-    /// line at its start (the upper median of the first 50 heartbeats' `Utc − offset`) plus the
-    /// line's offset, so a line's archive time less its true UTC is minus that beat's departure
-    /// from the median. Over the São Paulo race and qualifying, while the sessions ran, beats
-    /// departed by −2.1 s to +0.1 s: the archive's times run up to 2.1 s ahead (later) and at
-    /// most 0.1 s behind. Only "behind" can make the archive look short of a change it holds,
-    /// so the tolerance covers 0.1 s five times over. An archive is taken to reach a live
-    /// change only when its last line is no more than this before the change.
-    static let seamToleranceMs: Int64 = 500
+    /// How far before a live change the archive's copy of it may be timed. A live change
+    /// carries F1's own time (the feed message's third argument); the archive times a line at
+    /// its start (the upper median of the first 50 heartbeats' `Utc − offset`) plus the line's
+    /// offset. So a line's archive time less its true UTC is minus the departure of the beats
+    /// around it from that median, and only a positive departure (the archive's times running
+    /// behind, earlier) can make an archive look short of a change it holds.
+    ///
+    /// Measured over the São Paulo race's and qualifying's Heartbeat files (leaving out the
+    /// beats written as the archive closes, minutes off), departures run from −2.1 s (the
+    /// archive up to 2.1 s ahead, later) to these, behind:
+    /// - race, while it ran: up to +208 ms (the beat at 02:00:35.011), 11 % of beats behind
+    ///   at all;
+    /// - qualifying, from Q1's start to Q3's end: up to +160 ms, 15 % of beats behind;
+    /// - before the sessions, when users often join: up to +282 ms (race) and +414 ms
+    ///   (qualifying, the beat at 00:12:44.600, 36 s before Q1 started).
+    ///
+    /// 1 s covers the worst of them 2.4 times over, and stays well under the 3.7 s at which
+    /// F1 soonest repeats an identical line. An archive is taken to reach a live change only
+    /// when its last line is no more than this before the change, and to hold it only in a
+    /// line no more than this before it.
+    static let seamToleranceMs: Int64 = 1_000
 
     /// Tops the feed up from F1's archive (Android's backfill), so nothing before the seam is
     /// lost and nothing across it counts twice. For each topic (archive lines are offsets from
@@ -220,10 +232,13 @@ public struct LiveFeed: Sendable {
     ///   the live lines from that change on. The archive and live timing are then one stream,
     ///   whatever the snapshot's stamp says. F1 repeats some lines within seconds, so the match
     ///   may be an earlier copy; it checks out when
+    ///   - it is itself at most `seamToleranceMs` before the change, and so is the archive's
+    ///     next line, if any (an earlier copy is further back, or has the archive's next
+    ///     lines before the change), and
     ///   - the archive merged up to it is the state the live lines hold just before the change
-    ///     (an earlier copy leaves out what came after it), or
-    ///   - at the archive's first line, no other archive line comes before the change. Then
-    ///     the archive has nothing before it, and the live lines stand as they are.
+    ///     (an earlier copy leaves out what came after it). There is nothing to compare at
+    ///     the archive's first line (the archive has nothing before the change, and the live
+    ///     lines stand as they are) or for a topic first seen as a change.
     /// - Otherwise (the archive lags, the match doesn't check out, or the topic hasn't changed
     ///   since joining), the archive's
     ///   lines before the snapshot (or the first live change, if earlier) come first, then the
@@ -275,18 +290,19 @@ public struct LiveFeed: Sendable {
     /// reaches it, holds it, and the match checks out (see `topUp`); nil otherwise.
     private func seamMatch(_ topic: String, live: [StreamLine], change k: Int, archive: [StreamLine]) -> Int? {
         let change = live[k]
-        guard let last = archive.last, last.offsetMs >= F1Values.sub(change.offsetMs, Self.seamToleranceMs),
-              let j = Self.match(change, in: archive)
+        // The archive's times run at most the tolerance behind: nothing earlier is the change
+        // or follows it.
+        let earliest = F1Values.sub(change.offsetMs, Self.seamToleranceMs)
+        guard let last = archive.last, last.offsetMs >= earliest,
+              let j = Self.match(change, in: archive),
+              // An earlier copy is further back,
+              archive[j].offsetMs >= earliest,
+              // or has the archive's next lines before the change (whatever they merge to).
+              j + 1 == archive.count || archive[j + 1].offsetMs >= earliest
         else { return nil }
-        if j == 0 {
-            // Nothing before it in the archive; an earlier copy would have the archive's next
-            // lines before the change.
-            guard archive.count == 1 || archive[1].offsetMs >= F1Values.sub(change.offsetMs, Self.seamToleranceMs)
-            else { return nil }
-            return j
-        }
-        // A topic first seen as a change has no live state before it to compare with.
-        guard let expected = expectedState(topic, before: k) else { return j }
+        // At the archive's first line there is nothing before it to compare, and neither is
+        // there for a topic first seen as a change (no live state before it).
+        guard j > 0, let expected = expectedState(topic, before: k) else { return j }
         let reached = archive[..<j].reduce(JSONValue.null) { TopicMerge.merge($0, $1.json) }
         return TopicPatch.delta(from: reached, to: expected) == nil ? j : nil
     }
