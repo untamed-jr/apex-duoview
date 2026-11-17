@@ -153,6 +153,13 @@ final class MultiviewController {
     /// onboard and the feed that was the main one. Undone when the console goes, unless the slots
     /// changed since (a tap, the editor); forgotten then.
     @ObservationIgnored private var topSwap: (onboard: Int, main: Int)?
+    /// The feed that was the main one before Race Engineer (its own swap, or a tap) put an onboard
+    /// in its place, by channel id. The feeds are remembered (last used, presets, the default)
+    /// with it back in the main spot, so closing from Race Engineer reopens on it, with the sound.
+    @ObservationIgnored private var formerMain: Int?
+    /// A car tapped in Race Engineer is being placed: Race Engineer doesn't swap by itself
+    /// meanwhile, so the arrangement is the viewer's own (nothing undone on leaving).
+    @ObservationIgnored private var placingTap = false
     /// Where the main feed starts once it is ready; a refresh sets it to the main feed's place.
     @ObservationIgnored private var pendingStart: Start = .position(0)
     /// The feeds were started together (or there was nothing to start).
@@ -420,6 +427,7 @@ final class MultiviewController {
         raceEngineerShown = false
         deckShown = false
         topSwap = nil
+        formerMain = nil
         placedAt = [:]
         visibleFeeds = nil
         sessionChannels = []
@@ -538,7 +546,14 @@ final class MultiviewController {
         raceEngineerShown = console
         deckShown = deck
         if console, !wasConsole { chooseTopOnboard() }
-        if !console, wasConsole { undoTopSwap() }
+        if !console, wasConsole {
+            undoTopSwap()
+            // Left with the viewer's own arrangement (or after the undo): remembered as it is.
+            if topSwap == nil, formerMain != nil {
+                formerMain = nil
+                if currentItem != nil { store.lastUsed = picks }
+            }
+        }
         sendRaceViews()
     }
 
@@ -558,8 +573,19 @@ final class MultiviewController {
     func showOnboardOnTop(racingNumber: Int) -> String? {
         guard raceEngineerShown else { return showOnboard(racingNumber: racingNumber) }
         guard currentItem != nil, !refreshing, errorText == nil else { return nil }
-        // The viewer's own choice: nothing to undo on leaving.
+        // The viewer's own choice: nothing to undo on leaving, and Race Engineer doesn't swap by
+        // itself while the tap is placed.
         topSwap = nil
+        placingTap = true
+        let before = slots[0]
+        defer {
+            placingTap = false
+            // A main feed that wasn't an onboard gave way: remembered back in the main spot.
+            if let main = slots[0]?.id, main != before?.id, before?.isOnboard == false, formerMain == nil {
+                formerMain = before?.id
+            }
+            if currentItem != nil { store.lastUsed = rememberedPicks() }
+        }
         let placement = RaceEngineerTop.placement(
             racingNumber: racingNumber, slots: slots, channels: channels, audioChannelId: audioChannelId,
             lapStates: timing.lapStatesNow(), placedAt: placedAt)
@@ -579,34 +605,37 @@ final class MultiviewController {
     /// isn't one (noting the swap, to undo on leaving). Nothing when no onboard is available: the
     /// view then shows "Tap a car to pick an onboard" over the main feed.
     private func chooseTopOnboard() {
-        guard raceEngineerShown, currentItem != nil, !refreshing, errorText == nil else { return }
+        guard raceEngineerShown, !placingTap, currentItem != nil, !refreshing, errorText == nil else { return }
         let playable = Set(slots.compactMap { $0?.id }.filter { canBeMain(channelId: $0) })
         guard let slot = RaceEngineerTop.slot(slots: slots, favourite: store.favouriteDriver, playable: playable),
               slot > 0, let onboard = slots[slot]?.id, let main = slots[0]?.id else { return }
         topSwap = (onboard: onboard, main: main)
+        if formerMain == nil { formerMain = main }
         makeMain(slot: slot)
         if slots[0]?.id != onboard { topSwap = nil }
     }
 
     /// Leaving Race Engineer: the feed that was the main one before its own swap goes back, if the
     /// slots are as that swap left them.
+    /// It is forgotten only once undone, or once the slots no longer match it; a refresh or an
+    /// error in the way leaves it for the next change of the slots to try again.
     private func undoTopSwap() {
         guard let swap = topSwap else { return }
+        guard slots[0]?.id == swap.onboard, let slot = slots.firstIndex(where: { $0?.id == swap.main }), slot > 0 else {
+            topSwap = nil
+            return
+        }
+        guard canBeMain(channelId: swap.main), !refreshing, errorText == nil else { return }
         topSwap = nil
-        guard slots[0]?.id == swap.onboard, let slot = slots.firstIndex(where: { $0?.id == swap.main }), slot > 0,
-              canBeMain(channelId: swap.main) else { return }
         makeMain(slot: slot)
+        if slots[0]?.id == swap.main { formerMain = nil } else { topSwap = swap }
     }
 
-    /// The feeds to remember as last used: the picks, except that Race Engineer's own swap is
-    /// remembered undone, so closing from Race Engineer doesn't open next time with the onboard as
-    /// the main feed (and the sound on it).
+    /// The feeds to remember (last used, presets, the default): the picks, with the feed Race
+    /// Engineer put an onboard in place of back in the main spot (`formerMain`), so closing or
+    /// saving from Race Engineer keeps the order from before it.
     private func rememberedPicks() -> [FeedPick?] {
-        guard let swap = topSwap, let a = slots.firstIndex(where: { $0?.id == swap.onboard }),
-              let b = slots.firstIndex(where: { $0?.id == swap.main }) else { return picks }
-        var remembered = picks
-        remembered.swapAt(a, b)
-        return remembered
+        RaceEngineerTop.remembered(picks: picks, slots: slots, formerMain: formerMain)
     }
 
     /// The timing hears whether the console and the deck show, and the top onboard's car.
@@ -699,7 +728,7 @@ final class MultiviewController {
 
     /// The current feeds become the default ("Reset to default" brings them back).
     func makeCurrentFeedsDefault() {
-        store.defaultPicks = picks
+        store.defaultPicks = rememberedPicks()
     }
 
     /// Loads a preset's feeds and its layout choices: a layout the preset doesn't name goes back to
@@ -724,7 +753,7 @@ final class MultiviewController {
     /// Saves the current feeds and layout choices under a name. Throws `PresetError`.
     func saveAsPreset(name: String) throws {
         defer { presets = store.presets }
-        try store.savePreset(name: name, picks: picks, layouts: currentLayouts())
+        try store.savePreset(name: name, picks: rememberedPicks(), layouts: currentLayouts())
     }
 
     func renamePreset(id: UUID, to name: String) throws {
@@ -735,7 +764,7 @@ final class MultiviewController {
     /// The preset takes the current feeds and layout choices; its name stays.
     func updatePreset(id: UUID) throws {
         defer { presets = store.presets }
-        try store.updatePreset(id: id, picks: picks, layouts: currentLayouts())
+        try store.updatePreset(id: id, picks: rememberedPicks(), layouts: currentLayouts())
     }
 
     func deletePreset(id: UUID) {
@@ -805,10 +834,13 @@ final class MultiviewController {
         // Held at this speed: the others freeze again (or come back, if the number of feeds
         // changed to one this speed never struggled with).
         updateSpeedHold()
-        // Race Engineer: a swap of its own is forgotten once anything else moved the slots.
+        // Race Engineer: a swap of its own is forgotten once anything else moved the slots, and
+        // one left behind (an undo a refresh held up) is tried again.
         if let swap = topSwap, slots[0]?.id != swap.onboard || !slots.contains(where: { $0?.id == swap.main }) {
             topSwap = nil
         }
+        if !raceEngineerShown, topSwap != nil { undoTopSwap() }
+        if !slots.contains(where: { $0?.id == formerMain }) { formerMain = nil }
         store.lastUsed = rememberedPicks()
         notePlacements()
         updateCards()
@@ -845,7 +877,9 @@ final class MultiviewController {
                 }
             }
         case .fill(let slot, let channel), .replace(let slot, let channel):
+            let before = effectiveFeedCount
             setFeed(channel, at: slot)
+            keepDataLayout(fromCount: before)
         case .noFreeSpot, .noOnboard:
             break
         }
@@ -854,6 +888,18 @@ final class MultiviewController {
             return message
         }
         return nil
+    }
+
+    /// A feed added while a laptop data layout shows (Race Engineer, the Scrub Deck): that layout
+    /// stays for the new feed count rather than the count's default (controller ruling), stored
+    /// as a ⟳ choice would be. The layout engine still falls back if it doesn't fit the screen.
+    private func keepDataLayout(fromCount before: Int) {
+        let after = effectiveFeedCount
+        guard let option = LayoutChoice.keptDataLayout(
+            console: raceEngineerShown, deck: deckShown, oldCount: Self.layoutCount(before), newCount: Self.layoutCount(after))
+        else { return }
+        store.setLayoutChoice(option, for: LayoutKey(posture: .laptop, feedCount: Self.layoutCount(after)))
+        layoutRevision += 1
     }
 
     /// Tap-a-car found the car's onboard showing, but stopped.

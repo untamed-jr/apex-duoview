@@ -208,3 +208,31 @@ extension RaceEngineerTop {
         return .replace(slot: 0, channel: onboard)
     }
 }
+
+extension RaceEngineerTop {
+    /// The feeds to remember (last used, presets, the default) while Race Engineer has put an
+    /// onboard on top in place of `formerMain` (the channel id that was the main feed): that feed
+    /// back in the main spot, trading places with whatever took it, as if Race Engineer had never
+    /// swapped. The picks as they are when there is none, or it is the main feed again, or it has
+    /// left the slots.
+    static func remembered(picks: [FeedPick?], slots: [Channel?], formerMain: Int?) -> [FeedPick?] {
+        guard let formerMain, let index = slots.firstIndex(where: { $0?.id == formerMain }), index > 0,
+              picks.indices.contains(index), !picks.isEmpty else { return picks }
+        var remembered = picks
+        remembered.swapAt(0, index)
+        return remembered
+    }
+}
+
+extension LayoutChoice {
+    /// A feed added while a laptop data layout shows (Race Engineer's console, or the Scrub Deck):
+    /// that layout, to keep for the new feed count (controller ruling: it stays rather than the
+    /// count's default; `LayoutEngine.frames` still falls back if it doesn't fit). Nil when no
+    /// data layout shows, or the count didn't change.
+    static func keptDataLayout(console: Bool, deck: Bool, oldCount: Int, newCount: Int) -> String? {
+        guard oldCount != newCount else { return nil }
+        if console { return "laptop.raceEngineer" }
+        if deck { return "laptop.scrubDeck" }
+        return nil
+    }
+}
