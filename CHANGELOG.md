@@ -4,6 +4,54 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.3, build 13 — Duo data layouts and the tracker delay
+
+- **Data layouts.** Once a session's timing has loaded, ⟳ offers each fold's data layout after
+  its usual ones, remembered per posture and feed count like any other choice:
+  - **Flat — Director's Desk:** the tower as a full-height column on the right, the main feed as
+    large as fits beside it, and below it a row with up to two other feeds and the map. A fourth
+    feed keeps playing out of sight.
+  - **Book — Data screen:** the feeds on the left screen (one, two stacked, or a 2 × 2 grid), the
+    map over the tower on the right. Nothing crosses the fold.
+  - **Laptop — Race Engineer and Scrub Deck:** the main feed on the top screen, the bottom screen
+    kept for the console or the deck, labelled "Race Engineer — next build" and "Scrub Deck — next
+    build" until build 14. With one feed, Scrub Deck is now the default; beta.2's "Saved for
+    beta.3" placeholder is gone (without timing, the bottom half stays empty).
+  The map and tower in these layouts are the same as the floating panels (tap a car, the Battle
+  chip, −1 s / +1 s, turning the map); a floating panel the layout already shows hides while it
+  does. Layout changes and folds glide, as in beta.2. Without timing (loading, unavailable, or no
+  timing for this session) a remembered data layout shows the fold's default instead, and comes
+  back once the timing is there.
+- **The tower fits its width:** narrower than its full set of columns (a resized panel, the
+  Director's Desk column) it drops the interval, then the last lap (PIT then shows in the gap's
+  place).
+- **Tracker delay.** Settings › Multiview › "Tracker delay", in 0.5 s steps up to 20 s: the
+  multiview keeps the TRACKER and DATA tiles that far behind the main feed. Made the main feed,
+  TRACKER sets the pace and the others run level with it. It starts at 0 s until the lag has been
+  measured.
+
+### Untested — check later (build 13)
+
+- The zero-warnings build (regenerate the project with XcodeGen first: build 13 adds
+  `DuoApp/Multiview/DataRegionViews.swift` and removes `DuoApp/Multiview/ReservedArea.swift`).
+- **T-B3:** each fold's data layout on the São Paulo race replay — Director's Desk (flat, 1–4
+  feeds), the book data screen (1–4 feeds), Race Engineer and Scrub Deck (laptop, 1–4 feeds) —
+  and the glides between them and across folds, with the same views moving (no video restarts).
+- The labelled placeholders on the laptop's bottom screen, and nothing drawn there on a screen
+  too small for the deck.
+- The map and tower in a layout: tapping a car or a row, the Battle chip, the header's controls
+  fitting Director's Desk's 240 pt map slot, and the 200 pt tower column without the interval and
+  last-lap columns.
+- A floating panel hiding while the layout shows it, and coming back with a plain layout; the
+  Map button while both are in the layout (it switches the floating panels, which stay hidden).
+- A remembered data layout falling back to the fold's default on a video without timing, and
+  coming back on a replay with timing.
+- **The tracker delay default (T-B1):** still 0 s. Read how many seconds the TRACKER tile runs
+  ahead of the world feed and set that as the default in the next build. Then check that with the
+  delay set, TRACKER and DATA hold that far behind the world feed, with the main feed swapped
+  (TRACKER as the main one: the others run level with it), after picture in picture, and on a
+  live session.
+
 ### v1.0-beta.3, build 12 — tower, driver cards, tap a car
 
 - **Timing tower.** The Map control's second panel is now the tower, twice a second at picture
