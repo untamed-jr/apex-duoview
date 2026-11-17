@@ -187,6 +187,8 @@ final class TimingController {
     /// The link's state, the join and the archive's reach, from the last refresh.
     @ObservationIgnored private var livePhase: LiveLinkPhase = .idle
     @ObservationIgnored private var liveEverSubscribed = false
+    /// F1 refused enough tries that they slowed to one a minute.
+    @ObservationIgnored private var liveRefused = false
     @ObservationIgnored private var liveJoinedAt: UTCms?
     @ObservationIgnored private var liveArchiveReach: UTCms?
     /// The recording's gaps (a reconnect, the session reopened): shown as catching up.
@@ -927,6 +929,7 @@ final class TimingController {
         liveRef = nil
         livePhase = .idle
         liveEverSubscribed = false
+        liveRefused = false
         liveJoinedAt = nil
         liveArchiveReach = nil
         liveGaps = []
@@ -944,6 +947,7 @@ final class TimingController {
         guard generation == mine, liveBuilder === builder, !Task.isCancelled else { return }
         livePhase = r.phase
         liveEverSubscribed = r.everSubscribed
+        liveRefused = r.refused
         liveJoinedAt = r.joinedAt
         liveArchiveReach = r.archiveReach
         liveGaps = r.gaps
@@ -1049,7 +1053,8 @@ final class TimingController {
     private func updateLiveNote(pictureTime t: UTCms?) {
         var note: String?
         if liveBuilder != nil, !liveWrongSession {
-            note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed, hasSession: loaded != nil,
+            note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed, refused: liveRefused,
+                                 hasSession: loaded != nil,
                                  hasPositions: loaded.map { !$0.positions.cars.isEmpty } ?? true,
                                  pictureTime: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach,
                                  gaps: liveGaps)

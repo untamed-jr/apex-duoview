@@ -86,6 +86,11 @@ struct LiveLink: Equatable, Sendable {
         restarting ? .subscribed : phase
     }
 
+    /// F1 has refused enough tries in a row that they come only every `refusedDelay`.
+    var slowed: Bool {
+        refusals >= Self.refusalsBeforeSlowing
+    }
+
     /// A new try starts (`restart`: a planned one, straight after the last); returns its number.
     mutating func connecting(restart: Bool = false) -> Int {
         let quiet = phase == .subscribed || restarting
@@ -141,14 +146,23 @@ enum LiveNote {
     /// A picture before the feed joined, while the archive hasn't filled it in yet (the state on
     /// joining stands in): shown like "Timing estimated".
     static let catchingUp = "Timing catching up"
+    /// F1 refused the account three times in a row (`LiveLink.refusalsBeforeSlowing`): the tries
+    /// slow to one a minute.
+    static let refused = "F1 isn't letting this account into live timing \u{2014} trying again every minute"
+    /// How far before the join the state on joining still stands in (Android's head start: on
+    /// live, picture time trails the join by the stream's delay); further back, nothing shows
+    /// until the archive fills it in.
+    static let headStartMs: Int64 = 90_000
 
     /// The line for the link: connecting until the first subscribe result, then "dropped" while a
-    /// later try is under way; nil while subscribed or idle.
-    static func link(_ phase: LiveLinkPhase, everSubscribed: Bool) -> String? {
+    /// later try is under way; nil while subscribed or idle. `refused`: F1 has refused enough
+    /// tries in a row that they slowed down, which says why better than either.
+    static func link(_ phase: LiveLinkPhase, everSubscribed: Bool, refused: Bool = false) -> String? {
         switch phase {
         case .idle, .subscribed: return nil
-        case .connecting: return everSubscribed ? dropped : connecting
-        case .dropped: return everSubscribed ? dropped : connecting
+        case .connecting, .dropped:
+            if refused { return Self.refused }
+            return everSubscribed ? dropped : connecting
         }
     }
 
@@ -168,9 +182,10 @@ enum LiveNote {
     /// The note over the live map, most important first: the link, then (`hasSession` false: no
     /// session built yet, even after the subscribe result) connecting, then no car positions,
     /// then catching up. Nil when all is well.
-    static func note(phase: LiveLinkPhase, everSubscribed: Bool, hasSession: Bool = true, hasPositions: Bool,
-                     pictureTime: UTCms?, joinedAt: UTCms?, archiveReach: UTCms?, gaps: [LiveGap] = []) -> String? {
-        if let line = link(phase, everSubscribed: everSubscribed) { return line }
+    static func note(phase: LiveLinkPhase, everSubscribed: Bool, refused: Bool = false, hasSession: Bool = true,
+                     hasPositions: Bool, pictureTime: UTCms?, joinedAt: UTCms?, archiveReach: UTCms?,
+                     gaps: [LiveGap] = []) -> String? {
+        if let line = link(phase, everSubscribed: everSubscribed, refused: refused) { return line }
         if !hasSession { return connecting }
         if phase == .subscribed, !hasPositions { return noPositions }
         if let t = pictureTime, catchingUp(at: t, joinedAt: joinedAt, archiveReach: archiveReach, gaps: gaps) {
@@ -349,7 +364,9 @@ struct LiveCarData: Sendable {
 /// live), and the link's state whenever it changes.
 enum LiveEvent: Sendable, Equatable {
     case message(RecordedMessage)
-    case link(LiveLinkPhase, everSubscribed: Bool)
+    /// The link's phase; whether a subscribe result has come in this run; whether F1 has refused
+    /// enough tries in a row that they slowed (`LiveLink.slowed`).
+    case link(LiveLinkPhase, everSubscribed: Bool, refused: Bool)
 }
 
 /// The live session as of a refresh.
@@ -367,6 +384,8 @@ struct LiveRefresh: Sendable {
     var session: LiveSessionUpdate
     var phase: LiveLinkPhase
     var everSubscribed: Bool
+    /// F1 refused enough tries in a row that they slowed to one a minute (`LiveLink.slowed`).
+    var refused = false
     var joinedAt: UTCms?
     /// The SessionInfo `Path` the feed holds (the archive folder for the top-up).
     var sessionPath: String?
@@ -391,6 +410,7 @@ actor LiveSessionBuilder {
     private var urgent = false
     private var phase: LiveLinkPhase = .connecting
     private var everSubscribed = false
+    private var refused = false
     private var archiveReach: UTCms?
     private var lastPath: String?
     private var gapFinder = LiveGapFinder()
@@ -412,9 +432,10 @@ actor LiveSessionBuilder {
 
     func receive(_ event: LiveEvent) {
         switch event {
-        case .link(let phase, let ever):
+        case .link(let phase, let ever, let refused):
             self.phase = phase
             everSubscribed = ever
+            self.refused = refused
         case .message(let m):
             if m.topic == "CarData.z" {
                 carData.add(m)
@@ -479,7 +500,7 @@ actor LiveSessionBuilder {
         }
         let info = feed.state.topics["SessionInfo"].flatMap { TimingSessionInfo.parse($0) }
         return LiveRefresh(
-            session: update, phase: phase, everSubscribed: everSubscribed, joinedAt: feed.joinedAt,
+            session: update, phase: phase, everSubscribed: everSubscribed, refused: refused, joinedAt: feed.joinedAt,
             sessionPath: feed.sessionPath, sessionKey: info?.key, archiveReach: archiveReach,
             cars: pictureTime.map { carData.window(around: $0) } ?? [:], gaps: gapFinder.gaps)
     }

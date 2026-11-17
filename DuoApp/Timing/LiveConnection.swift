@@ -125,7 +125,8 @@ actor LiveConnection {
         lingerTask = nil
         if runTask == nil { start() }
         // Just started, the run's first try hasn't begun yet: it is connecting all the same.
-        continuation.yield(.link(link.reported == .idle ? .connecting : link.reported, everSubscribed: link.everSubscribed))
+        continuation.yield(.link(link.reported == .idle ? .connecting : link.reported, everSubscribed: link.everSubscribed,
+                                 refused: link.slowed))
         return stream
     }
 
@@ -185,7 +186,7 @@ actor LiveConnection {
     }
 
     private func broadcastLink() {
-        broadcast(.link(link.reported, everSubscribed: link.everSubscribed))
+        broadcast(.link(link.reported, everSubscribed: link.everSubscribed, refused: link.slowed))
     }
 
     // MARK: The run
