@@ -41,6 +41,11 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         let circle = try #require(PitCircle.layout(at: t, session: race))
         #expect(circle.referenceLapMs == 86_385)
         #expect(circle.greenLaps == 5)
+        // With 3 green laps (the leader's 4th crossing) it is the typical lap, not their
+        // average: check:raceReferenceAtLeader4thCrossing = (3576430, [87098, 86394, 86015], 86394).
+        let fewer = try #require(PitCircle.layout(at: Fixture.raceStart + 3_576_430, session: race))
+        #expect(fewer.referenceLapMs == 86_394)
+        #expect(fewer.greenLaps == 0)
 
         // A lap under a safety car at its midpoint, or with a stop in it, isn't green.
         let session = RaceFixture.synthetic(

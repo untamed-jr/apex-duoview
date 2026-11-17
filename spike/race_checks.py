@@ -181,6 +181,11 @@ def pit_circle_checks(states, hist, t10):
     check("raceLeaderLapWindowsAtLightsOutPlus10min", windows)
     check("raceReferenceLapAtLightsOutPlus10min", sum(green) // len(green))
     check("raceTypicalLapAtLightsOutPlus10min", sorted(windows[-5:])[len(windows[-5:]) // 2])
+    # Fewer than 5 green laps: the spec's fallback, the typical lap (upper median of the last 5),
+    # not an average. At the leader's 4th crossing it has 3 laps.
+    fourth = crossings[3]
+    few = [b - a for a, b in zip(crossings, crossings[1:]) if b <= fourth and 40_000 <= b - a <= 240_000]
+    check("raceReferenceAtLeader4thCrossing", (fourth, few, sorted(few)[len(few) // 2]))
     ref = sum(green) // len(green)
     racing = {n: m for n, m in at.items() if m.get("Retired") is not True and m.get("Stopped") is not True}
     gaps = {n: (0 if n == leader else gap_ms(m.get("GapToLeader"))) for n, m in racing.items()}
