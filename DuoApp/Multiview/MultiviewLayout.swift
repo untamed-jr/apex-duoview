@@ -163,3 +163,27 @@ enum TrackerDelay {
         offset.map { $0 + feedLag - referenceLag }
     }
 }
+
+/// Race Engineer's top onboard: which slot's feed goes on the top screen.
+enum RaceEngineerTop {
+    /// The first available of: the main feed (slot 0) if it's an onboard; else your driver's
+    /// onboard (`favourite`, a last name, matched as the feed picker matches it); else the first
+    /// onboard among the feeds. Only feeds already in the slots count, and only those in
+    /// `playable` (they have a player that hasn't ended: `canBeMain`) can be brought up from
+    /// another slot. Nil when no onboard is available ("Tap a car to pick an onboard"). Choosing a
+    /// slot never moves the sound: the caller swaps it into the main spot with `makeMain`.
+    static func slot(slots: [Channel?], favourite: String?, playable: Set<Int>) -> Int? {
+        if slots.first??.isOnboard == true { return 0 }
+        func available(_ index: Int) -> Bool {
+            guard let channel = slots[index], channel.isOnboard, let id = channel.id else { return false }
+            return playable.contains(id)
+        }
+        if let favourite, !favourite.isEmpty {
+            let pick = FeedPick.onboard(lastName: favourite)
+            if let index = slots.indices.first(where: { available($0) && slots[$0].map(pick.matches) == true }) {
+                return index
+            }
+        }
+        return slots.indices.first(where: available)
+    }
+}

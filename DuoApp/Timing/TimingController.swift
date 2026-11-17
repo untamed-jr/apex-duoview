@@ -19,8 +19,12 @@ import Observation
 ///   (`TimelineMark.marks`) show lights out and the chequered flag always, and flag periods only
 ///   up to picture time unless "Show the whole race" is on.
 /// - The 2 Hz tick runs only while something reads it: a floating panel showing, a data layout's
-///   docked map or tower (`setDockedPanels`), the multiview's timeline marks, or a driver card over
-///   an onboard (`setCardFeeds`).
+///   docked map or tower (`setDockedPanels`), the multiview's timeline marks, a driver card over
+///   an onboard (`setCardFeeds`), Race Engineer's console (`setConsole`) or the Scrub Deck
+///   (`setDeck`).
+/// - The console (`console`) and the deck (`deck`) are built at the tick, never per frame: their
+///   DuoCore calculations rescan the session's history. The console reads timing at picture time;
+///   the deck too, unless "Show the whole race" is on (then it is built once and kept).
 /// - The tower (`tower`), its header (`header`), the battle (`battleRival`) and the cards (`cards`)
 ///   are published at 2 Hz as separate values, each assigned only when it changed, so a view reads
 ///   only what it shows.
@@ -84,6 +88,11 @@ final class TimingController {
     private(set) var cards: [String: DriverCardState] = [:]
     /// Channel ids whose cards the viewer hid (mirrors `TimingSettings.hiddenCards`).
     private(set) var hiddenCards: Set<Int>
+    /// Race Engineer's console for the top onboard's car at picture time; nil while the console
+    /// isn't showing or has no car.
+    private(set) var console: ConsoleState?
+    /// The Scrub Deck at picture time (or the whole race, opted in); nil while it isn't showing.
+    private(set) var deck: DeckState?
 
     @ObservationIgnored let settings: TimingSettings
     @ObservationIgnored private let archive: TimingArchive
@@ -115,6 +124,18 @@ final class TimingController {
     @ObservationIgnored private var contentIsLive = false
     /// Your driver's last name (Settings › Multiview › My driver), for the battle highlight.
     @ObservationIgnored private var favouriteDriver: String?
+    /// The attached player shows Race Engineer's console, and the racing number of the car on its
+    /// top screen (nil: no onboard there).
+    @ObservationIgnored private var consoleShown = false
+    @ObservationIgnored private var consoleCar: String?
+    /// The attached player shows the Scrub Deck.
+    @ObservationIgnored private var deckShown = false
+    /// The deck as last built, kept while nothing it depends on changes (picture time, the whole
+    /// race switch, your driver): with the whole race on it is built once.
+    @ObservationIgnored private var deckBase: DeckState?
+    /// Channel 45 was seen moving in a 2026 car data window this session: the light stays "Aero"
+    /// rather than coming and going with the window.
+    @ObservationIgnored private var activeAeroSeen = false
 
     init(archive: TimingArchive, settings: TimingSettings, http: any HTTPClient) {
         self.archive = archive
@@ -175,6 +196,7 @@ final class TimingController {
                 if !cards.isEmpty { cards = [:] }
             }
             if ownerID != newOwner, !dockedPanels.isEmpty { dockedPanels = [] }
+            if ownerID != newOwner { clearRaceViews() }
             ownerID = newOwner
             wantsMarks = timelineMarks
             // The new clock may change the status (estimated or not) even with no reader ticking.
@@ -227,6 +249,8 @@ final class TimingController {
         contentIsLive = false
         carData?.cancel()
         carData = nil
+        clearRaceViews()
+        activeAeroSeen = false
         if status != .idle { status = .idle }
         if snapshot != .empty { snapshot = .empty }
         if !tower.isEmpty { tower = [] }
@@ -342,6 +366,39 @@ final class TimingController {
         publish()
     }
 
+    /// The attached player (`owner`) shows Race Engineer's console (`shown`), with `car` (a racing
+    /// number) on its top screen, or none. While it shows, the tick runs; with a car, its car data
+    /// downloads. Ignored from a player that isn't attached.
+    func setConsole(shown: Bool, car: String?, owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner) else { return }
+        let car = shown ? car : nil
+        guard consoleShown != shown || consoleCar != car else { return }
+        consoleShown = shown
+        consoleCar = car
+        updateTicking()
+        startCarDataIfShown()
+        publish()
+    }
+
+    /// The attached player (`owner`) shows the Scrub Deck: the tick runs and builds it. Ignored
+    /// from a player that isn't attached.
+    func setDeck(shown: Bool, owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner), deckShown != shown else { return }
+        deckShown = shown
+        updateTicking()
+        publish()
+    }
+
+    /// Forgets the console and the deck (detach, or another player took over).
+    private func clearRaceViews() {
+        consoleShown = false
+        consoleCar = nil
+        deckShown = false
+        deckBase = nil
+        if console != nil { console = nil }
+        if deck != nil { deck = nil }
+    }
+
     /// Settings › Multiview › "Tracker delay": longer (positive) or shorter by half-seconds,
     /// within 0–20 s.
     func nudgeTrackerDelay(by halfSeconds: Int) {
@@ -349,7 +406,8 @@ final class TimingController {
         if trackerDelayHalfSeconds != value { trackerDelayHalfSeconds = value }
     }
 
-    /// "Show the whole race": every flag period on the timeline (and, later, the Scrub Deck).
+    /// "Show the whole race": the Scrub Deck's whole lap chart and event strip, and every flag
+    /// period on the timeline.
     func setShowWholeRace(_ on: Bool) {
         settings.showWholeRace = on
         showWholeRace = settings.showWholeRace
@@ -408,7 +466,9 @@ final class TimingController {
     /// goes on to the end of the file once started (topping it up while the session isn't known
     /// to be over). Never for a live item (`CarDataPolicy`).
     private func startCarDataIfShown() {
-        guard carData == nil, loaded != nil, !cardCars.isEmpty, let archiveSession, let loaded else { return }
+        // A card showing, or the console's car (its readouts: even with that onboard's card hidden).
+        guard carData == nil, loaded != nil, !cardCars.isEmpty || consoleCar != nil, let archiveSession, let loaded
+        else { return }
         let plan = CarDataPolicy.plan(live: contentIsLive, status: loaded.sessionStatus)
         guard plan != .skip else { return }
         let loader = CarDataLoader(
@@ -523,7 +583,7 @@ final class TimingController {
     /// Whether the tick has a reader: a session loaded, and a panel showing (floating or docked),
     /// the marks shown or a driver card showing.
     private var needsTicking: Bool {
-        loaded != nil && (wantsMarks || !readPanels.isEmpty || !cardCars.isEmpty)
+        loaded != nil && (wantsMarks || !readPanels.isEmpty || !cardCars.isEmpty || consoleShown || deckShown)
     }
 
     /// Starts or stops the tick to match `needsTicking`.
@@ -574,6 +634,47 @@ final class TimingController {
         if timelineMarks != marks { timelineMarks = marks }
         publishPanels(loaded, at: t)
         publishCards(loaded, at: t)
+        publishConsole(loaded, at: t)
+        publishDeck(loaded, at: t, playerSeconds: now.playerSeconds)
+    }
+
+    /// Race Engineer's console for the top onboard's car, while it shows.
+    private func publishConsole(_ loaded: LoadedSession, at t: UTCms) {
+        guard consoleShown, let car = consoleCar else {
+            if console != nil { console = nil }
+            return
+        }
+        let samples = carData?.samples(car: car, around: t) ?? []
+        var meaning = Channel45Meaning.of(year: loaded.info.year, samples: [car: samples])
+        if meaning == .activeAero { activeAeroSeen = true }
+        if activeAeroSeen, meaning == .absent { meaning = .activeAero }
+        let stored = circuitKey.flatMap { settings.pitLossMs(circuitKey: $0) }.map { Int(clamping: $0) }
+        let next = ConsoleState.make(number: car, at: t, session: loaded, samples: samples, channel45: meaning,
+                                     storedPitLossMs: stored)
+        if console != next { console = next }
+    }
+
+    /// The Scrub Deck, while it shows: rebuilt when picture time moves (so a seek back shrinks
+    /// it), or once with the whole race on; the clock reading is always the latest.
+    private func publishDeck(_ loaded: LoadedSession, at t: UTCms, playerSeconds: Double) {
+        guard deckShown else {
+            deckBase = nil
+            if deck != nil { deck = nil }
+            return
+        }
+        let favourite = favouriteDriver.flatMap { Tower.carNumber(forDriver: $0, in: loaded) }
+        var next: DeckState
+        if let base = deckBase, base.wholeRace == showWholeRace, base.favourite == favourite,
+           showWholeRace || base.pictureTime == t {
+            next = base
+        } else {
+            next = DeckState.make(session: loaded, at: t, playerSeconds: playerSeconds, wholeRace: showWholeRace,
+                                  favourite: favourite)
+            deckBase = next
+        }
+        next.pictureTime = t
+        next.playerSeconds = playerSeconds
+        if deck != next { deck = next }
     }
 
     /// The tower, its header and the battle, while a panel shows, floating or docked (the tower,
