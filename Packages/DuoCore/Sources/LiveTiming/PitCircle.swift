@@ -227,7 +227,9 @@ public enum PitCircle {
         let states = session.timing.at(t)
         guard let leader = states.first(where: { $0.value.position == 1 && !$0.value.retired && !$0.value.stopped })?.key,
               let crossed = states[leader]?.lineCrossedAt,
-              let reference = reference(leader: leader, at: t, session: session) else { return nil }
+              let reference = reference(leader: leader, at: t, session: session),
+              // F1's last lap can read "0.000": no lap to go round by (and nothing to divide by).
+              reference.ms > 0 else { return nil }
         let ref = Double(reference.ms)
         // A lap slower than the reference (a safety car, a stop, a red flag) holds the leader
         // just short of the line until it crosses, instead of wrapping the field round.
@@ -253,7 +255,7 @@ public enum PitCircle {
                 fraction: car.at,
                 angle: car.at * 360,
                 gapToLeaderMs: car.gap,
-                gapToAhead: words(state?.interval) ?? ahead.map { signedText(Int(($0 * ref).rounded())) } ?? "",
+                gapToAhead: words(state?.interval) ?? ahead.flatMap { finiteMs($0 * ref) }.map(signedText) ?? "",
                 gapToLeader: car.number == leader ? "Leader" : words(state?.gapToLeader) ?? signedText(car.gap),
                 inPit: states[car.number]?.inPit ?? false
             )
@@ -379,6 +381,13 @@ public enum PitCircle {
         }
         if let since { out.append((since, nil)) }
         return out
+    }
+
+    /// `ms` rounded to whole ms; nil when it isn't a finite number an `Int` can hold.
+    static func finiteMs(_ ms: Double) -> Int? {
+        let rounded = ms.rounded()
+        guard rounded.isFinite, abs(rounded) < 1e15 else { return nil }
+        return Int(rounded)
     }
 
     static func fraction(_ x: Double) -> Double {

@@ -91,6 +91,26 @@ private func laps(_ count: Int, lapMs: Int = 90_000, firstLine: Int = 100, gap: 
         #expect(underSC.greenLaps == 0)
     }
 
+    @Test func noCircleOnAZeroReferenceLap() throws {
+        // Joined live part-way; F1's last lap reads "0.000" when the leader crosses, and no lap
+        // has been timed here yet: no reference, so no circle (and no trap dividing by it).
+        let s: UTCms = 1_000_000
+        let zero = RaceFixture.synthetic(timing: [
+            timingLine("00:00:00.000", [("1", #""Position":"1","NumberOfLaps":30,"GapToLeader":"LAP 31""#),
+                                        ("4", #""Position":"2","NumberOfLaps":30,"GapToLeader":"+3.000","IntervalToPositionAhead":{"Value":"+3.000"}"#)]),
+            timingLine("00:00:40.000", [("1", #""NumberOfLaps":31,"LastLapTime":{"Value":"0.000"}"#)]),
+        ], start: s)
+        #expect(PitCircle.layout(at: s + 40_000, session: zero) == nil)
+        #expect(PitCircle.layout(at: s + 60_000, session: zero) == nil)
+        // A real last lap later brings it in.
+        let later = RaceFixture.synthetic(timing: [
+            timingLine("00:00:00.000", [("1", #""Position":"1","NumberOfLaps":30,"GapToLeader":"LAP 31""#)]),
+            timingLine("00:00:40.000", [("1", #""NumberOfLaps":31,"LastLapTime":{"Value":"0.000"}"#)]),
+            timingLine("00:00:41.000", [("1", #""LastLapTime":{"Value":"1:26.900"}"#)]),
+        ], start: s)
+        #expect(PitCircle.layout(at: s + 41_000, session: later)?.referenceLapMs == 86_900)
+    }
+
     @Test func circleHoldsLeaderOnASlowLap() throws {
         // Five green 90 s laps (lines at 100 … 550 s), then a 150 s lap (a safety car, a stop or
         // a red flag): the leader is held just short of the line until it crosses at 700 s,
