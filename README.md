@@ -14,18 +14,23 @@ at once, a live track map, timing and team radio, all kept in sync with the pict
 
 ## Status
 
-**v1.0-beta.2 — Multiview and fold** is released (2026-11-14, pre-release; see the
-[changelog](CHANGELOG.md)). On top of beta.1 (sign in with your F1 TV account, browse Race
-Weekend, Paddock and the archive, one feed with your choice of commentary, resume where you
-stopped), it plays four feeds at once in step, fitted to every fold of the phone, with your
-favourite driver's onboard, sound from any feed, drag to rearrange, presets, picture in picture
-and resume. Some of it is not yet tested by hand: the changelog lists what is still to check.
-Tested in the iPhone Duo simulator; the real Duo comes in beta.7.
-Next: **v1.0-beta.3**.
+**v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
+[changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race
+marks on the timeline follow the picture, never running ahead of it; tapping a car brings up its
+onboard. Half-open like a laptop, the phone shows Race Engineer (an onboard above, the
+engineer's console below) or Scrub Deck (the video above, a touch timeline of the race below).
+Races get a pit circle showing where each car would rejoin after a stop. Live sessions get F1's
+live timing, recorded on the phone so you can rewind, and an offer of the next live programme. The live parts can only be tried on a live weekend (next:
+Las Vegas, November 19–22); the changelog lists what is still to check.
+
+**v1.0-beta.2 — Multiview and fold** is released (2026-11-14, pre-release): four feeds at once
+in step, fitted to every fold of the phone, on top of beta.1's sign-in, browsing, one feed with
+your choice of commentary and resume. Tested in the iPhone Duo simulator; the real Duo comes in
+beta.7.
 
 What has been checked so far, on a 2026 race replay with a Premium account: F1 TV returns all 26
 feeds of a race (world feed, F1 Live, every onboard, data channels) in a format the iPhone's own
-video player supports. Live sessions are still to be tested.
+video player supports.
 
 ## What it will do
 
@@ -91,13 +96,15 @@ your phone.
 
 - **F1 TV** for the catalogue and the video.
 - **F1's live timing** (`livetiming.formula1.com`) for the track map and the rest of the race
-  data, from beta.3. It takes the same F1 TV sign-in as the video; the sign-in goes to that host
-  only, never to anyone else, and is never written into a file or a log.
+  data, from beta.3. It takes the same F1 TV sign-in as the video; besides F1 TV, the sign-in
+  is sent only to that host, never to anyone else, and is never written into a file or a log.
 - **MultiViewer's circuit data** (`api.multiviewer.app`) for each track's outline, corners and
   marshal sectors, from beta.3. Those requests carry nothing about you or your sign-in.
 
-Circuit outlines are kept in the app's caches on your phone, so each track is fetched once; the
-timing itself is loaded when you watch and holds timing only.
+Circuit outlines are kept in the app's caches on your phone, so each track is fetched once. The
+timing is loaded when you watch and holds timing only. The live timing the app records (so you
+can rewind a live session) and the car data it loads for speed readouts are kept in the same
+caches and deleted after 7 days; they hold F1's timing messages only, nothing about you.
 
 ## Credits
 
