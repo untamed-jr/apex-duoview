@@ -574,6 +574,14 @@ struct NextLiveState: Equatable, Sendable {
         self.offer = nil
         return (offer, multiview)
     }
+
+    /// "Switch" couldn't open `item` (its details didn't load): the prompt comes back, unless
+    /// the programme watched is no longer `watched`, a newer offer came meanwhile, or it was
+    /// declined.
+    mutating func restore(_ item: CatalogItem, watched: Int?) {
+        guard let watching, watching == watched, offer == nil, !declined.contains(item.contentId) else { return }
+        offer = item
+    }
 }
 
 // MARK: - The pit circle's view

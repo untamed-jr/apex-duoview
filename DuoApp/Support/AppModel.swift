@@ -130,10 +130,15 @@ final class AppModel {
     /// last one was watched (the multiview shows one feed as well as four), else the single-feed
     /// player on its default feed.
     func switchToNextLive() async {
-        guard let (offer, inMultiview) = nextLive.accept(),
-              let detail = try? await catalogue.video(contentId: offer.contentId),
+        let watched = nextLive.watching
+        guard let (offer, inMultiview) = nextLive.accept() else { return }
+        // A failed fetch puts the prompt back rather than dropping it without a word.
+        guard let detail = try? await catalogue.video(contentId: offer.contentId),
               let channel = detail.channels.first(where: \.isDefault) ?? detail.channels.first
-        else { return }
+        else {
+            nextLive.restore(offer, watched: watched)
+            return
+        }
         var item = offer
         if item.title.isEmpty { item.title = detail.title }
         // The live list's tile may carry no metadata: the video's details say where its timing is.
