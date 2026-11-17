@@ -25,7 +25,9 @@ import SwiftUI
 /// the floating copy of a panel the layout shows hides meanwhile. Race Engineer's console and the
 /// Scrub Deck are labelled placeholders until the next build. Regions glide with the tiles (the
 /// same views, frames animated); a region the layout doesn't have is not drawn at all. Without
-/// timing a remembered data layout shows the posture's default. This view reads only whether
+/// timing a remembered data layout shows the posture's default, and on the laptop with one feed
+/// the bottom half says why ("Loading timing…", "No timing for this session"). Regions and that
+/// line hide while an error shows, as the floating panels do. This view reads only whether
 /// the timing is loaded (`hasTiming`), so the twice-a-second updates redraw only the panels.
 ///
 /// Controls (`MultiviewControls`): up when the multiview opens, hidden after 4 s without use, and
@@ -108,6 +110,7 @@ struct MultiviewView: View {
     private struct Placement: Equatable {
         var frames: [TileKey: TileFrame]
         var regions: DataRegions
+        var timingNoteArea: CGRect?
     }
 
     private struct Arrangement {
@@ -120,13 +123,17 @@ struct MultiviewView: View {
         var tiles: [PlacedTile]
         /// The data layout's panels, in full-screen coordinates; all nil for other layouts.
         var regions: DataRegions
+        /// Laptop with one feed and no timing: the bottom half (beta.2's placeholder area), where
+        /// a quiet line says why there is no data (`LaptopTimingNote`). nil otherwise, and nil if
+        /// it would touch a visible tile.
+        var timingNoteArea: CGRect?
 
         var visibleCount: Int { tiles.filter(\.frame.visible).count }
 
         var placement: Placement {
             var frames: [TileKey: TileFrame] = [:]
             for tile in tiles { frames[tile.id] = tile.frame }
-            return Placement(frames: frames, regions: regions)
+            return Placement(frames: frames, regions: regions, timingNoteArea: timingNoteArea)
         }
     }
 
@@ -153,7 +160,16 @@ struct MultiviewView: View {
                     Color.black
                         .onTapGesture { toggleControls() }
                         .accessibilityHidden(true)
-                    dataRegions(layout.regions)
+                    // Like the floating panels, no data while an error shows.
+                    if controller.errorText == nil {
+                        dataRegions(layout.regions)
+                        if let rect = layout.timingNoteArea {
+                            LaptopTimingNote(timing: controller.timing)
+                                .frame(width: rect.width, height: rect.height)
+                                .position(x: rect.midX, y: rect.midY)
+                                .transition(.opacity)
+                        }
+                    }
                     ForEach(layout.tiles) { placed in
                         tile(placed, in: layout)
                     }
@@ -304,6 +320,17 @@ struct MultiviewView: View {
         let regions = LayoutEngine.dataRegions(
             screen: screen, foldFrame: input.foldFrame, posture: input.posture,
             feedCount: count, optionID: option)
+        let tiles = zip(shown, frames).map {
+            PlacedTile(entry: $0.0, frame: TileFrame(rect: input.onScreen($0.1.rect), visible: $0.1.visible))
+        }
+        // Without timing the laptop's bottom half isn't left blank: it says why (never over a tile).
+        var noteArea: CGRect?
+        if !hasTiming, count > 0,
+           let area = LayoutEngine.reservedArea(
+               screen: screen, foldFrame: input.foldFrame, posture: input.posture, feedCount: count) {
+            let rect = input.onScreen(area)
+            if !tiles.contains(where: { $0.frame.visible && $0.frame.rect.intersects(rect) }) { noteArea = rect }
+        }
         return Arrangement(
             input: input,
             feedCount: count,
@@ -311,14 +338,13 @@ struct MultiviewView: View {
             usableOptions: LayoutEngine.usableOptionIDs(
                 screen: screen, foldFrame: input.foldFrame, posture: input.posture, feedCount: count,
                 hasTiming: hasTiming),
-            tiles: zip(shown, frames).map {
-                PlacedTile(entry: $0.0, frame: TileFrame(rect: input.onScreen($0.1.rect), visible: $0.1.visible))
-            },
+            tiles: tiles,
             regions: DataRegions(
                 map: regions.map.map { input.onScreen($0) },
                 tower: regions.tower.map { input.onScreen($0) },
                 console: regions.console.map { input.onScreen($0) },
-                deck: regions.deck.map { input.onScreen($0) }))
+                deck: regions.deck.map { input.onScreen($0) }),
+            timingNoteArea: noteArea)
     }
 
     private func tile(_ placed: PlacedTile, in layout: Arrangement) -> some View {

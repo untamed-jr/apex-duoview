@@ -89,3 +89,40 @@ private struct DataRegionFrame<Content: View>: View {
             .contentShape(shape)
     }
 }
+
+/// Laptop with one feed and no timing: a quiet line in the bottom half (where beta.2's placeholder
+/// was) rather than a blank screen. "Loading timing…" while the timing loads (or is tried again
+/// after a failure), "No timing for this session" when there is none; nothing before the player
+/// has attached the timing (the opening spinner shows then). Its own view, so only it follows the
+/// timing's status. Not interactive.
+struct LaptopTimingNote: View {
+    static let loading = "Loading timing\u{2026}"
+
+    let timing: TimingController
+
+    var body: some View {
+        Group {
+            if let text = Self.text(timing.status) {
+                Text(text)
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(16)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+    }
+
+    static func text(_ status: TimingStatus) -> String? {
+        switch status {
+        case .idle: return nil
+        case .loading: return loading
+        case .unavailable(let reason):
+            return reason == TimingController.retrying ? loading : TimingController.noTiming
+        // The data layouts take over once the timing is in; nothing to say here.
+        case .ready, .estimated: return nil
+        }
+    }
+}
