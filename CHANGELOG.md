@@ -16,10 +16,11 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   - **Laptop — Race Engineer and Scrub Deck:** the main feed on the top screen, the bottom screen
     kept for the console or the deck, labelled "Race Engineer — next build" and "Scrub Deck — next
     build" until build 14. With one feed, Scrub Deck is now the default; beta.2's "Saved for
-    beta.3" placeholder is gone (without timing, the bottom half stays empty).
+    beta.3" placeholder is gone. Without timing, the bottom half says "Loading timing…" or "No
+    timing for this session" instead.
   The map and tower in these layouts are the same as the floating panels (tap a car, the Battle
   chip, −1 s / +1 s, turning the map); a floating panel the layout already shows hides while it
-  does. Layout changes and folds glide, as in beta.2. Without timing (loading, unavailable, or no
+  does, and the Map button hides while the layout shows both. Layout changes and folds glide, as in beta.2. Without timing (loading, unavailable, or no
   timing for this session) a remembered data layout shows the fold's default instead, and comes
   back once the timing is there.
 - **The tower fits its width:** narrower than its full set of columns (a resized panel, the
@@ -43,7 +44,12 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   fitting Director's Desk's 240 pt map slot, and the 200 pt tower column without the interval and
   last-lap columns.
 - A floating panel hiding while the layout shows it, and coming back with a plain layout; the
-  Map button while both are in the layout (it switches the floating panels, which stay hidden).
+  Map button gone while the layout shows both the map and the tower (Director's Desk, the book
+  data screen) and back with any other layout.
+- Laptop with one feed: "Loading timing…" in the bottom half while the timing loads, "No timing
+  for this session" on a video without timing (a highlights video), and nothing there once the
+  Scrub Deck takes over.
+- An error over the multiview hides the layout's map and tower, as it hides the floating panels.
 - A remembered data layout falling back to the fold's default on a video without timing, and
   coming back on a replay with timing.
 - **The tracker delay default (T-B1):** still 0 s. Read how many seconds the TRACKER tile runs
