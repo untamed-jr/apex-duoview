@@ -183,13 +183,14 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
 }
 
 /// The "Map" control, in the multiview's top bar and over the single-feed player: shows both
-/// panels, or hides them. Only for content with timing.
+/// panels, or hides them. Only for content with timing, and hidden while the multiview's data
+/// layout already shows both the map and the tower (its floating panels would stay hidden).
 struct TimingMapButton: View {
     let timing: TimingController
     let onInteraction: @MainActor () -> Void
 
     var body: some View {
-        if timing.showsData {
+        if timing.showsData, !timing.dockedPanels.isSuperset(of: TimingPanel.allCases) {
             let showing = !timing.panels.isEmpty
             Button {
                 onInteraction()
