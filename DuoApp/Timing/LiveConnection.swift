@@ -37,7 +37,8 @@ protocol LiveTransport: Sendable {
 
 /// F1's live timing (SignalR Core at `livetiming.formula1.com/signalrcore`), one connection for
 /// the whole app, shared and reference-counted: it runs while anyone listens (`listen()`) and
-/// stops when the last listener goes.
+/// stops 15 s after the last listener goes (a listener back within them, such as the multiview
+/// taking over from the single player, keeps the same socket and session).
 ///
 /// - Each try: negotiate (keeping the sticky cookie), open the socket with the F1 TV token as
 ///   `Authorization: Bearer` and the Android user agent the multiview already uses, the
@@ -86,18 +87,29 @@ actor LiveConnection {
     #if canImport(Network)
     private var monitor: NWPathMonitor?
     #endif
+    /// How long the connection stays up after the last listener leaves.
+    private let linger: Duration
+    /// The wait after the last listener left; cancelled when one comes back.
+    private var lingerTask: Task<Void, Never>?
+    /// Which wait is current: bumped by each leave and each listen.
+    private var lingerTicket = 0
+
+    /// After the last listener leaves, the connection is kept this long for the next.
+    static let lingerAfterLastListener: Duration = .seconds(15)
 
     init(transport: any LiveTransport, recorder: LiveRecorder?, token: @escaping @Sendable () async -> String?,
-         now: @escaping @Sendable () -> UTCms = { UTCms((Date().timeIntervalSince1970 * 1000).rounded()) }) {
+         now: @escaping @Sendable () -> UTCms = { UTCms((Date().timeIntervalSince1970 * 1000).rounded()) },
+         linger: Duration = LiveConnection.lingerAfterLastListener) {
         self.transport = transport
         self.recorder = recorder
         self.token = token
         self.now = now
+        self.linger = linger
     }
 
     /// The current session's messages so far, the link's state, then everything live. The stream
     /// ends when the listener stops reading it (its task is cancelled); the connection stops when
-    /// nobody listens.
+    /// nobody has listened for `linger`.
     func listen() -> AsyncStream<LiveEvent> {
         let (stream, continuation) = AsyncStream.makeStream(of: LiveEvent.self, bufferingPolicy: .unbounded)
         let id = nextListener
@@ -107,6 +119,10 @@ actor LiveConnection {
         continuation.onTermination = { @Sendable [weak self] _ in
             Task { await self?.remove(id) }
         }
+        // Back within the linger: the connection that is still up serves this listener.
+        lingerTicket &+= 1
+        lingerTask?.cancel()
+        lingerTask = nil
         if runTask == nil { start() }
         // Just started, the run's first try hasn't begun yet: it is connecting all the same.
         continuation.yield(.link(link.reported == .idle ? .connecting : link.reported, everSubscribed: link.everSubscribed))
@@ -131,8 +147,28 @@ actor LiveConnection {
 
     // MARK: Listeners
 
-    private func remove(_ id: Int) async {
+    /// The last listener left: the connection stays up `linger` longer, so a player handing over
+    /// to another (single feed to multiview) keeps the socket and the session so far.
+    private func remove(_ id: Int) {
         guard listeners.removeValue(forKey: id) != nil, listeners.isEmpty else { return }
+        lingerTicket &+= 1
+        let ticket = lingerTicket
+        let linger = linger
+        lingerTask?.cancel()
+        lingerTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: linger)
+            } catch {
+                return  // a listener came back
+            }
+            await self?.stopIfNobodyListens(ticket)
+        }
+    }
+
+    /// The linger `ticket` ran out: everything stops unless a listener came meanwhile.
+    private func stopIfNobodyListens(_ ticket: Int) async {
+        guard ticket == lingerTicket, listeners.isEmpty else { return }
+        lingerTask = nil
         runTask?.cancel()
         runTask = nil
         socket?.close()
