@@ -18,8 +18,9 @@ import Observation
 ///   `mapState(at:)`, which the map asks for at the display's frame rate. The timeline marks
 ///   (`TimelineMark.marks`) show lights out and the chequered flag always, and flag periods only
 ///   up to picture time unless "Show the whole race" is on.
-/// - The 2 Hz tick runs only while something reads it: a floating panel showing, the multiview's
-///   timeline marks, or a driver card over an onboard (`setCardFeeds`).
+/// - The 2 Hz tick runs only while something reads it: a floating panel showing, a data layout's
+///   docked map or tower (`setDockedPanels`), the multiview's timeline marks, or a driver card over
+///   an onboard (`setCardFeeds`).
 /// - The tower (`tower`), its header (`header`), the battle (`battleRival`) and the cards (`cards`)
 ///   are published at 2 Hz as separate values, each assigned only when it changed, so a view reads
 ///   only what it shows.
@@ -56,8 +57,16 @@ final class TimingController {
     private(set) var mapTurn: Double = 0
     /// The picture offset (mirrors `TimingSettings.offsetMs`, so frames don't read the store).
     private(set) var offsetMs: Int64
-    /// The floating panels showing.
+    /// The floating panels switched on (the Map control). One the attached player's data layout
+    /// already shows (`dockedPanels`) is hidden while it does.
     private(set) var panels: Set<TimingPanel> = []
+    /// The panels the attached player's data layout shows in its own regions (the multiview's
+    /// Director's Desk, book data screen): read like a floating panel, drawn in place.
+    private(set) var dockedPanels: Set<TimingPanel> = []
+    /// Settings › Multiview › "Tracker delay", in half-seconds (mirrors
+    /// `TimingSettings.trackerDelayHalfSeconds`, so the multiview's sync and the stepper don't
+    /// read the store).
+    private(set) var trackerDelayHalfSeconds: Int
     /// Settings › Track map switches (mirrors of the store, which isn't observed).
     private(set) var showWholeRace: Bool
     private(set) var speedOnMobileData: Bool
@@ -115,6 +124,7 @@ final class TimingController {
         showWholeRace = settings.showWholeRace
         speedOnMobileData = settings.speedOnMobileData
         hiddenCards = settings.hiddenCards
+        trackerDelayHalfSeconds = settings.trackerDelayHalfSeconds
     }
 
     isolated deinit {
@@ -134,6 +144,17 @@ final class TimingController {
         }
     }
 
+    /// The session's timing is loaded (picture time exact or estimated): the data layouts are
+    /// offered. Not while loading, retrying or unavailable.
+    var hasTiming: Bool {
+        status == .ready || status == .estimated
+    }
+
+    /// A floating panel shows: switched on, and not already in the data layout.
+    func showsFloating(_ panel: TimingPanel) -> Bool {
+        panels.contains(panel) && !dockedPanels.contains(panel)
+    }
+
     // MARK: Attaching
 
     /// Starts timing for `item` (its `timingRef` must be filled, from the video's details when the
@@ -147,11 +168,13 @@ final class TimingController {
         if contentId == item.contentId, status != .idle {
             self.clock = clock
             let newOwner = owner.map(ObjectIdentifier.init)
-            // Another player took over: its own cards come with its next `setCardFeeds`.
+            // Another player took over: its own cards and docked panels come with its next
+            // `setCardFeeds` and `setDockedPanels`.
             if ownerID != newOwner, !cardFeeds.isEmpty {
                 cardFeeds = [:]
                 if !cards.isEmpty { cards = [:] }
             }
+            if ownerID != newOwner, !dockedPanels.isEmpty { dockedPanels = [] }
             ownerID = newOwner
             wantsMarks = timelineMarks
             // The new clock may change the status (estimated or not) even with no reader ticking.
@@ -216,6 +239,7 @@ final class TimingController {
         mapMessage = nil
         mapTurn = 0
         if !panels.isEmpty { panels = [] }
+        if !dockedPanels.isEmpty { dockedPanels = [] }
     }
 
     // MARK: Picture time
@@ -306,6 +330,23 @@ final class TimingController {
     func closePanel(_ panel: TimingPanel) {
         panels.remove(panel)
         updateTicking()
+    }
+
+    /// The attached player's data layout shows these panels in its own regions (`owner` must be
+    /// the attached player; anyone else is ignored): they tick and publish like floating ones, and
+    /// the floating copies hide while they show.
+    func setDockedPanels(_ docked: Set<TimingPanel>, owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner), dockedPanels != docked else { return }
+        dockedPanels = docked
+        updateTicking()
+        publish()
+    }
+
+    /// Settings › Multiview › "Tracker delay": longer (positive) or shorter by half-seconds,
+    /// within 0–20 s.
+    func nudgeTrackerDelay(by halfSeconds: Int) {
+        let value = settings.nudgeTrackerDelay(by: halfSeconds)
+        if trackerDelayHalfSeconds != value { trackerDelayHalfSeconds = value }
     }
 
     /// "Show the whole race": every flag period on the timeline (and, later, the Scrub Deck).
@@ -474,10 +515,15 @@ final class TimingController {
 
     // MARK: The 2 Hz snapshot
 
-    /// Whether the tick has a reader: a session loaded, and a panel showing, the marks shown or a
-    /// driver card showing.
+    /// The panels read at 2 Hz: floating or docked.
+    private var readPanels: Set<TimingPanel> {
+        panels.union(dockedPanels)
+    }
+
+    /// Whether the tick has a reader: a session loaded, and a panel showing (floating or docked),
+    /// the marks shown or a driver card showing.
     private var needsTicking: Bool {
-        loaded != nil && (wantsMarks || !panels.isEmpty || !cardCars.isEmpty)
+        loaded != nil && (wantsMarks || !readPanels.isEmpty || !cardCars.isEmpty)
     }
 
     /// Starts or stops the tick to match `needsTicking`.
@@ -530,10 +576,10 @@ final class TimingController {
         publishCards(loaded, at: t)
     }
 
-    /// The tower, its header and the battle, while a panel shows (the tower, or the map with its
-    /// Battle chip).
+    /// The tower, its header and the battle, while a panel shows, floating or docked (the tower,
+    /// or the map with its Battle chip).
     private func publishPanels(_ loaded: LoadedSession, at t: UTCms) {
-        guard !panels.isEmpty else {
+        guard !readPanels.isEmpty else {
             if !tower.isEmpty { tower = [] }
             if battleRival != nil { battleRival = nil }
             return

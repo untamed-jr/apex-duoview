@@ -7,7 +7,12 @@ import SwiftUI
 /// 0.9 opacity, and is remembered per posture and screen shape (`PanelLayout.postureKey`).
 ///
 /// Only the panels take touches: the space around them reaches the feeds underneath. Nothing
-/// shows for content without timing.
+/// shows for content without timing. A panel the multiview's data layout already shows in its
+/// own region (`TimingController.dockedPanels`) hides while it does, and comes back with the
+/// next layout.
+///
+/// The tower adapts its columns to its width (`TowerColumns`), so a narrowed panel keeps the
+/// position, code and gap.
 struct FloatingPanels: View {
     let timing: TimingController
     /// Where the panels may sit, in this view's own space (the safe area).
@@ -20,7 +25,7 @@ struct FloatingPanels: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             if timing.showsData {
-                if timing.panels.contains(.tower) {
+                if timing.showsFloating(.tower) {
                     FloatingPanel(
                         panel: .tower, title: "Tower", settings: timing.settings, bounds: bounds, postureKey: postureKey,
                         onClose: { timing.closePanel(.tower) }
@@ -30,7 +35,7 @@ struct FloatingPanels: View {
                         TowerView(timing: timing, onCar: onCar)
                     }
                 }
-                if timing.panels.contains(.map) {
+                if timing.showsFloating(.map) {
                     FloatingPanel(
                         panel: .map, title: "Map", settings: timing.settings, bounds: bounds, postureKey: postureKey,
                         onClose: { timing.closePanel(.map) }

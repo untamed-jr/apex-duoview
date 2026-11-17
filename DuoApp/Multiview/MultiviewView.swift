@@ -19,7 +19,14 @@ import SwiftUI
 ///
 /// Timing: the controls' "Map" shows the map and tower as floating panels (`FloatingPanels`),
 /// above the tiles and below the controls, inside the safe area. Only the panels take touches.
-/// This view never reads the timing itself, so its twice-a-second updates redraw only the panels.
+/// Once the session's timing is loaded, ⟳ also offers the posture's data layouts (Director's
+/// Desk, the book data screen, Race Engineer, Scrub Deck): their map and tower are drawn in the
+/// layout's own regions (`LayoutEngine.dataRegions`, `DockedMapPanel`, `DockedTowerPanel`), and
+/// the floating copy of a panel the layout shows hides meanwhile. Race Engineer's console and the
+/// Scrub Deck are labelled placeholders until the next build. Regions glide with the tiles (the
+/// same views, frames animated); a region the layout doesn't have is not drawn at all. Without
+/// timing a remembered data layout shows the posture's default. This view reads only whether
+/// the timing is loaded (`hasTiming`), so the twice-a-second updates redraw only the panels.
 ///
 /// Controls (`MultiviewControls`): up when the multiview opens, hidden after 4 s without use, and
 /// held up while paused, loading, scrubbing or showing an error. A tap on a tile keeps its job
@@ -97,26 +104,29 @@ struct MultiviewView: View {
         var translation: CGSize
     }
 
-    /// What the glide animates on: every tile's frame and the reserved area.
+    /// What the glide animates on: every tile's frame and the data regions.
     private struct Placement: Equatable {
         var frames: [TileKey: TileFrame]
-        var reserved: CGRect?
+        var regions: DataRegions
     }
 
     private struct Arrangement {
         var input: MultiviewLayoutInput
         var feedCount: Int
+        /// The session's timing is loaded: the data layouts are offered.
+        var hasTiming: Bool
         /// The layouts ⟳ cycles through: those that fit this screen.
         var usableOptions: [String]
         var tiles: [PlacedTile]
-        var reserved: CGRect?
+        /// The data layout's panels, in full-screen coordinates; all nil for other layouts.
+        var regions: DataRegions
 
         var visibleCount: Int { tiles.filter(\.frame.visible).count }
 
         var placement: Placement {
             var frames: [TileKey: TileFrame] = [:]
             for tile in tiles { frames[tile.id] = tile.frame }
-            return Placement(frames: frames, reserved: reserved)
+            return Placement(frames: frames, regions: regions)
         }
     }
 
@@ -143,12 +153,7 @@ struct MultiviewView: View {
                     Color.black
                         .onTapGesture { toggleControls() }
                         .accessibilityHidden(true)
-                    if let rect = layout.reserved {
-                        ReservedArea()
-                            .frame(width: rect.width, height: rect.height)
-                            .position(x: rect.midX, y: rect.midY)
-                            .transition(.opacity)
-                    }
+                    dataRegions(layout.regions)
                     ForEach(layout.tiles) { placed in
                         tile(placed, in: layout)
                     }
@@ -160,17 +165,18 @@ struct MultiviewView: View {
                 .onChange(of: Self.visibleFeedIDs(layout), initial: true) { _, ids in
                     controller.setVisibleFeeds(ids)
                 }
+                // The map and tower the layout shows: the timing reads them, and hides their
+                // floating copies.
+                .onChange(of: Self.dockedPanels(layout.regions), initial: true) { _, docked in
+                    controller.setDockedPanels(docked)
+                }
                 .overlay {
                     if controller.errorText == nil {
                         FloatingPanels(
                             timing: controller.timing,
                             bounds: Self.safeRect(screen: proxy.size, insets: insets),
                             postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
-                            onCar: { number in
-                                noteInteraction()
-                                // Racing numbers are whole numbers; anything else has no onboard.
-                                if let racingNumber = Int(number) { controller.showOnboard(racingNumber: racingNumber) }
-                            })
+                            onCar: { number in carTapped(number) })
                     }
                 }
                 .overlay {
@@ -204,6 +210,52 @@ struct MultiviewView: View {
     }
 
     // MARK: Layout
+
+    /// The data layout's regions, each drawn only when the layout has it, in a fixed place in this
+    /// builder so a region the next layout keeps is the same view, gliding to its new frame.
+    @ViewBuilder
+    private func dataRegions(_ regions: DataRegions) -> some View {
+        if let rect = regions.map {
+            DockedMapPanel(timing: controller.timing, onCar: { number in carTapped(number) })
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        if let rect = regions.tower {
+            DockedTowerPanel(timing: controller.timing, onCar: { number in carTapped(number) })
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        if let rect = regions.console {
+            DataRegionPlaceholder(caption: DataRegionPlaceholder.raceEngineer)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        if let rect = regions.deck {
+            DataRegionPlaceholder(caption: DataRegionPlaceholder.scrubDeck)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+    }
+
+    /// The timing panels the layout's regions show.
+    private static func dockedPanels(_ regions: DataRegions) -> Set<TimingPanel> {
+        var docked: Set<TimingPanel> = []
+        if regions.map != nil { docked.insert(.map) }
+        if regions.tower != nil { docked.insert(.tower) }
+        return docked
+    }
+
+    /// A car tapped on the map or the tower (floating or in the layout), or the Battle chip: its
+    /// onboard.
+    private func carTapped(_ number: String) {
+        noteInteraction()
+        // Racing numbers are whole numbers; anything else has no onboard.
+        if let racingNumber = Int(number) { controller.showOnboard(racingNumber: racingNumber) }
+    }
 
     /// The channel ids of the tiles this layout shows.
     private static func visibleFeedIDs(_ layout: Arrangement) -> Set<Int> {
@@ -242,21 +294,31 @@ struct MultiviewView: View {
         let filled = all.filter { $0.channel != nil }
         let shown = controller.effectiveFeedCount == all.count ? all : filled
         let count = shown.count
-        let option = controller.layoutOption(for: input.posture, feedCount: count)
+        // Read once, so the choice, the usable list and the regions agree.
+        let hasTiming = controller.timing.hasTiming
+        let option = controller.layoutOption(for: input.posture, feedCount: count, hasTiming: hasTiming)
         let frames = LayoutEngine.frames(
+            screen: screen, foldFrame: input.foldFrame, posture: input.posture,
+            feedCount: count, optionID: option)
+        // The same arguments as the frames, so the regions are that layout's (none for no feed).
+        let regions = LayoutEngine.dataRegions(
             screen: screen, foldFrame: input.foldFrame, posture: input.posture,
             feedCount: count, optionID: option)
         return Arrangement(
             input: input,
             feedCount: count,
+            hasTiming: hasTiming,
             usableOptions: LayoutEngine.usableOptionIDs(
-                screen: screen, foldFrame: input.foldFrame, posture: input.posture, feedCount: count),
+                screen: screen, foldFrame: input.foldFrame, posture: input.posture, feedCount: count,
+                hasTiming: hasTiming),
             tiles: zip(shown, frames).map {
                 PlacedTile(entry: $0.0, frame: TileFrame(rect: input.onScreen($0.1.rect), visible: $0.1.visible))
             },
-            reserved: LayoutEngine.reservedArea(
-                screen: screen, foldFrame: input.foldFrame, posture: input.posture, feedCount: count)
-                .map { input.onScreen($0) })
+            regions: DataRegions(
+                map: regions.map.map { input.onScreen($0) },
+                tower: regions.tower.map { input.onScreen($0) },
+                console: regions.console.map { input.onScreen($0) },
+                deck: regions.deck.map { input.onScreen($0) }))
     }
 
     private func tile(_ placed: PlacedTile, in layout: Arrangement) -> some View {
@@ -392,6 +454,7 @@ struct MultiviewView: View {
     private func controls(_ layout: Arrangement) -> some View {
         let posture = layout.input.posture
         let feedCount = layout.feedCount
+        let hasTiming = layout.hasTiming
         let usable = layout.usableOptions
         let half = mainHalf(layout)
         let handle = handleSpan(layout, half: half)
@@ -408,7 +471,7 @@ struct MultiviewView: View {
             // A control used, even from a menu that outlived the fade: the controls are up again.
             onInteraction: { showControls() },
             onSwitchLayout: {
-                controller.cycleLayout(posture: posture, feedCount: feedCount, usable: usable)
+                controller.cycleLayout(posture: posture, feedCount: feedCount, hasTiming: hasTiming, usable: usable)
             },
             onFeeds: { openEditor(slot: nil) })
     }

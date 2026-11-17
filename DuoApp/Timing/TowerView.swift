@@ -7,7 +7,8 @@ import SwiftUI
 /// in a race, "Fastest" otherwise), the interval, and the tyre (a compound ring with its letter,
 /// then laps on the set). In qualifying the knockout zone is shaded and knocked-out cars are
 /// dimmed. Your driver and a rival within 1.0 s glow (races only). Tapping a row opens that car's
-/// onboard (`onCar`).
+/// onboard (`onCar`). Narrower than every column needs (a resized panel, Director's Desk's tower
+/// column), the interval goes, then the last lap (`TowerColumns`).
 struct TowerView: View {
     let timing: TimingController
     /// A row was tapped (its racing number).
@@ -16,10 +17,13 @@ struct TowerView: View {
     var body: some View {
         switch timing.status {
         case .ready, .estimated:
-            VStack(spacing: 0) {
-                SessionHeaderView(timing: timing)
-                TowerColumnTitles(gapHeader: timing.gapHeader)
-                TowerRows(timing: timing, onCar: onCar)
+            GeometryReader { proxy in
+                let columns = TowerColumns.fitting(proxy.size.width)
+                VStack(spacing: 0) {
+                    SessionHeaderView(timing: timing)
+                    TowerColumnTitles(gapHeader: timing.gapHeader, columns: columns)
+                    TowerRows(timing: timing, columns: columns, onCar: onCar)
+                }
             }
         case .loading:
             TowerMessage(text: "Loading timing…", busy: true)
@@ -34,6 +38,7 @@ struct TowerView: View {
 /// The rows: their own view, so only it follows `timing.tower`.
 private struct TowerRows: View {
     let timing: TimingController
+    let columns: TowerColumns
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
@@ -43,7 +48,7 @@ private struct TowerRows: View {
                     Button {
                         onCar(row.number)
                     } label: {
-                        TowerRowView(row: row)
+                        TowerRowView(row: row, columns: columns)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(TowerRowView.accessibility(row))
@@ -58,15 +63,20 @@ private struct TowerRows: View {
 /// The column titles.
 private struct TowerColumnTitles: View {
     let gapHeader: String
+    let columns: TowerColumns
 
     var body: some View {
         HStack(spacing: TowerLayout.spacing) {
             title("P", width: TowerLayout.position, alignment: .trailing)
             Color.clear.frame(width: TowerLayout.bar)
             title("Driver", width: TowerLayout.code, alignment: .leading)
-            title("Last lap", width: TowerLayout.lap, alignment: .trailing)
+            if columns.lastLap {
+                title("Last lap", width: TowerLayout.lap, alignment: .trailing)
+            }
             title(gapHeader, width: TowerLayout.gap, alignment: .trailing)
-            title("Int", width: TowerLayout.interval, alignment: .trailing)
+            if columns.interval {
+                title("Int", width: TowerLayout.interval, alignment: .trailing)
+            }
             title("Tyre", width: TowerLayout.tyre, alignment: .leading)
         }
         .padding(.horizontal, TowerLayout.inset)
@@ -85,7 +95,7 @@ private struct TowerColumnTitles: View {
     }
 }
 
-/// The tower's column widths, in points.
+/// The tower's column widths, in points (`TowerColumns` adds them up to choose the columns).
 enum TowerLayout {
     static let inset: CGFloat = 6
     static let spacing: CGFloat = 4
@@ -102,6 +112,7 @@ enum TowerLayout {
 /// One car's row.
 struct TowerRowView: View {
     let row: TowerRow
+    var columns: TowerColumns = .all
 
     var body: some View {
         HStack(spacing: TowerLayout.spacing) {
@@ -117,10 +128,19 @@ struct TowerRowView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
                 .frame(width: TowerLayout.code, alignment: .leading)
-            cell(row.lastLap, width: TowerLayout.lap, alignment: .trailing,
-                 colour: row.lastLap == "PIT" ? Theme.flagYellow : TimingColours.lap(row.lastLapPace))
-            cell(row.gap, width: TowerLayout.gap, alignment: .trailing, colour: Theme.textPrimary)
-            cell(row.interval, width: TowerLayout.interval, alignment: .trailing, colour: Theme.textSecondary)
+            if columns.lastLap {
+                cell(row.lastLap, width: TowerLayout.lap, alignment: .trailing,
+                     colour: row.lastLap == "PIT" ? Theme.flagYellow : TimingColours.lap(row.lastLapPace))
+            }
+            // Without the last-lap column, PIT shows in the gap's place.
+            if !columns.lastLap, row.lastLap == "PIT" {
+                cell("PIT", width: TowerLayout.gap, alignment: .trailing, colour: Theme.flagYellow)
+            } else {
+                cell(row.gap, width: TowerLayout.gap, alignment: .trailing, colour: Theme.textPrimary)
+            }
+            if columns.interval {
+                cell(row.interval, width: TowerLayout.interval, alignment: .trailing, colour: Theme.textSecondary)
+            }
             TyreCell(tyre: row.tyre)
                 .frame(width: TowerLayout.tyre, alignment: .leading)
         }

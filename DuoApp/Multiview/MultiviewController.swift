@@ -140,6 +140,9 @@ final class MultiviewController {
     /// The feeds whose tiles the layout shows (the view reports them); nil until it has. Only
     /// these get driver cards.
     @ObservationIgnored private var visibleFeeds: Set<Int>?
+    /// The timing panels the data layout shows in its own regions (the view reports them), handed
+    /// to the timing after every attach.
+    @ObservationIgnored private var dockedPanels: Set<TimingPanel> = []
     /// Where the main feed starts once it is ready; a refresh sets it to the main feed's place.
     @ObservationIgnored private var pendingStart: Start = .position(0)
     /// The feeds were started together (or there was nothing to start).
@@ -330,6 +333,8 @@ final class MultiviewController {
             guard let self else { return (programDate: nil, playerSeconds: .nan) }
             return self.timingClock()
         })
+        // The view may have reported before the attach, when the timing ignored it.
+        timing.setDockedPanels(dockedPanels, owner: self)
 
         feedURLs = info.feeds
         // Links can't have expired seconds after this PLAY: a failure in the first minute is an
@@ -473,30 +478,37 @@ final class MultiviewController {
     // MARK: Layout choice
 
     /// The layout chosen for this posture and feed count (remembered across sessions), or the
-    /// posture's default. `LayoutEngine.frames` falls back if it doesn't fit the screen.
-    func layoutOption(for posture: Multiview.Posture, feedCount: Int) -> String {
+    /// posture's default. With `hasTiming` (the session's timing is loaded) the data layouts are
+    /// among the choices; without it a remembered data layout shows the posture's default and
+    /// stays remembered for when the timing is back (`LayoutChoice`). `LayoutEngine.frames` falls
+    /// back if the choice doesn't fit the screen.
+    func layoutOption(for posture: Multiview.Posture, feedCount: Int, hasTiming: Bool) -> String {
         _ = layoutRevision
         let count = Self.layoutCount(feedCount)
-        let options = LayoutEngine.optionIDs(posture: posture, feedCount: count)
-        if let saved = store.layoutChoice(for: LayoutKey(posture: posture, feedCount: count)),
-           options.contains(saved) {
-            return saved
-        }
-        return options[0]
+        return LayoutChoice.option(
+            saved: store.layoutChoice(for: LayoutKey(posture: posture, feedCount: count)),
+            posture: posture, feedCount: count, hasTiming: hasTiming)
     }
 
     /// "Switch layout": the next layout among `usable` (the options that fit this screen, from
-    /// `LayoutEngine.usableOptionIDs`; all of the posture's options when nil), stored as the
-    /// choice for this posture and feed count.
-    func cycleLayout(posture: Multiview.Posture, feedCount: Int, usable: [String]? = nil) {
+    /// `LayoutEngine.usableOptionIDs` with the same `hasTiming`; all of the posture's options when
+    /// nil), stored as the choice for this posture and feed count.
+    func cycleLayout(posture: Multiview.Posture, feedCount: Int, hasTiming: Bool, usable: [String]? = nil) {
         let count = Self.layoutCount(feedCount)
-        let options = usable ?? LayoutEngine.optionIDs(posture: posture, feedCount: count)
-        guard options.count > 1 else { return }
+        let options = usable ?? LayoutEngine.optionIDs(posture: posture, feedCount: count, hasTiming: hasTiming)
         // A choice that doesn't fit shows the first option that does: cycle on from that one.
-        let current = layoutOption(for: posture, feedCount: count)
-        let shown = options.firstIndex(of: current) ?? 0
-        store.setLayoutChoice(options[(shown + 1) % options.count], for: LayoutKey(posture: posture, feedCount: count))
+        let current = layoutOption(for: posture, feedCount: count, hasTiming: hasTiming)
+        guard let next = LayoutChoice.next(after: current, in: options) else { return }
+        store.setLayoutChoice(next, for: LayoutKey(posture: posture, feedCount: count))
         layoutRevision += 1
+    }
+
+    /// The timing panels the layout shows in its data regions (the view reports them): the timing
+    /// reads them like floating panels and hides the floating copies.
+    func setDockedPanels(_ docked: Set<TimingPanel>) {
+        guard dockedPanels != docked else { return }
+        dockedPanels = docked
+        timing.setDockedPanels(docked, owner: self)
     }
 
     private static func layoutCount(_ feedCount: Int) -> Int {
@@ -1143,7 +1155,7 @@ final class MultiviewController {
     /// otherwise by position. Once playing, it aims ahead by what the seek is expected to cost.
     private func join(_ feed: MultiviewFeed, to reference: MultiviewFeed) {
         let time = feed.player.currentTime()
-        guard let offset = offsetSeconds(of: feed, from: reference), time.isNumeric else {
+        guard let offset = syncError(of: feed, from: reference), time.isNumeric else {
             placed(feed)
             return
         }
@@ -1454,7 +1466,8 @@ final class MultiviewController {
         if !isPaused && !mainRunning { return }
         for feed in otherFeeds where !isFrozen(feed) {
             guard feed.positioned, feed.seekStartedAt == nil, !feed.ended else { continue }
-            let offset = offsetSeconds(of: feed, from: main)
+            // Where it should be: level with the main feed, or the tracker delay behind it.
+            let offset = syncError(of: feed, from: main)
             if feed.parked {
                 // Waiting at its start for the main feed to get there.
                 if let offset, offset <= SyncPolicy.tolerance {
@@ -1492,6 +1505,27 @@ final class MultiviewController {
                 }
             }
         }
+    }
+
+    /// How far this feed is from where it should be against the reference, in seconds (positive =
+    /// ahead): its offset, corrected by the tracker delay (`TrackerDelay`), so a TRACKER or DATA
+    /// feed is in place when it runs the delay behind the main feed. Joining, the parked release,
+    /// the lead learning and the sync's nudges and seeks all use this.
+    private func syncError(of feed: MultiviewFeed, from reference: MultiviewFeed) -> Double? {
+        TrackerDelay.syncError(
+            offset: offsetSeconds(of: feed, from: reference),
+            feedLag: trackerLag(feed), referenceLag: trackerLag(reference))
+    }
+
+    /// How far behind the main feed this feed should run: the tracker delay for a TRACKER or DATA
+    /// feed while the main feed is neither, else 0.
+    private func trackerLag(_ feed: MultiviewFeed) -> Double {
+        let delay = TrackerDelay.seconds(halfSeconds: timing.trackerDelayHalfSeconds)
+        guard delay > 0 else { return 0 }
+        return TrackerDelay.lag(
+            feedDelayed: TrackerDelay.applies(to: slots.first(where: { $0?.id == feed.channelId }).flatMap { $0 }),
+            mainDelayed: TrackerDelay.applies(to: slots[0]),
+            delay: delay)
     }
 
     /// This feed's time minus the reference's, in seconds (positive = ahead): by program date

@@ -29,6 +29,29 @@ enum TimingPanel: String, CaseIterable, Sendable {
     case tower
 }
 
+/// The tower's optional columns for a given width: all of them from 277 pt (the floating panel's
+/// default), the interval dropped below that, and the last lap too below 229 pt (Director's
+/// Desk's 200 pt tower column). Position, code, gap and tyre always show.
+struct TowerColumns: Equatable, Sendable {
+    var lastLap: Bool
+    var interval: Bool
+
+    static let all = TowerColumns(lastLap: true, interval: true)
+
+    /// Insets, spacing and the fixed columns (position, team bar, code, gap, tyre); the optional
+    /// ones add their width plus one spacing each. Mirrors `TowerLayout`'s widths.
+    static let fixedWidth: CGFloat = 2 * 6 + 18 + 3 + 32 + 50 + 38 + 4 * 4
+    static let lastLapWidth: CGFloat = 56 + 4
+    static let intervalWidth: CGFloat = 44 + 4
+
+    /// The columns that fit `width`.
+    static func fitting(_ width: CGFloat) -> TowerColumns {
+        if width >= fixedWidth + lastLapWidth + intervalWidth { return .all }
+        if width >= fixedWidth + lastLapWidth { return TowerColumns(lastLap: true, interval: false) }
+        return TowerColumns(lastLap: false, interval: false)
+    }
+}
+
 /// What the 2 Hz views read: every value at picture time, never later.
 struct TimingSnapshot: Equatable, Sendable {
     var drivers: [String: DriverInfo]

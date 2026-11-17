@@ -1,4 +1,5 @@
 import CoreGraphics
+import F1TV
 import Multiview
 
 /// What the multiview lays its tiles out by: the layout engine's posture, the fold it can use,
@@ -97,5 +98,68 @@ enum MultiviewLayout {
             if playable.contains(id) { return slots.firstIndex(of: id) }
         }
         return nil
+    }
+}
+
+/// Which layout shows: the posture's options with or without the data layouts (`hasTiming`: the
+/// session's timing is loaded), the remembered choice when it is one of them, else the default.
+/// A remembered data layout stays remembered while timing is missing: the posture's default shows
+/// meanwhile, and the data layout comes back with the timing.
+enum LayoutChoice {
+    /// The layout for this posture and feed count, from the remembered choice (`saved`).
+    static func option(saved: String?, posture: Multiview.Posture, feedCount: Int, hasTiming: Bool) -> String {
+        let options = LayoutEngine.optionIDs(posture: posture, feedCount: feedCount, hasTiming: hasTiming)
+        if let saved, options.contains(saved) { return saved }
+        return options[0]
+    }
+
+    /// "Switch layout": the option after `current` among `options` (those that fit the screen),
+    /// wrapping; from the first when `current` isn't among them (it didn't fit). nil with one
+    /// option or none.
+    static func next(after current: String, in options: [String]) -> String? {
+        guard options.count > 1 else { return nil }
+        let shown = options.firstIndex(of: current) ?? 0
+        return options[(shown + 1) % options.count]
+    }
+}
+
+/// Settings › Multiview › "Tracker delay": F1's TRACKER feed runs a little ahead of the world
+/// feed, so the sync holds the TRACKER and DATA tiles that much behind the feed they line up
+/// with. Matched by title, as the feed picker matches them (`FeedPick`).
+enum TrackerDelay {
+    /// The stored half-seconds, in seconds.
+    static func seconds(halfSeconds: Int) -> Double {
+        Double(max(halfSeconds, 0)) * 0.5
+    }
+
+    /// The delay as Settings shows it: "0 s", "1.5 s", "2 s".
+    static func text(halfSeconds: Int) -> String {
+        let value = max(halfSeconds, 0)
+        return value % 2 == 0 ? "\(value / 2) s" : "\(value / 2).5 s"
+    }
+
+    /// TRACKER or DATA.
+    static func applies(to channel: Channel?) -> Bool {
+        guard let channel else { return false }
+        switch FeedPick(channel) {
+        case .tracker, .data: return true
+        default: return false
+        }
+    }
+
+    /// How far behind the main feed this feed should run, in seconds. Never ahead of it: with a
+    /// delayed main feed (TRACKER made the main one) the others stay level with it, and a delayed
+    /// feed beside a delayed main one runs level with it too. The main feed's own lag is 0.
+    static func lag(feedDelayed: Bool, mainDelayed: Bool, delay: Double) -> Double {
+        guard delay > 0, feedDelayed, !mainDelayed else { return 0 }
+        return delay
+    }
+
+    /// What the sync corrects when a feed lines up with a reference feed (the main one, or any
+    /// feed in place while the main one isn't): the feed's offset from the reference (positive =
+    /// ahead) plus how much more it should lag behind the main feed than the reference does. Zero
+    /// when the two sit exactly as their lags say.
+    static func syncError(offset: Double?, feedLag: Double, referenceLag: Double) -> Double? {
+        offset.map { $0 + feedLag - referenceLag }
     }
 }
