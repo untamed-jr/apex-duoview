@@ -87,9 +87,12 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   main thread); the interval stretches with the cost.
 - A rewind further back than 15 minutes on a live session shows no speed readouts (live car data
   is kept for the last 15 minutes only).
-- Coming back to a live session after a gap: the part between the earlier visit and the new join
-  shows the earlier visit's last state, without the "Timing catching up" label (the label covers
-  only times before the first join), until the archive fills it in.
+- Coming back to a live session after a break (or a reconnect after more than 3 s): the stretch
+  between the earlier visit and the new join shows the earlier visit's last state labelled
+  "Timing catching up". The archive top-up fills in only what came before the first join, so
+  that stretch keeps the label.
+- Resuming a live session from the resume banner now opens it as live (live timing and the
+  next-live check), in the single player and the multiview.
 
 ### v1.0-beta.3, build 14 — Race Engineer and Scrub Deck
 
