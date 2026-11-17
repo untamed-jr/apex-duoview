@@ -502,9 +502,9 @@ SDK=$(xcrun --sdk iphoneos --show-sdk-path); for m in SwiftUI UIKit; do f=$(find
 ### Task 14: Review and release v1.0-beta.1
 **Model:** most capable tier reviews. fast tier writes the changelog.
 
-- [ ] **Step 1:** Opus reviews the whole branch against the spec and this plan's Review Focus, and fixes what it finds.
+- [ ] **Step 1:** The most capable tier reviews the whole branch against the spec and this plan's Review Focus, and fixes what it finds.
 - [ ] **Step 2:** The owner runs the exit test in the simulator (owner's change, 2026-11-13; it was the 15 Pro Max): sign in, play the São Paulo race replay, close the app, reopen it, tap Resume, and it resumes at the same moment. Pass or fail is the owner's call.
-- [ ] **Step 3:** Haiku moves the CHANGELOG "Unreleased" entries into `## v1.0-beta.1 — Foundation (2026-MM-DD)` and starts a new empty "Unreleased" section.
+- [ ] **Step 3:** The fast tier moves the CHANGELOG "Unreleased" entries into `## v1.0-beta.1 — Foundation (2026-MM-DD)` and starts a new empty "Unreleased" section.
 - [ ] **Step 4:** Tag and release:
 
 ```bash
