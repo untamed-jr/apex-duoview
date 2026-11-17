@@ -182,7 +182,9 @@ private struct TyreCell: View {
                     .font(.system(size: 9, weight: .heavy))
                     .foregroundStyle(TimingColours.tyre(tyre.compound))
                     .frame(width: 15, height: 15)
-                    .overlay(Circle().strokeBorder(TimingColours.tyre(tyre.compound), lineWidth: 2))
+                    .overlay {
+                        Circle().strokeBorder(TimingColours.tyre(tyre.compound), lineWidth: 2)
+                    }
                 Text("\(max(tyre.laps, 0))")
                     .font(.caption2)
                     .monospacedDigit()

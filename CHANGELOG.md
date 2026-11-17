@@ -46,6 +46,7 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
   on mobile data with the switch off, and not fetched again after a seek back.
 - The tower's columns fitting the panel's default width, the battle glow and chip during a race,
   and the knockout shading in qualifying.
+- The yellow ring on a car's flying lap in qualifying (the trimmed fixtures stop before any).
 
 ### v1.0-beta.3, build 11 — data on replays
 

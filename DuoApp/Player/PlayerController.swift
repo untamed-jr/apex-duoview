@@ -55,6 +55,9 @@ final class PlayerController {
     /// Tap-a-car: the moment (program date) the new onboard starts at, ahead of `pendingStart`,
     /// which stands in when the stream has no date there.
     @ObservationIgnored private var pendingDate: Date?
+    /// The item whose seek to `pendingDate` AVFoundation accepted: only its completion plays and
+    /// allows saving (a refused date seek's handler, should one come, must not).
+    @ObservationIgnored private var dateSeekItemID: ObjectIdentifier?
     /// The session's feeds, for tap-a-car: fetched once per content.
     @ObservationIgnored private var sessionChannels: (contentId: Int, channels: [Channel])?
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
@@ -457,14 +460,21 @@ final class PlayerController {
                 // False when this stream has no date there: the position below stands in.
                 isLoading = false
                 let accepted = item.seek(to: date) { @Sendable [weak self] _ in
+                    // Runs after the flag below is set: the hop queues behind this call.
                     Task { @MainActor [weak self] in
-                        // Dropped if the item was replaced or closed while seeking.
-                        guard let self, self.currentItemID == itemID, let current = self.player else { return }
+                        // Dropped if the item was replaced or closed while seeking, or if the
+                        // date seek was refused (the position seek below is the one that counts).
+                        guard let self, self.currentItemID == itemID, self.dateSeekItemID == itemID,
+                              let current = self.player else { return }
+                        self.dateSeekItemID = nil
                         self.canSave = true
                         current.play()
                     }
                 }
-                if accepted { return }
+                if accepted {
+                    dateSeekItemID = itemID
+                    return
+                }
             }
             if start == .beginning {
                 // A live session from its start (Android 0.98): nothing plays, and the spinner
@@ -612,6 +622,7 @@ final class PlayerController {
         canSave = false
         pendingStart = .position(0)
         pendingDate = nil
+        dateSeekItemID = nil
         currentItemID = nil
     }
 
