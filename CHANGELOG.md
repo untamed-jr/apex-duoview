@@ -66,6 +66,9 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
     never a real subscribe result. The recording file is the recording format, so the first
     weekend's `Caches/live/{sessionKey}.txt` can become a test fixture: please keep one;
   - "Live timing is connected, but F1 isn't sending car positions" if F1 sends none;
+  - a live race showing "No timing for this session" while F1's live timing runs would mean F1
+    TV's session key and live timing's differ (the app only shows live timing for the session
+    on screen): note which session it was;
   - with "Speed readouts on mobile data" off on cellular, the readouts stay empty and come back
     on Wi-Fi;
   - the next-live prompt: offered when another programme goes live (or yours ends), "Switch"
