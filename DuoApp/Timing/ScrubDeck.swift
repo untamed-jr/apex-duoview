@@ -104,14 +104,15 @@ private struct ScrubDeckContent: View {
                             }
                         })
             }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(deck.race ? "Lap chart and race events" : "Session events")
-        .accessibilityValue(Self.spoken(markers))
-        .accessibilityHint("Swipe up or down to move every feed 30 seconds")
-        .accessibilityAdjustableAction { direction in
-            let step: Double = direction == .increment ? 30 : -30
-            controller.seek(toSeconds: controller.position + step)
+            // The drawing is one element; the header (and its "Open onboard") stays reachable.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(deck.race ? "Lap chart and race events" : "Session events")
+            .accessibilityValue(Self.spoken(markers))
+            .accessibilityHint("Swipe up or down to move every feed 30 seconds")
+            .accessibilityAdjustableAction { direction in
+                let step: Double = direction == .increment ? 30 : -30
+                controller.seek(toSeconds: controller.position + step)
+            }
         }
     }
 
@@ -220,10 +221,10 @@ enum DeckDrawing {
         base.addLine(to: CGPoint(x: width, y: stripHeight / 2))
         graphics.stroke(base, with: .color(Theme.hairline), lineWidth: 1)
 
-        // Lap lines every 10 laps, labelled under the chart.
+        // Lap lines every 10 laps, labelled under the chart; none across the fog.
         if let total = axis.totalLaps, deck.race {
             for lap in stride(from: 10, to: total + 1, by: 10) {
-                guard let f = axis.fraction(ofLap: lap) else { continue }
+                guard let f = axis.fraction(ofLap: lap), f <= (axis.fogFrom ?? 1) else { continue }
                 var grid = Path()
                 grid.move(to: CGPoint(x: x(f), y: stripHeight + 4))
                 grid.addLine(to: CGPoint(x: x(f), y: stripHeight + 4 + chartHeight))

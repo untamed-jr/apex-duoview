@@ -53,14 +53,14 @@ struct RaceEngineerConsole: View {
     }
 }
 
-/// The mini map: this car in full, the others as grey dots. Its own view, so only it follows the
-/// top car.
+/// The mini map: this car in full, the others as grey dots. It reads only the top car
+/// (`consoleCar`, observed on its own), so the console's 2 Hz values don't rebuild the map.
 private struct ConsoleMiniMap: View {
     let timing: TimingController
     let onCar: @MainActor (String) -> Void
 
     var body: some View {
-        MapPanel(timing: timing, onCar: onCar, highlight: timing.console?.number)
+        MapPanel(timing: timing, onCar: onCar, highlight: timing.consoleCar)
     }
 }
 
