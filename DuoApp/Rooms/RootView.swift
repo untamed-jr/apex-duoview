@@ -17,6 +17,12 @@ struct RootView: View {
     /// The drivers for the first-run "Pick your driver" sheet, once loaded.
     @State private var driverChoices: [Channel] = []
 
+    /// The live programme playing (the timing's live item) and whether in multiview.
+    private struct LiveWatch: Equatable {
+        var contentId: Int?
+        var multiview: Bool
+    }
+
     private enum ActiveSheet: Identifiable {
         case settings
         case signIn
@@ -200,14 +206,19 @@ struct RootView: View {
                 set: { if !$0 { model.playback.coverDismissed() } }),
                 onDismiss: { offerDriverPrompt() }
             ) {
-                PlayerCover(controller: model.playback, fold: fold)
+                PlayerCover(controller: model.playback, fold: fold, model: model)
             }
             .fullScreenCover(isPresented: Binding(
                 get: { model.multiview.isPresented },
                 set: { if !$0 { model.multiview.close() } }),
                 onDismiss: { offerDriverPrompt() }
             ) {
-                MultiviewView(controller: model.multiview, fold: fold)
+                MultiviewView(controller: model.multiview, fold: fold, model: model)
+            }
+            // The next live programme: checked every 60 s only while a live one plays.
+            .onChange(of: LiveWatch(contentId: model.timing.liveContentId, multiview: model.multiview.isPresented),
+                      initial: true) { _, watch in
+                model.liveWatchChanged(contentId: watch.contentId, multiview: watch.multiview)
             }
             .task(id: model.auth) { await loadDriverPrompt() }
             .onChange(of: model.auth) { _, auth in

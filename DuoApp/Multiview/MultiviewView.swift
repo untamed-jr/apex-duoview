@@ -48,6 +48,8 @@ import SwiftUI
 struct MultiviewView: View {
     let controller: MultiviewController
     let fold: FoldState
+    /// For the next live programme's prompt.
+    let model: AppModel
 
     /// The tile being dragged and how far it has moved. Back to nil (with `.snappy`) when the
     /// finger lifts, which glides the tile home or, after a trade, into its new place.
@@ -220,6 +222,12 @@ struct MultiviewView: View {
             .ignoresSafeArea()
         }
         .overlay { status }
+        // While a live programme plays: another one that went live, at the top (never in
+        // picture in picture). "Switch" opens it in multiview.
+        .overlay(alignment: .top) {
+            NextLivePrompt(model: model, inPictureInPicture: controller.isInPictureInPicture)
+                .animation(.snappy, value: model.nextLive.offer?.contentId)
+        }
         // An editor reopened while the last one was still closing keeps the question waiting.
         .sheet(item: $editor, onDismiss: { editorShowing = editor != nil }) { request in
             FeedsEditor(controller: controller, startSlot: request.slot)

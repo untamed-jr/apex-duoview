@@ -21,9 +21,13 @@ struct PlayerView: UIViewControllerRepresentable {
 /// timing, a "Map" control beside Close shows the map and tower as floating panels over the
 /// picture (inside the safe area), remembered per posture as in the multiview. Tapping a car there
 /// switches to its onboard at the same moment; an onboard shows its driver card under Close.
+/// While a live programme plays, the next one that goes live is offered at the top
+/// (`NextLivePrompt`).
 struct PlayerCover: View {
     let controller: PlayerController
     let fold: FoldState
+    /// For the next live programme's prompt.
+    let model: AppModel
 
     var body: some View {
         ZStack {
@@ -77,7 +81,13 @@ struct PlayerCover: View {
             }
         }
         .overlay(alignment: .top) {
-            PlayerNotice(controller: controller)
+            VStack(spacing: 0) {
+                // While a live programme plays: another one that went live (never in picture in
+                // picture).
+                NextLivePrompt(model: model, inPictureInPicture: controller.isInPictureInPicture)
+                PlayerNotice(controller: controller)
+            }
+            .animation(.snappy, value: model.nextLive.offer?.contentId)
         }
         .statusBarHidden(controller.player != nil)
     }

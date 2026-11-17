@@ -40,6 +40,12 @@ final class AppModel {
     /// Your driver (Settings › Multiview › My driver): their onboard is the second default feed.
     /// Mirrors the multiview store, which isn't observed.
     private(set) var favouriteDriver: String?
+    /// The next live programme offered while a live one is watched (`NextLivePrompt`).
+    private(set) var nextLive = NextLiveState()
+    /// F1's live timing, one connection for the app (the timing listens while a live item plays).
+    @ObservationIgnored let liveTiming: LiveConnection
+    /// The 60 s "live now" check, only while a live programme is watched.
+    @ObservationIgnored private var nextLiveTask: Task<Void, Never>?
 
     init() {
         let session = F1TVSession(http: URLSessionHTTPClient())
@@ -56,10 +62,19 @@ final class AppModel {
         // Its own client: longer timeouts for the archive's large files, and the token never
         // follows a redirect to another host. The token is read from the session when needed.
         let timingHTTP = TimingHTTPClient()
+        // Live timing: the same token, read when needed, only ever sent to F1's hub. The
+        // recording goes to Caches/live; recordings older than 7 days go at launch.
+        let liveTiming = LiveConnection(
+            transport: URLSessionLiveTransport(), recorder: LiveRecorder(), token: { await session.bearerToken() })
+        self.liveTiming = liveTiming
+        Task.detached(priority: .background) {
+            LiveRecorder.deleteOld(in: LiveRecorder.defaultDirectory, now: Date())
+        }
         let timing = TimingController(
             archive: TimingArchive(http: timingHTTP, token: { await session.bearerToken() }),
             settings: TimingSettings(store: store),
-            http: timingHTTP)
+            http: timingHTTP,
+            live: liveTiming)
         self.timing = timing
         self.playback = PlayerController(
             coordinator: player, recents: recents, history: history, catalogue: catalogue, timing: timing)
@@ -70,6 +85,69 @@ final class AppModel {
         favouriteDriver = multiviewStore.favouriteDriver
         // Your driver's battles glow in the tower.
         timing.setFavouriteDriver(favouriteDriver)
+    }
+
+    // MARK: The next live programme
+
+    /// What live programme plays (the timing's live item), and whether in multiview; nil when no
+    /// live programme plays. The root reports it: the 60 s check runs only while one does.
+    func liveWatchChanged(contentId: Int?, multiview: Bool) {
+        guard let contentId else {
+            nextLiveTask?.cancel()
+            nextLiveTask = nil
+            nextLive.stop()
+            return
+        }
+        let same = nextLive.watching == contentId
+        nextLive.watch(contentId: contentId, multiview: multiview)
+        guard !same || nextLiveTask == nil else { return }
+        nextLiveTask?.cancel()
+        nextLiveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.checkLiveNow()
+                do {
+                    try await Task.sleep(for: NextLiveState.checkInterval)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    /// One check of F1 TV's "live now" list. A failure learns nothing and offers nothing (and
+    /// never signs anyone out).
+    private func checkLiveNow() async {
+        guard let live = try? await catalogue.liveNow(), !Task.isCancelled, nextLive.watching != nil else { return }
+        nextLive.checked(live: live)
+    }
+
+    /// "Not now": that programme isn't offered again.
+    func declineNextLive() {
+        nextLive.decline()
+    }
+
+    /// "Switch": opens the offered programme at the live edge, in multiview when that is how the
+    /// last one was watched (the multiview shows one feed as well as four), else the single-feed
+    /// player on its default feed.
+    func switchToNextLive() async {
+        guard let (offer, inMultiview) = nextLive.accept(),
+              let detail = try? await catalogue.video(contentId: offer.contentId),
+              let channel = detail.channels.first(where: \.isDefault) ?? detail.channels.first
+        else { return }
+        var item = offer
+        if item.title.isEmpty { item.title = detail.title }
+        // The live list's tile may carry no metadata: the video's details say where its timing is.
+        if item.timingRef == nil { item.timingRef = detail.timingRef }
+        var multiviewAllowed = false
+        if case .signedIn(let account) = auth { multiviewAllowed = account.hasMultiview }
+        if (inMultiview || multiview.isPresented), multiviewAllowed {
+            // The single-feed player's stop() must land before the multiview's PLAY.
+            if playback.isPresented || playback.isInPictureInPicture { playback.close() }
+            await playback.waitForStop()
+            await multiview.open(item: item, detail: detail, startAt: .liveEdge)
+        } else {
+            await playback.play(item: item, channel: channel)
+        }
     }
 
     // MARK: Your driver
