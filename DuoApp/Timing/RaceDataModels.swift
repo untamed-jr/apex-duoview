@@ -221,9 +221,12 @@ struct DeckState: Equatable, Sendable {
         playerSeconds + Double(u - pictureTime) / 1000
     }
 
-    /// Picture time where the main feed is at `seconds`.
-    func moment(atSeconds seconds: Double) -> UTCms {
-        pictureTime + UTCms(((seconds - playerSeconds) * 1000).rounded())
+    /// Picture time where the main feed is at `seconds`; nil for a time that isn't finite (or is
+    /// beyond any session).
+    func moment(atSeconds seconds: Double) -> UTCms? {
+        let ms = ((seconds - playerSeconds) * 1000).rounded()
+        guard ms.isFinite, abs(ms) < 1e15 else { return nil }
+        return pictureTime + UTCms(ms)
     }
 
     /// A marker's seek: 5 s before its moment, kept inside the scrubber's span.
@@ -273,7 +276,9 @@ struct DeckAxis: Equatable, Sendable {
             if let last = points.last, !(f > last.f && s > last.s) { return }
             points.append(DeckAnchor(f: min(max(f, 0), 1), s: s))
         }
-        guard deck.race else {
+        // By time: other sessions, and a race whose lights out isn't known (with the whole race on
+        // there is then nothing to lay laps out from).
+        guard deck.race, !(deck.wholeRace && deck.crossings.isEmpty) else {
             guard let timeline, timeline.upperBound > timeline.lowerBound else { return .empty }
             add(0, timeline.lowerBound)
             add(1, timeline.upperBound)
@@ -456,4 +461,28 @@ enum LapChartGeometry {
         let last = pts[pts.count - 1]
         return x - last.x <= DeckHitTest.radius ? last.y : nil
     }
+}
+
+// MARK: - What a build depends on
+
+/// Everything the console's build depends on: a build whose key matches the current one is
+/// reused (paused, nothing new), so the session's history isn't rescanned.
+struct ConsoleKey: Equatable, Sendable {
+    /// Which loaded session (bumped whenever the timing replaces it: a load, live, a top-up).
+    var session: Int
+    var car: String
+    var t: UTCms
+    /// The car data window as it stands: its size and its latest sample.
+    var samples: Int
+    var lastSample: UTCms?
+    var channel45: Channel45Meaning
+    var storedPitLossMs: Int?
+}
+
+/// Everything the deck's build depends on.
+struct DeckKey: Equatable, Sendable {
+    var session: Int
+    /// Picture time, or nil for the whole race (built once, whatever the moment).
+    var cut: UTCms?
+    var favourite: String?
 }

@@ -98,7 +98,11 @@ final class TimingController {
     @ObservationIgnored private let archive: TimingArchive
     /// For MultiViewer's circuit data: no token is ever added to its requests.
     @ObservationIgnored private let http: any HTTPClient
-    @ObservationIgnored private var loaded: LoadedSession?
+    @ObservationIgnored private var loaded: LoadedSession? {
+        didSet { loadedRevision &+= 1 }
+    }
+    /// Which `loaded` this is: the console's and deck's builds are kept only for the same one.
+    @ObservationIgnored private var loadedRevision = 0
     @ObservationIgnored private var clock: (@MainActor () -> (programDate: Date?, playerSeconds: Double))?
     @ObservationIgnored private var contentId: Int?
     /// The player that attached (`attach(owner:)`); only it can detach.
@@ -127,12 +131,17 @@ final class TimingController {
     /// The attached player shows Race Engineer's console, and the racing number of the car on its
     /// top screen (nil: no onboard there).
     @ObservationIgnored private var consoleShown = false
-    @ObservationIgnored private var consoleCar: String?
+    /// Observed on its own, so the console's mini map follows only the car, not the 2 Hz values.
+    private(set) var consoleCar: String?
     /// The attached player shows the Scrub Deck.
     @ObservationIgnored private var deckShown = false
-    /// The deck as last built, kept while nothing it depends on changes (picture time, the whole
-    /// race switch, your driver): with the whole race on it is built once.
-    @ObservationIgnored private var deckBase: DeckState?
+    /// The console and the deck as last built, with what they were built from: kept while that
+    /// doesn't change (paused; the whole race is built once). Builds run off the main actor, one
+    /// of each at a time.
+    @ObservationIgnored private var consoleBuild: (key: ConsoleKey, state: ConsoleState)?
+    @ObservationIgnored private var deckBuild: (key: DeckKey, state: DeckState)?
+    @ObservationIgnored private var consoleTask: Task<Void, Never>?
+    @ObservationIgnored private var deckTask: Task<Void, Never>?
     /// Channel 45 was seen moving in a 2026 car data window this session: the light stays "Aero"
     /// rather than coming and going with the window.
     @ObservationIgnored private var activeAeroSeen = false
@@ -392,10 +401,23 @@ final class TimingController {
     /// Forgets the console and the deck (detach, or another player took over).
     private func clearRaceViews() {
         consoleShown = false
-        consoleCar = nil
+        if consoleCar != nil { consoleCar = nil }
         deckShown = false
-        deckBase = nil
+        dropConsole()
+        dropDeck()
+    }
+
+    private func dropConsole() {
+        consoleTask?.cancel()
+        consoleTask = nil
+        consoleBuild = nil
         if console != nil { console = nil }
+    }
+
+    private func dropDeck() {
+        deckTask?.cancel()
+        deckTask = nil
+        deckBuild = nil
         if deck != nil { deck = nil }
     }
 
@@ -638,10 +660,11 @@ final class TimingController {
         publishDeck(loaded, at: t, playerSeconds: now.playerSeconds)
     }
 
-    /// Race Engineer's console for the top onboard's car, while it shows.
+    /// Race Engineer's console for the top onboard's car, while it shows. Built off the main
+    /// actor (it rescans the session's history), only when something it reads changed.
     private func publishConsole(_ loaded: LoadedSession, at t: UTCms) {
         guard consoleShown, let car = consoleCar else {
-            if console != nil { console = nil }
+            dropConsole()
             return
         }
         let samples = carData?.samples(car: car, around: t) ?? []
@@ -649,32 +672,73 @@ final class TimingController {
         if meaning == .activeAero { activeAeroSeen = true }
         if activeAeroSeen, meaning == .absent { meaning = .activeAero }
         let stored = circuitKey.flatMap { settings.pitLossMs(circuitKey: $0) }.map { Int(clamping: $0) }
-        let next = ConsoleState.make(number: car, at: t, session: loaded, samples: samples, channel45: meaning,
-                                     storedPitLossMs: stored)
-        if console != next { console = next }
+        let key = ConsoleKey(session: loadedRevision, car: car, t: t, samples: samples.count,
+                             lastSample: samples.last?.t, channel45: meaning, storedPitLossMs: stored)
+        if let built = consoleBuild, built.key == key {
+            if console != built.state { console = built.state }
+            return
+        }
+        // One build at a time: the next tick asks again with the newest moment.
+        guard consoleTask == nil else { return }
+        let channel45 = meaning
+        consoleTask = Task { [weak self] in
+            let state = await Task.detached(priority: .userInitiated) {
+                ConsoleState.make(number: car, at: t, session: loaded, samples: samples, channel45: channel45,
+                                  storedPitLossMs: stored)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.consoleTask = nil
+            self.adoptConsole(state, key: key)
+        }
     }
 
-    /// The Scrub Deck, while it shows: rebuilt when picture time moves (so a seek back shrinks
-    /// it), or once with the whole race on; the clock reading is always the latest.
+    /// A finished console build, dropped when superseded: another car or session, the console
+    /// gone, or the picture moved back before its moment (no data ahead of the picture).
+    private func adoptConsole(_ state: ConsoleState, key: ConsoleKey) {
+        guard consoleShown, consoleCar == key.car, loadedRevision == key.session,
+              let now = pictureTime, key.t <= now else { return }
+        consoleBuild = (key, state)
+        if console != state { console = state }
+    }
+
+    /// The Scrub Deck, while it shows: built off the main actor when picture time moves (so a seek
+    /// back shrinks it), or once with the whole race on; a kept build takes the latest clock
+    /// reading.
     private func publishDeck(_ loaded: LoadedSession, at t: UTCms, playerSeconds: Double) {
         guard deckShown else {
-            deckBase = nil
-            if deck != nil { deck = nil }
+            dropDeck()
             return
         }
         let favourite = favouriteDriver.flatMap { Tower.carNumber(forDriver: $0, in: loaded) }
-        var next: DeckState
-        if let base = deckBase, base.wholeRace == showWholeRace, base.favourite == favourite,
-           showWholeRace || base.pictureTime == t {
-            next = base
-        } else {
-            next = DeckState.make(session: loaded, at: t, playerSeconds: playerSeconds, wholeRace: showWholeRace,
-                                  favourite: favourite)
-            deckBase = next
+        let whole = showWholeRace
+        let key = DeckKey(session: loadedRevision, cut: whole ? nil : t, favourite: favourite)
+        if let built = deckBuild, built.key == key {
+            var next = built.state
+            next.pictureTime = t
+            next.playerSeconds = playerSeconds
+            if deck != next { deck = next }
+            return
         }
-        next.pictureTime = t
-        next.playerSeconds = playerSeconds
-        if deck != next { deck = next }
+        guard deckTask == nil else { return }
+        deckTask = Task { [weak self] in
+            let state = await Task.detached(priority: .userInitiated) {
+                DeckState.make(session: loaded, at: t, playerSeconds: playerSeconds, wholeRace: whole, favourite: favourite)
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            self.deckTask = nil
+            self.adoptDeck(state, key: key)
+        }
+    }
+
+    /// A finished deck build, dropped when superseded: another session, the deck gone, the whole
+    /// race switched, or (cut at picture time) the picture moved back before its cut.
+    private func adoptDeck(_ state: DeckState, key: DeckKey) {
+        guard deckShown, loadedRevision == key.session, (key.cut == nil) == showWholeRace else { return }
+        if let cut = key.cut {
+            guard let now = pictureTime, cut <= now else { return }
+        }
+        deckBuild = (key, state)
+        if deck != state { deck = state }
     }
 
     /// The tower, its header and the battle, while a panel shows, floating or docked (the tower,
