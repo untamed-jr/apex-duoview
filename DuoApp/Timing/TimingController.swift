@@ -32,8 +32,23 @@ import Observation
 ///   ring and tap-a-car's ranking read them.
 /// - The speed readouts come from `CarDataLoader`, started once a card shows.
 /// - The circuit comes from MultiViewer (or is traced from the cars), kept in Caches.
+/// - Live items (`CatalogItem.isLive`, build 15): the shared `LiveConnection` instead of the
+///   archive. Its messages (the session's recording first, so a rewind has the session so far)
+///   go to a `LiveSessionBuilder` off the main actor, which owns the `LiveFeed`; once a second
+///   the controller asks it for the session, rebuilt at most every 2–5 s (`LiveRebuildClock`)
+///   and served cached to the 2 Hz tick and the map. The live car data (CarData.z, which the
+///   feed leaves out) feeds the readouts and the console. The status lines: "Connecting to live
+///   timing…" until the first session, then as a note over the map "Live timing dropped —
+///   reconnecting…", "Live timing is connected, but F1 isn't sending car positions" and, for
+///   picture times before the join that the archive hasn't filled in, "Timing catching up". The
+///   archive top-up (`Backfill`) runs every 2 min, up to 180 times, until the archive reaches
+///   within 30 s of the join; a new session (SessionInfo `Path`) starts it again. A feed
+///   for another session than the video's is "No timing for this session".
+/// - The map panel's second view is the pit circle (races), built at the tick while it shows;
+///   a measured pit loss of at least three stops is kept for the circuit.
 ///
-/// Never logs; the token goes only to F1's archive, inside `TimingArchive`.
+/// Never logs; the token goes only to F1's archive, inside `TimingArchive`, and to the live hub,
+/// inside `LiveConnection`.
 @MainActor
 @Observable
 final class TimingController {
@@ -93,6 +108,18 @@ final class TimingController {
     private(set) var console: ConsoleState?
     /// The Scrub Deck at picture time (or the whole race, opted in); nil while it isn't showing.
     private(set) var deck: DeckState?
+    /// A live session's status line or label for the map (`LiveNote`); nil otherwise.
+    private(set) var liveNote: String?
+    /// The live programme attached (its content id), for the next-live check; nil otherwise.
+    private(set) var liveContentId: Int?
+    /// The loaded session is a race: the map panel offers the pit circle.
+    private(set) var isRace = false
+    /// The map panel's view: the map, or the pit circle.
+    private(set) var mapMode: MapPanelMode = .map
+    /// The pit circle at picture time, while it shows; nil otherwise.
+    private(set) var pitCircle: PitCircleViewState?
+    /// The pit circle's labels: the gap to the leader (on) or to the car ahead (off).
+    private(set) var pitGapsToLeader = false
 
     @ObservationIgnored let settings: TimingSettings
     @ObservationIgnored private let archive: TimingArchive
@@ -145,11 +172,38 @@ final class TimingController {
     /// Channel 45 was seen moving in a 2026 car data window this session: the light stays "Aero"
     /// rather than coming and going with the window.
     @ObservationIgnored private var activeAeroSeen = false
+    /// The shared live connection; nil leaves live items to the archive.
+    @ObservationIgnored private let live: LiveConnection?
+    /// This attach's live session, off the main actor; nil when not live.
+    @ObservationIgnored private var liveBuilder: LiveSessionBuilder?
+    @ObservationIgnored private var liveRef: TimingRef?
+    @ObservationIgnored private var liveListenTask: Task<Void, Never>?
+    @ObservationIgnored private var liveRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var backfillTask: Task<Void, Never>?
+    /// The session the top-up runs for (its `Path`).
+    @ObservationIgnored private var backfillPath: String?
+    /// The link's state, the join and the archive's reach, from the last refresh.
+    @ObservationIgnored private var livePhase: LiveLinkPhase = .idle
+    @ObservationIgnored private var liveEverSubscribed = false
+    @ObservationIgnored private var liveJoinedAt: UTCms?
+    @ObservationIgnored private var liveArchiveReach: UTCms?
+    /// The live feed is another session than the video's.
+    @ObservationIgnored private var liveWrongSession = false
+    /// The live car data within a minute of picture time, by car.
+    @ObservationIgnored private var liveCars: [String: [CarSample]] = [:]
+    /// The pit circle's selected car (tapped or held).
+    @ObservationIgnored private var pitCircleCar: String?
+    /// The measured stops last offered to `TimingSettings.rememberPitLoss`.
+    @ObservationIgnored private var rememberedStops = -1
 
-    init(archive: TimingArchive, settings: TimingSettings, http: any HTTPClient) {
+    /// How often the live session is asked for (it rebuilds only when due).
+    static let liveRefreshInterval: Duration = .seconds(1)
+
+    init(archive: TimingArchive, settings: TimingSettings, http: any HTTPClient, live: LiveConnection? = nil) {
         self.archive = archive
         self.settings = settings
         self.http = http
+        self.live = live
         offsetMs = settings.offsetMs
         showWholeRace = settings.showWholeRace
         speedOnMobileData = settings.speedOnMobileData
@@ -162,6 +216,23 @@ final class TimingController {
         mapTask?.cancel()
         tickTask?.cancel()
         carData?.cancel()
+        liveListenTask?.cancel()
+        liveRefreshTask?.cancel()
+        backfillTask?.cancel()
+    }
+
+    /// The note over the map: a live line or "Timing catching up", else "Timing estimated —
+    /// nudge until the cars match" while picture time is estimated.
+    var mapNote: String? {
+        liveNote ?? (status == .estimated ? Self.estimatedNote : nil)
+    }
+
+    /// The session in hand (read-only; the runtime checks compare against it).
+    var loadedSession: LoadedSession? { loaded }
+
+    /// What the map says while loading: "Connecting to live timing…" for a live item.
+    var loadingText: String {
+        liveNote ?? "Loading timing\u{2026}"
     }
 
     /// Whether the data views (the Map button, the panels) show: while loading, when loaded, and
@@ -219,12 +290,17 @@ final class TimingController {
         wantsMarks = timelineMarks
         contentId = item.contentId
         contentIsLive = item.isLive
+        if item.isLive { liveContentId = item.contentId }
         guard let ref = item.timingRef, ref.isSession else {
             status = .unavailable(Self.noTiming)
             return
         }
         status = .loading
         let mine = generation
+        if item.isLive, let live {
+            startLive(ref: ref, connection: live, generation: mine)
+            return
+        }
         loadTask = Task { [weak self] in
             await self?.load(ref: ref, generation: mine)
         }
@@ -258,8 +334,14 @@ final class TimingController {
         contentIsLive = false
         carData?.cancel()
         carData = nil
+        stopLive()
         clearRaceViews()
         activeAeroSeen = false
+        if mapMode != .map { mapMode = .map }
+        if pitCircle != nil { pitCircle = nil }
+        pitCircleCar = nil
+        rememberedStops = -1
+        if isRace { isRace = false }
         if status != .idle { status = .idle }
         if snapshot != .empty { snapshot = .empty }
         if !tower.isEmpty { tower = [] }
@@ -440,6 +522,49 @@ final class TimingController {
         settings.speedOnMobileData = on
         speedOnMobileData = settings.speedOnMobileData
         carData?.setAllowsExpensive(speedOnMobileData)
+        // Live: CarData.z is left out of the subscription while off on an expensive connection.
+        if let live, liveBuilder != nil {
+            let allowed = speedOnMobileData
+            Task { await live.setCarData(allowsExpensive: allowed) }
+        }
+    }
+
+    // MARK: The pit circle
+
+    /// Map / Pit circle in the map panel's header.
+    func setMapMode(_ mode: MapPanelMode) {
+        guard mapMode != mode else { return }
+        mapMode = mode
+        if mode == .map { pitCircleCar = nil }
+        publish()
+    }
+
+    /// The pit circle's gap labels: to the leader, or to the car ahead.
+    func setPitGapsToLeader(_ on: Bool) {
+        guard pitGapsToLeader != on else { return }
+        pitGapsToLeader = on
+        publish()
+    }
+
+    /// A car tapped or held on the pit circle: every gap is measured to it and its pit window
+    /// shows; tapping it again (or nil) lets it go.
+    func selectPitCar(_ number: String?, toggle: Bool = false) {
+        pitCircleCar = toggle && number == pitCircleCar ? nil : number
+        publish()
+    }
+
+    /// A car held on the map: its pit window at picture time ("If HAM stops now, out 2.1 s behind
+    /// NOR"); nil outside races. Read once per hold (it measures the session's stops so far).
+    func pitWindowText(car: String) -> String? {
+        guard let loaded, loaded.info.isRace, let t = pictureTime else { return nil }
+        let loss = PitCircle.pitLossMs(at: t, session: loaded, storedMs: storedPitLossMs)
+        return PitCircle.rejoin(car: car, at: t, session: loaded, pitLossMs: loss)?.text(car: car, session: loaded)
+            ?? PitCircleText.noWindow(tla: loaded.drivers[car]?.tla ?? car)
+    }
+
+    /// This circuit's stored pit loss.
+    private var storedPitLossMs: Int? {
+        circuitKey.flatMap { settings.pitLossMs(circuitKey: $0) }.map { Int(clamping: $0) }
     }
 
     /// Settings › Multiview › My driver (a last name), for the battle highlight; nil turns it off.
@@ -549,6 +674,7 @@ final class TimingController {
         // A snapshot of this session's timing: built once here, never per frame.
         lapStates = LapStates(session: session)
         gapHeader = Tower.gapHeader(session: session)
+        isRace = session.info.isRace
         let key = session.info.circuitKey ?? ref.circuitKey
         circuitKey = key
         mapTurn = key.map { settings.mapTurn(circuitKey: $0) } ?? 0
@@ -556,13 +682,20 @@ final class TimingController {
         publish()
         updateTicking()
         startCarDataIfShown()
-        let year = session.info.year ?? ref.year
+        startMap(key: key, year: session.info.year ?? ref.year, session: session, generation: mine)
+    }
+
+    /// Finds the circuit's map (MultiViewer's, or traced from the cars), trying again after 3, 10,
+    /// 30 and 60 s, then every 60 s. Each try traces from the session in hand (a live one grows).
+    private func startMap(key: Int?, year: Int, session: LoadedSession, generation mine: Int) {
+        mapTask?.cancel()
         let http = http
         mapTask = Task { [weak self] in
             var attempt = 0
             while !Task.isCancelled {
+                let current = self?.loaded ?? session
                 let outcome = await Task.detached(priority: .utility) {
-                    await CircuitLoader.load(circuitKey: key, year: year, session: session, http: http)
+                    await CircuitLoader.load(circuitKey: key, year: year, session: current, http: http)
                 }.value
                 guard let self, self.generation == mine, !Task.isCancelled else { return }
                 switch outcome {
@@ -658,6 +791,233 @@ final class TimingController {
         publishCards(loaded, at: t)
         publishConsole(loaded, at: t)
         publishDeck(loaded, at: t, playerSeconds: now.playerSeconds)
+        publishPitCircle(loaded, at: t)
+        updateLiveNote(pictureTime: t)
+    }
+
+    /// The pit circle, while the map panel shows it (floating or docked).
+    private func publishPitCircle(_ loaded: LoadedSession, at t: UTCms) {
+        guard mapMode == .pitCircle, readPanels.contains(.map) else {
+            if pitCircle != nil { pitCircle = nil }
+            return
+        }
+        let next = PitCircleViewState.make(at: t, session: loaded, storedPitLossMs: storedPitLossMs,
+                                           selected: pitCircleCar, toLeader: pitGapsToLeader)
+        // The measured pit loss is kept for the circuit (three stops or more), each time the
+        // count of measured stops changes.
+        if let circle = next.circle, let circuitKey, circle.measuredStops != rememberedStops {
+            rememberedStops = circle.measuredStops
+            settings.rememberPitLoss(circle, circuitKey: circuitKey)
+        }
+        if pitCircle != next { pitCircle = next }
+    }
+
+    /// The speed readouts' and the console's samples: live car data for a live item, else the
+    /// archive's download.
+    private func carSamples(_ car: String, around t: UTCms) -> [CarSample] {
+        if liveBuilder != nil { return liveCars[car] ?? [] }
+        return carData?.samples(car: car, around: t) ?? []
+    }
+
+    // MARK: Live
+
+    /// Follows the live session: listens to the shared connection (its recording first) through
+    /// a builder off the main actor, and asks it for the session once a second.
+    private func startLive(ref: TimingRef, connection: LiveConnection, generation mine: Int) {
+        liveRef = ref
+        let builder = LiveSessionBuilder()
+        liveBuilder = builder
+        livePhase = .connecting
+        liveNote = LiveNote.connecting
+        let allowed = speedOnMobileData
+        liveListenTask = Task.detached(priority: .userInitiated) {
+            await connection.setCarData(allowsExpensive: allowed)
+            let stream = await connection.listen()
+            // Ends when this task is cancelled (detach), which lets the connection go.
+            for await event in stream {
+                await builder.receive(event)
+            }
+        }
+        liveRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.generation == mine else { return }
+                await self.refreshLive(builder, generation: mine)
+                do {
+                    try await Task.sleep(for: TimingController.liveRefreshInterval)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    /// Stops following live timing (detach).
+    private func stopLive() {
+        liveListenTask?.cancel()
+        liveListenTask = nil
+        liveRefreshTask?.cancel()
+        liveRefreshTask = nil
+        backfillTask?.cancel()
+        backfillTask = nil
+        backfillPath = nil
+        liveBuilder = nil
+        liveRef = nil
+        livePhase = .idle
+        liveEverSubscribed = false
+        liveJoinedAt = nil
+        liveArchiveReach = nil
+        liveWrongSession = false
+        liveCars = [:]
+        if liveNote != nil { liveNote = nil }
+        if liveContentId != nil { liveContentId = nil }
+    }
+
+    /// One refresh: the session (when rebuilt), the link, the car data around picture time,
+    /// and the top-up for the feed's session.
+    private func refreshLive(_ builder: LiveSessionBuilder, generation mine: Int) async {
+        let r = await builder.refresh(pictureTime: pictureTime, wanted: needsTicking || loaded == nil)
+        guard generation == mine, liveBuilder === builder, !Task.isCancelled else { return }
+        livePhase = r.phase
+        liveEverSubscribed = r.everSubscribed
+        liveJoinedAt = r.joinedAt
+        liveArchiveReach = r.archiveReach
+        liveCars = r.cars
+        let wrong = liveRef.map { !LiveSessionMatch.matches(feedKey: r.sessionKey, ref: $0) } ?? false
+        if wrong != liveWrongSession {
+            liveWrongSession = wrong
+            if wrong {
+                // Live timing serves another session than the video's: show none of it.
+                dropLiveSession()
+                status = .unavailable(Self.noTiming)
+            } else {
+                status = .loading
+            }
+        }
+        switch r.session {
+        case .rebuilt(let session, let states):
+            if !liveWrongSession { adoptLive(session, lapStates: states, generation: mine) }
+        case .cleared:
+            // Another session came as a change: nothing until its subscribe result.
+            dropLiveSession()
+            if !liveWrongSession { status = .loading }
+        case .unchanged:
+            break
+        }
+        if !liveWrongSession, loaded != nil, let path = r.sessionPath, path != backfillPath {
+            startBackfill(path: path, builder: builder, generation: mine)
+        }
+        if loaded == nil { updateLiveNote(pictureTime: nil) }
+    }
+
+    /// A rebuilt live session takes the place of the last; the map starts with the first.
+    private func adoptLive(_ session: LoadedSession, lapStates states: LapStates, generation mine: Int) {
+        let first = loaded == nil
+        // Through `loaded`: its revision moves on, so the console's and deck's kept builds (the
+        // whole-race deck too) are made again from this session.
+        loaded = session
+        lapStates = states
+        gapHeader = Tower.gapHeader(session: session)
+        if isRace != session.info.isRace { isRace = session.info.isRace }
+        if first {
+            let key = session.info.circuitKey ?? liveRef?.circuitKey
+            circuitKey = key
+            mapTurn = key.map { settings.mapTurn(circuitKey: $0) } ?? 0
+            status = .ready
+            startMap(key: key, year: session.info.year ?? liveRef?.year ?? 0, session: session, generation: mine)
+            updateTicking()
+        }
+        publish()
+    }
+
+    /// The live session is gone (another session): the views empty until the next one.
+    private func dropLiveSession() {
+        guard loaded != nil else { return }
+        loaded = nil
+        lapStates = nil
+        circuitKey = nil
+        mapTask?.cancel()
+        mapTask = nil
+        map = nil
+        mapMessage = nil
+        backfillTask?.cancel()
+        backfillTask = nil
+        backfillPath = nil
+        tickTask?.cancel()
+        tickTask = nil
+        if snapshot != .empty { snapshot = .empty }
+        if !tower.isEmpty { tower = [] }
+        if header != .empty { header = .empty }
+        if battleRival != nil { battleRival = nil }
+        if !cards.isEmpty { cards = [:] }
+        if !timelineMarks.isEmpty { timelineMarks = [] }
+        dropConsole()
+        dropDeck()
+        if pitCircle != nil { pitCircle = nil }
+        rememberedStops = -1
+    }
+
+    /// The live note at picture time `t`.
+    private func updateLiveNote(pictureTime t: UTCms?) {
+        var note: String?
+        if liveBuilder != nil, !liveWrongSession {
+            note = LiveNote.note(phase: livePhase, everSubscribed: liveEverSubscribed,
+                                 hasPositions: loaded.map { !$0.positions.cars.isEmpty } ?? true,
+                                 pictureTime: t, joinedAt: liveJoinedAt, archiveReach: liveArchiveReach)
+        }
+        if liveNote != note { liveNote = note }
+    }
+
+    /// The archive top-up for the session at `path`: now, then every 2 min, up to 180 tries,
+    /// until the archive reaches within 30 s of the join. A refusal or a missing file (F1 hasn't
+    /// published the session yet) is only a try that found nothing.
+    private func startBackfill(path: String, builder: LiveSessionBuilder, generation mine: Int) {
+        backfillTask?.cancel()
+        backfillPath = path
+        let archive = archive
+        backfillTask = Task { [weak self] in
+            for _ in 0..<Backfill.maxAttempts {
+                let fetched = await Task.detached(priority: .utility) {
+                    await TimingController.fetchTopUp(path: path, archive: archive)
+                }.value
+                guard !Task.isCancelled, let self, self.generation == mine else { return }
+                if let fetched {
+                    await builder.topUp(archive: fetched.lines, archiveStart: fetched.start, reach: fetched.reach,
+                                        sessionPath: path)
+                    if let reach = fetched.reach, let joined = self.liveJoinedAt,
+                       Backfill.isComplete(archiveLast: reach, joinedAt: joined) { return }
+                }
+                do {
+                    try await Task.sleep(for: Backfill.spacing)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    /// The archive's lines for a top-up (`Backfill.topics`), its start (`ArchiveClock`, from
+    /// Heartbeat and Position) and its last car position; nil while it has no positions.
+    nonisolated static func fetchTopUp(path: String, archive: TimingArchive) async -> TopUpFetch? {
+        let names = ["Heartbeat"] + Backfill.topics
+        let lines: [String: [StreamLine]] = await withTaskGroup(of: (String, [StreamLine]?).self) { group in
+            for name in names {
+                group.addTask {
+                    if case .data(let body) = await archive.file(sessionPath: path, name: name + ".jsonStream") {
+                        return (name, StreamLine.parseFile(body))
+                    }
+                    return (name, nil)
+                }
+            }
+            var out: [String: [StreamLine]] = [:]
+            for await (name, parsed) in group { if let parsed { out[name] = parsed } }
+            return out
+        }
+        guard let positions = lines["Position.z"], !positions.isEmpty,
+              let start = ArchiveClock.streamStart(heartbeat: lines["Heartbeat"] ?? [], positions: positions)
+        else { return nil }
+        var topics = lines
+        topics["Heartbeat"] = nil
+        return TopUpFetch(lines: topics, start: start, reach: Backfill.archiveLast(PositionSeries.parse(lines: positions)))
     }
 
     /// Race Engineer's console for the top onboard's car, while it shows. Built off the main
@@ -667,11 +1027,11 @@ final class TimingController {
             dropConsole()
             return
         }
-        let samples = carData?.samples(car: car, around: t) ?? []
+        let samples = carSamples(car, around: t)
         var meaning = Channel45Meaning.of(year: loaded.info.year, samples: [car: samples])
         if meaning == .activeAero { activeAeroSeen = true }
         if activeAeroSeen, meaning == .absent { meaning = .activeAero }
-        let stored = circuitKey.flatMap { settings.pitLossMs(circuitKey: $0) }.map { Int(clamping: $0) }
+        let stored = storedPitLossMs
         let key = ConsoleKey(session: loadedRevision, car: car, t: t, samples: samples.count,
                              lastSample: samples.last?.t, channel45: meaning, storedPitLossMs: stored)
         if let built = consoleBuild, built.key == key {
@@ -764,8 +1124,7 @@ final class TimingController {
         for number in cardCars {
             guard let card = DriverCardModel.at(t, number: number, session: loaded) else { continue }
             var speed: Int?
-            if let samples = carData?.samples(car: number, around: t),
-               let readout = CarDataWindow.readout(samples, at: t), !readout.stale {
+            if let readout = CarDataWindow.readout(carSamples(number, around: t), at: t), !readout.stale {
                 speed = readout.sample.speedKmh
             }
             next[number] = DriverCardState(card: card, speedKmh: speed)
@@ -778,4 +1137,11 @@ final class TimingController {
 private struct FoundSession: Sendable {
     var session: ArchiveSession
     var loaded: LoadedSession
+}
+
+/// One archive top-up's fetch: each topic's lines, the archive's start and its last car position.
+struct TopUpFetch: Sendable {
+    var lines: [String: [StreamLine]]
+    var start: UTCms
+    var reach: UTCms?
 }
