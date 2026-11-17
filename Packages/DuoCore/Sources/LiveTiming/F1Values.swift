@@ -81,6 +81,28 @@ enum F1Values {
         return d
     }
 
+    /// What a running position, a lap count and a temperature can be in any F1 session. A value
+    /// outside is no reading (nil), so arithmetic on it (the car ahead, the next lap, a lap
+    /// chart's columns) can't overflow or run away.
+    static let positions = 1...99
+    static let laps = 0...999
+    static let temperatures: ClosedRange<Double> = -50...100
+
+    /// A running position (1…99), from a number or a string holding one.
+    static func position(_ value: JSONValue) -> Int? {
+        value.int.flatMap { positions.contains($0) ? $0 : nil }
+    }
+
+    /// A lap count (0…999), from a number or a string holding one.
+    static func lapCount(_ value: JSONValue) -> Int? {
+        value.int.flatMap { laps.contains($0) ? $0 : nil }
+    }
+
+    /// A temperature in °C (−50…100), from a number or a string holding one.
+    static func temperature(_ value: JSONValue) -> Double? {
+        number(value.string).flatMap { temperatures.contains($0) ? $0 : nil }
+    }
+
     /// A whole number (truncated toward zero) from `JSONSerialization`; nil when out of range.
     static func int(_ value: Any?) -> Int? {
         guard let d = number(value), abs(d) < 1e15 else { return nil }

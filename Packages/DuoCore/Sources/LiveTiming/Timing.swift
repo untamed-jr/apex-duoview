@@ -271,7 +271,7 @@ public struct TimingTimeline: Sendable {
             }
             let known = !line.isNull
             line = TopicMerge.merge(line, delta)
-            if let n = delta["NumberOfLaps"].int {
+            if let n = F1Values.lapCount(delta["NumberOfLaps"]) {
                 // A count that goes up is a crossing; so is the first count for a car already
                 // known without one (2026 sends none until lap 1 ends). A car's first line —
                 // a live feed's opening snapshot — is never one. A count raised with PitOut
@@ -315,8 +315,8 @@ public struct TimingTimeline: Sendable {
             }
             let sectors = line["Sectors"]
             return DriverTimingState(
-                position: line["Position"].int,
-                numberOfLaps: line["NumberOfLaps"].int,
+                position: F1Values.position(line["Position"]),
+                numberOfLaps: F1Values.lapCount(line["NumberOfLaps"]),
                 lastLapMs: F1Values.durationMs(line["LastLapTime"]["Value"].string),
                 lastLapPace: SectorPace.of(line["LastLapTime"]),
                 bestLapMs: F1Values.durationMs(line["BestLapTime"]["Value"].string),
@@ -476,8 +476,8 @@ public struct HeaderTimeline: Sendable {
         var totalTimes: [UTCms] = [], totals: [Int] = []
         for line in lapCount {
             let t = F1Values.add(streamStart, line.offsetMs)
-            if let lap = line.json["CurrentLap"].int { lapTimes.append(t); laps.append(lap) }
-            if let total = line.json["TotalLaps"].int { totalTimes.append(t); totals.append(total) }
+            if let lap = F1Values.lapCount(line.json["CurrentLap"]) { lapTimes.append(t); laps.append(lap) }
+            if let total = F1Values.lapCount(line.json["TotalLaps"]) { totalTimes.append(t); totals.append(total) }
         }
 
         // Android's parseClock: a line can leave out any of Utc, Remaining and Extrapolating.
@@ -502,7 +502,7 @@ public struct HeaderTimeline: Sendable {
         var state: JSONValue = .null
         for line in weather {
             state = TopicMerge.merge(state, line.json)
-            let reading = Weather(air: Double(state["AirTemp"].string), track: Double(state["TrackTemp"].string),
+            let reading = Weather(air: F1Values.temperature(state["AirTemp"]), track: F1Values.temperature(state["TrackTemp"]),
                                   raining: (Double(state["Rainfall"].string) ?? 0) > 0)
             if readings.last == reading { continue }
             weatherTimes.append(F1Values.add(streamStart, line.offsetMs))

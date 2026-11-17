@@ -116,6 +116,8 @@ public struct PositionSeries: Sendable {
     /// `parse`, a line at a time: the live feed keeps one and adds only the lines that came
     /// since it last asked.
     struct Builder: LineFolder {
+        /// The largest X, Y or Z kept, in 1/10 m.
+        static let maxCoordinate = 1e7
         private var cars: [String: Samples] = [:]
 
         init() {}
@@ -130,7 +132,12 @@ public struct PositionSeries: Sendable {
                       let entries = sample["Entries"] as? [String: Any] else { continue }
                 for (number, value) in entries {
                     guard let e = value as? [String: Any], (e["Status"] as? String) != "OffTrack",
-                          let x = F1Values.number(e["X"]), let y = F1Values.number(e["Y"]) else { continue }
+                          let x = F1Values.number(e["X"]), let y = F1Values.number(e["Y"]),
+                          // Past a kilometre from the origin (a hundred times any circuit) it's
+                          // no position, and would narrow to an infinite Float.
+                          abs(x) <= Self.maxCoordinate, abs(y) <= Self.maxCoordinate,
+                          F1Values.number(e["Z"]).map({ abs($0) <= Self.maxCoordinate }) ?? true
+                    else { continue }
                     cars[number, default: Samples()].add(t, Float(x), Float(y))
                 }
             }
