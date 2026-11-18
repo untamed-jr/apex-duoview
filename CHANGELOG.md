@@ -4,6 +4,26 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
+
+The shared logic for beta.4 is in, ahead of the app builds (17 to 21, after the Las Vegas
+weekend). None of it is wired into the app, so build 16 is unchanged. Tested on a computer only
+(637 tests, against the São Paulo race and qualifying data); nothing here has run on a phone yet.
+
+- **Team radio:** reads F1's radio clips, shows only the ones already heard at the picture's
+  moment, labels each with its lap (or the qualifying part, or the practice time), and queues
+  transcripts nearest-first, made on the phone only.
+- **Flags and buzzes:** spots yellow, safety car, virtual safety car, red and chequered flags,
+  your driver's pit stops and purple sectors as the picture passes them, and spaces the buzzes
+  (yellow at most once a minute, never more often than every 2 s).
+- **Closed phone:** the three outer-screen pages (picture, Radio Scanner, Gap Thermometer), the
+  gap between two drivers with its trend, and the hinge sound mixer (off by default).
+- **Logbook:** each driver's laps, stops, tyres, radio and race-control messages up to the
+  picture's moment.
+- **Settings** for all of the above, with the agreed defaults.
+- **Radio check for your Mac** (`--radio`, owner check T-A4): untested against F1's servers; its
+  first run is the real test (checklist row b4-radio).
+
 ## v1.0-beta.3 — Live data (2026-11-17)
 
 Builds 11 to 16. In short:
