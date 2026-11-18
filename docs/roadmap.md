@@ -143,10 +143,14 @@ be designed with the owner before it is built:
   - **Artwork:** night-track draft 2 (Higgsfield job `7f421f62-f43f-4cbe-8105-7244fb6b3009`, 9:16).
   - **Logo:** Higgsfield neon "APEX" draft 6 (job `191b73ae-6e10-4138-9858-17aae08fce69`, 16:9), with
     "DuoView" set beside it in the app's type ("View" in red), as in the hand-built lockup.
-  - Both are low-quality drafts, not in the repo yet. The owner saves the finals into `Design/`
-    from their Higgsfield gallery.
-- Still open: the outer screen's real size, measured on the Duo; and full-resolution redos of the
-  two picks, quoted first and made only after the owner's OK.
+- Finals (owner, 2026-11-18): the best-quality redraws of both picks (option C, 5.5 credits;
+  option A, sharpened copies, was also made for 4 credits and not kept):
+  - artwork: Higgsfield job `81cdc505-2933-4493-9638-459effc5e7a6` (9:16), to be saved as
+    `Design/OpeningArtwork.png`;
+  - "APEX" wordmark: job `5056dcae-d508-4e2e-b577-533a5d5683ca` (16:9), to be saved as
+    `Design/Wordmark-APEX.png`.
+  The owner saves both from the Higgsfield gallery; they are not in the repo yet.
+- Still open: the outer screen's real size, measured on the Duo.
 
 ## Screenshots
 
