@@ -92,6 +92,38 @@ import Testing
         #expect(clips.all.count == 17)
     }
 
+    /// The committed files are the fixtures' windows (Fixtures/README.md), not whole sessions:
+    /// the race's every line to 12 minutes after lights out, qualifying's to 12 minutes into Q1.
+    /// Over the owner's whole private copies (not in the repo) this parser gives the spec's
+    /// counts: the race 30 clips from 8 drivers (ANT 8, NOR 5, RUS 5, VER 4, HAM 3, HAD 3,
+    /// LEC 1, GAS 1), qualifying 36 from 15. These are the windows' counts, measured in Python.
+    @Test func measuredCounts() throws {
+        func perCar(_ path: String) throws -> [String: Int] {
+            RadioClips(lines: try Fixture.lines(path)).all.reduce(into: [:]) { $0[$1.racingNumber, default: 0] += 1 }
+        }
+        // NOR is car 1, ANT 12, LEC 16.
+        #expect(try perCar("sp26-race/TeamRadio.jsonStream") == ["1": 1, "12": 2, "16": 1])
+        // ANT 4, BEA 3, HAD 2, BOR 2, LAW 2, ALB 1, RUS 1, HUL 1.
+        #expect(try perCar("sp26-quali/TeamRadio.jsonStream") == ["12": 4, "87": 3, "6": 2, "5": 2, "30": 2, "23": 1, "63": 1, "27": 1])
+    }
+
+    /// The spec's "Utc is 6–43 s after the file name's time in qualifying, 11–50 s in the race"
+    /// (São Paulo is GMT−3), on the committed lines after each opening list. Rounded: the
+    /// shortest, LAW_30_20261107_150555, is 5.514 s.
+    @Test func publishedAfterTheFileNameTime() throws {
+        for (path, range) in [("sp26-race/TeamRadio.jsonStream", Int64(10_000)...51_000), ("sp26-quali/TeamRadio.jsonStream", 5_000...44_000)] {
+            let lines = try Fixture.lines(path)
+            let opening = Set(RadioClips(lines: [lines[0]]).all.map(\.path))
+            for clip in RadioClips(lines: lines).all where !opening.contains(clip.path) {
+                let delay = clip.utc - (try #require(clip.fileUtc(gmtOffsetSeconds: -3 * 3600)))
+                #expect(range.contains(delay), "\(clip.path): \(delay) ms")
+            }
+        }
+        // The race's opening list holds older, pre-race clips: NOR's is 26 minutes old.
+        let nor = RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream")).all[0]
+        #expect(nor.fileUtc(gmtOffsetSeconds: -3 * 3600).map { nor.utc - $0 } == 1_567_430)
+    }
+
     // MARK: Audio address
 
     @Test func audioURLFromTheSessionPath() throws {
