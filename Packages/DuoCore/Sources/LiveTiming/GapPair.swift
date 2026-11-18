@@ -17,6 +17,8 @@ public enum GapReading: Sendable, Equatable {
     case out(car: String)
     /// Gaps start after the first lap.
     case beforeFirstLap
+    /// The same car named twice: there is no gap to read.
+    case sameCar
     /// Qualifying, practice and the like: intervals there are lap-time differences.
     case notRace
 }
@@ -38,6 +40,7 @@ public enum GapPair {
     /// race lines do, at the same point of the chasing car's lap), each from the gaps to the leader.
     public static func reading(_ a: String, _ b: String, at t: UTCms, session: LoadedSession) -> GapReading {
         guard session.info.isRace else { return .notRace }
+        guard a != b else { return .sameCar }
         let states = session.timing.at(t)
         guard states.values.contains(where: { $0.lineCrossedAt != nil }) else { return .beforeFirstLap }
         // A car that is out, or in the pits, is no gap; the first of the pair says.
@@ -46,7 +49,7 @@ public enum GapPair {
             guard let s = states[car], s.position != nil, !s.retired, !s.stopped else { return .out(car: car) }
         }
         for car in [a, b] where states[car]?.inPit == true { return .inPit(car: car) }
-        guard let sa = states[a], let sb = states[b], let pa = sa.position, let pb = sb.position, a != b else {
+        guard let sa = states[a], let sb = states[b], let pa = sa.position, let pb = sb.position else {
             return .beforeFirstLap
         }
         let (front, back) = pa < pb ? (a, b) : (b, a)

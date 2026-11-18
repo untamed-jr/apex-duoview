@@ -70,6 +70,16 @@ import Foundation
         #expect(GapPair.defaultPair(favourite: "2", at: Self.t, session: session) == nil)
     }
 
+    @Test func sameCarTwiceIsNoGap() {
+        let session = Self.session()
+        #expect(GapPair.reading("3", "3", at: Self.t, session: session) == .sameCar)
+        // Not a "before the first lap", and not a pit or out reading either.
+        #expect(GapPair.reading("3", "3", at: Self.t, session: Self.session(laps: false)) == .sameCar)
+        let pit = Self.session(extra: [timingLine("00:01:45.000", [("3", #""InPit":true"#)])])
+        #expect(GapPair.reading("3", "3", at: Self.t, session: pit) == .sameCar)
+        #expect(GapPair.reading("3", "3", at: Self.t, session: Self.session(type: "Qualifying")) == .notRace)
+    }
+
     @Test func beforeFirstLap() {
         let session = Self.session(laps: false)
         #expect(GapPair.reading("2", "3", at: Self.t, session: session) == .beforeFirstLap)
