@@ -697,6 +697,14 @@ Task 10 works either way (no token first, then once with it). The answer goes in
 
 ### Task 12: App, build 19 — the closed phone and Unfold to See
 
+**Owner decision (2026-11-18), part of this task:** on the outer screen (466 × 678 pt) the Picture
+page stacks two feeds full width when the multiview has two or more (main on top, left/right
+still changes the main one); with one feed, the timing tower fills the space below. This needs a
+two-tile closed option in `LayoutEngine` (Task 9 adds the book shapes there; add `closed.stack`
+alongside, with tests: both tiles 466 wide, stacked within the safe height, the main one on top)
+and the Picture page in `ClosedPagerView`. Since build 16 the closed layout already uses the full
+width (`MultiviewLayout.input`).
+
 **Files:**
 - Create in `DuoApp/Closed/`:
   - `ClosedPagerView.swift`

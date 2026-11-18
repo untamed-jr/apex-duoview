@@ -187,6 +187,11 @@ Each feature gives: **Sees** (in simple words), **Data** (with picture time), **
   top; their clips so far as a large-type transcript that scrolls; one big ▶ / ■. A new clip plays
   by itself when the picture reaches it (Q4). Left/right changes the driver in race order; the
   default is your driver, else the leader.
+- **Picture page fills the screen (owner, 2026-11-18, after seeing it on the Duo):** the outer
+  screen is 466 × 678 pt, so one full-width feed fills only about 40% of it. With two or more feeds
+  in the multiview, the Picture page stacks two feeds full width (the main one on top); left/right
+  still changes the main feed. With one feed, the timing tower fills the space below it. Since
+  build 16 the closed feed already runs the full width, under any side inset.
 - **Data:** that driver's clips at picture time; position and lap from TimingData. The swipe order
   is race position, never "drivers with radio" (that would reveal who is about to speak).
 - **Copy:** "Radio Scanner"; "No radio from {CODE} yet. Swipe for another driver."; with auto-play
