@@ -217,8 +217,12 @@ import Testing
         #expect(label(200_000) == .afterFlag)
         #expect(label(200_000, "1") == .afterFlag)
         #expect(label(400_000) == .afterFlag)
-        // A car with no timing at all, during the race: lap 1 as well.
-        #expect(label(50_000, "99") == .lap(1))
+        // A car timing has never shown (or a clip with no number): no lap, rather than "Lap 1"
+        // all race.
+        #expect(label(50_000, "99") == .unknown)
+        #expect(label(150_000, "") == .unknown)
+        // Car 1 is known from its first timing line, with no count yet: lap 1.
+        #expect(label(10_500, "1") == .lap(1))
     }
 
     @Test func raceLabelsWithoutTheStart() {
