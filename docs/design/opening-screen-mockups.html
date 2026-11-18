@@ -4,11 +4,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one long review sheet. Each direction is a storyboard: outer-screen row, inner-screen row, still → live → end. Frames stay dark in both themes. */
+/* Layout: one long review sheet. Each direction is a storyboard: outer-screen row, inner flat row, inner laptop row (still → live → end). Frames stay dark in both themes. */
 :root {
   --bg: #f1f1f3; --surface: #ffffff; --ink: #141417; --ink-2: #565660; --ink-3: #7a7a84;
   --line: #dcdce2; --red: #c40012; --tag-bg: #fff4c2; --tag-ink: #5c4a00; --tag-line: #b89a1e;
   --f-bg: #0a0a0b; --f-ink: #e9e9ec; --f-ink-2: #a3a3ab; --f-ink-3: #85858d;
+  --outer-ar: 2 / 5; /* GUESS: outer screen width / height. Change this one value once measured on the Duo. */
   --f-red: #ec0014; --f-purple: #b14aed; --f-green: #30d158; --f-yellow: #ffd60a;
   --display: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -69,8 +70,9 @@ button { font: inherit; }
 .row-label { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
 .row-label b { color: var(--ink); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; margin-right: 6px; }
 .row { display: grid; gap: clamp(10px, 2.4vw, 28px); align-items: start; }
-.outer-row { grid-template-columns: repeat(3, minmax(0, 210px)); }
-.inner-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.outer-row { grid-template-columns: repeat(3, minmax(0, 150px)); }
+.flat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lap-row { grid-template-columns: repeat(2, minmax(0, 250px)); }
 .cell { margin: 0; display: grid; gap: 10px; position: relative; min-width: 0; container-type: inline-size; }
 .cell.live { cursor: pointer; }
 .cell figcaption { display: grid; gap: 1px; font-size: 12.5px; line-height: 1.35; }
@@ -78,78 +80,86 @@ button { font: inherit; }
 .cell figcaption span { color: var(--ink-2); }
 .art-tag { position: absolute; z-index: 5; top: -9px; left: 50%; transform: translateX(-50%); width: max-content; max-width: 92%; text-align: center; line-height: 1.25;
   font: 500 10.5px/1 var(--mono); padding: 4px 7px; border-radius: 4px; border: 1px dashed var(--tag-line); background: var(--tag-bg); color: var(--tag-ink); }
+.logo-note { justify-self: start; margin-top: 4px; font: 500 10.5px/1.3 var(--mono); padding: 3px 6px; border-radius: 4px; border: 1px dashed var(--tag-line); background: var(--tag-bg); color: var(--tag-ink); }
+.measure { display: inline-block; margin-left: 4px; font: 500 11px/1.3 var(--mono); padding: 3px 7px; border-radius: 4px; border: 1px dashed var(--ink-3); color: var(--ink); }
 .art-note { font-size: 13px; color: var(--ink-2); }
 
 /* the phones: silver edge, black bezel, dark screen (fixed colours, both themes) */
-.device { width: 100%; padding: 1.6cqw; border-radius: 15cqw; background: linear-gradient(150deg, #d6d6dc, #6b6b73 30%, #2b2b30 55%, #9d9da6 85%, #e2e2e8);
+.device { width: 100%; padding: 1cqw; border-radius: 4.4cqw; background: linear-gradient(150deg, #d6d6dc, #6b6b73 30%, #2b2b30 55%, #9d9da6 85%, #e2e2e8);
   box-shadow: 0 1px 2px rgba(0,0,0,.25), 0 14px 30px -18px rgba(0,0,0,.55); }
-.device .bezel { padding: 2.6cqw; border-radius: 13.5cqw; background: #030304; }
-.device.inner { border-radius: 7cqw; padding: 1cqw; }
-.device.inner .bezel { border-radius: 6.2cqw; padding: 1.6cqw; }
-.screen { position: relative; overflow: hidden; container-type: inline-size; background: var(--f-bg); color: var(--f-ink); isolation: isolate; }
-.screen.outer { aspect-ratio: 9 / 19.5; border-radius: 11cqw; }
-.screen.inner { aspect-ratio: 1 / 1.1; border-radius: 5cqw; }
+.device .bezel { padding: 1.5cqw; border-radius: 3.6cqw; background: #030304; }
+.screen { position: relative; overflow: hidden; container-type: inline-size; background: var(--f-bg); color: var(--f-ink); isolation: isolate; border-radius: 2.6cqw; }
+.screen.flat { aspect-ratio: 951 / 669; --half: 47.95cqw; }
+.screen.lap { aspect-ratio: 669 / 951; }
+/* outer screen: dashed guess, deliberately small and narrow; real size is not known yet */
+.device.outer { padding: 3cqw; border-radius: 13cqw; background: none; box-shadow: none; border: 1.5px dashed var(--ink-3); }
+.device.outer .bezel { padding: 0; background: none; border-radius: 10cqw; }
+.screen.outer { aspect-ratio: var(--outer-ar); border-radius: 9cqw; }
 .screen > * { position: absolute; }
 .art, .fx { inset: 0; }
 .fx > * { position: absolute; }
 .art-svg, .fx-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.crease { top: 0; bottom: 0; left: 50%; width: 1px; z-index: 6; background: linear-gradient(transparent, rgba(255,255,255,.07) 15%, rgba(255,255,255,.07) 85%, transparent);
-  box-shadow: 0 0 4px 1px rgba(0,0,0,.45); }
 
-.logo-wrap { z-index: 3; }
+/* the fold: 40 pt band (456-496 of 951) drawn as a subtle crease */
+.fold { z-index: 6; pointer-events: none; }
+.fold.flat { top: 0; bottom: 0; left: 47.95%; width: 4.2%;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.34) 22%, rgba(255,255,255,.07) 50%, rgba(0,0,0,.34) 78%, rgba(0,0,0,0)); }
+.fold.lap { left: 0; right: 0; top: 47.95%; height: 4.2%;
+  background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.34) 22%, rgba(255,255,255,.07) 50%, rgba(0,0,0,.34) 78%, rgba(0,0,0,0)); }
+
+/* lockup = logo + (underline) + name + tagline; positioned per screen */
+.lockup { z-index: 3; display: grid; justify-items: center; align-content: start; }
 .logo { width: 100%; aspect-ratio: 1; background: var(--logo) center / contain no-repeat; border-radius: 22%; }
-.screen.outer .logo-wrap { width: 50cqw; left: 25cqw; top: 25%; }
-.screen.inner .logo-wrap { width: 31cqw; left: 34.5cqw; top: 12%; }
-
-.copy { left: 0; right: 0; z-index: 3; display: grid; justify-items: center; text-align: center; padding: 0 6cqw; }
-.screen.outer .copy { top: 53%; gap: 2.4cqw; }
-.screen.inner .copy { top: 48%; gap: 1.3cqw; }
+.copy { display: grid; justify-items: center; text-align: center; }
 .name { font-family: var(--display); font-weight: 700; color: var(--f-ink); line-height: 1; letter-spacing: .01em; white-space: nowrap; }
 .tag { font-family: var(--body); font-weight: 500; color: var(--f-ink-2); line-height: 1.25; }
-.screen.outer .name { font-size: 11.5cqw; }
-.screen.outer .tag { font-size: 4.6cqw; }
-.screen.inner .name { font-size: 6.6cqw; }
-.screen.inner .tag { font-size: 2.7cqw; }
-
-.fine { left: 0; right: 0; z-index: 3; display: grid; justify-items: center; text-align: center; color: var(--f-ink-3); }
+.fine { z-index: 3; display: grid; justify-items: center; text-align: center; color: var(--f-ink-3); }
 .fine p { margin: 0; font-family: var(--body); line-height: 1.35; }
 .ver { font-family: var(--mono); color: var(--f-ink-2); }
-.screen.outer .fine { bottom: 4.5%; padding: 0 8cqw; gap: 1.6cqw; }
-.screen.outer .fine p { font-size: 2.65cqw; }
+
+/* outer: portrait guess */
+.screen.outer .lockup { left: 0; right: 0; top: 24%; gap: 5cqw; }
+.screen.outer .logo-wrap { width: 44cqw; }
+.screen.outer .copy { gap: 2.2cqw; padding: 0 5cqw; }
+.screen.outer .name { font-size: 11.5cqw; }
+.screen.outer .tag { font-size: 4.6cqw; }
+.screen.outer .fine { left: 0; right: 0; bottom: 4%; padding: 0 7cqw; gap: 1.5cqw; }
+.screen.outer .fine p { font-size: 2.7cqw; }
 .screen.outer .ver { font-size: 3.2cqw; margin-bottom: .8cqw; }
-.screen.inner .fine { bottom: 4%; padding: 0 18cqw; gap: .9cqw; }
-.screen.inner .fine p { font-size: 1.55cqw; }
-.screen.inner .ver { font-size: 1.8cqw; margin-bottom: .4cqw; }
+
+/* inner, open flat: 951 x 669, fold at 47.95%-52.15% of the width */
+.screen.flat .lockup { left: 0; right: 0; top: calc(46% - 15cqw); gap: 2.6cqw; }
+.screen.flat .logo-wrap { width: 18cqw; }
+.screen.flat .copy { gap: 1cqw; }
+.screen.flat .name { font-size: 5.4cqw; }
+.screen.flat .tag { font-size: 2.3cqw; }
+.screen.flat .fine { left: 0; right: 0; bottom: 5%; padding: 0 18cqw; gap: .7cqw; }
+.screen.flat .fine p { font-size: 1.35cqw; }
+.screen.flat .ver { font-size: 1.6cqw; margin-bottom: .3cqw; }
+/* A, flat: everything centred in the LEFT half (x 0-456) */
+.screen.a.flat .lockup { right: auto; width: var(--half); }
+.screen.a.flat .fine { right: auto; left: 3cqw; width: calc(var(--half) - 6cqw); padding: 0; }
+.screen.a.flat .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5,5,7,.88), rgba(5,5,7,.78) 38%, rgba(5,5,7,0) 56%); }
+
+/* inner, turned for laptop: 669 x 951, fold at 47.95%-52.15% of the height. Intro up top, small print below. */
+.screen.lap .lockup { left: 0; right: 0; top: calc(24% - 23cqw); gap: 3.6cqw; }
+.screen.lap .logo-wrap { width: 28cqw; }
+.screen.lap .copy { gap: 1.5cqw; }
+.screen.lap .name { font-size: 9cqw; }
+.screen.lap .tag { font-size: 3.6cqw; }
+.screen.lap .fine { left: 0; right: 0; top: calc(76% - 10cqw); padding: 0 11cqw; gap: 1.4cqw; }
+.screen.lap .fine p { font-size: 2.4cqw; }
+.screen.lap .ver { font-size: 2.8cqw; margin-bottom: .6cqw; }
+.screen.a.lap .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,5,7,.55), rgba(5,5,7,.2) 45%, rgba(5,5,7,.8) 62%, rgba(5,5,7,.9)); }
 
 /* A · Night circuit */
+.screen.a.flat .fx { -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000 56%); mask-image: linear-gradient(90deg, transparent 30%, #000 56%); }
+.screen.a.lap .fx { opacity: .3; }
 .screen.a .logo-wrap { filter: drop-shadow(0 0 5cqw rgba(236,0,20,.42)); }
 .screen.a .trail { stroke-dasharray: 100; stroke-dashoffset: 0; }
 .screen.a .fx-svg { filter: drop-shadow(0 0 .8px #ff2a3c) drop-shadow(0 0 2.5px rgba(255,42,60,.6)); }
 .screen.a.still .trail { stroke-dashoffset: 100; }
 .screen.a.still .logo-wrap { transform: scale(.86); filter: none; }
-
-/* B · Telemetry */
-.grid-bg { position: absolute; inset: 0; background-color: #07080a;
-  background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
-  background-size: 7cqw 7cqw; background-position: center; }
-.screen.inner .grid-bg { background-size: 4cqw 4cqw; }
-.sectors { position: absolute; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.6cqw; }
-.screen.outer .sectors { left: 9cqw; right: 9cqw; top: 13%; }
-.screen.inner .sectors { left: 24cqw; right: 24cqw; top: 5%; gap: 1cqw; }
-.sec { display: grid; gap: 1cqw; }
-.slabel { font: 500 2.8cqw/1 var(--mono); color: var(--f-ink-3); }
-.screen.inner .slabel { font-size: 1.7cqw; }
-.bar { display: block; height: 1.1cqw; border-radius: 1cqw; transform-origin: left center; }
-.screen.inner .bar { height: .7cqw; }
-.s1 .bar { background: var(--f-yellow); } .s2 .bar { background: var(--f-green); } .s3 .bar { background: var(--f-purple); box-shadow: 0 0 2cqw rgba(177,74,237,.7); }
-.trace { position: absolute; left: 0; width: 100%; display: block; overflow: visible; }
-.screen.outer .trace { top: 67%; height: 12%; }
-.screen.inner .trace { top: 67%; height: 11%; }
-.trace { clip-path: inset(-20% 0 -20% 0); }
-.screen.b.still .bar { transform: scaleX(0); }
-.screen.b.still .slabel { opacity: 0; }
-.screen.b.still .trace { clip-path: inset(-20% 100% -20% 0); }
-.screen.b.still .logo-wrap { opacity: 0; }
 
 /* C · Minimal */
 .carbon { position: absolute; inset: 0; background:
@@ -158,11 +168,13 @@ button { font: inherit; }
 .gate { top: 0; bottom: 0; left: 0; width: .9cqw; z-index: 4; opacity: 0;
   background: linear-gradient(transparent, var(--f-purple) 30%, #e6c6ff 50%, var(--f-purple) 70%, transparent);
   box-shadow: 0 0 4cqw 1.2cqw rgba(177,74,237,.55); }
-.screen.outer .gate { top: 20%; bottom: 46%; }
-.screen.inner .gate { top: 8%; bottom: 55%; width: .6cqw; }
-.underline { height: .7cqw; border-radius: 1cqw; background: var(--f-purple); box-shadow: 0 0 3cqw rgba(177,74,237,.65); transform-origin: left center; z-index: 3; }
-.screen.outer .underline { left: 38cqw; width: 24cqw; top: calc(25% + 55cqw); }
-.screen.inner .underline { left: 42.5cqw; width: 15cqw; top: calc(12% + 34cqw); height: .6cqw; }
+.screen.outer .gate { top: calc(24% - 2cqw); height: 48cqw; bottom: auto; }
+.screen.flat .gate { top: calc(46% - 17cqw); height: 22cqw; bottom: auto; width: .5cqw; }
+.screen.lap .gate { top: calc(24% - 25cqw); height: 32cqw; bottom: auto; width: .7cqw; }
+.underline { height: .7cqw; border-radius: 1cqw; background: var(--f-purple); box-shadow: 0 0 3cqw rgba(177,74,237,.65); transform-origin: left center; }
+.screen.outer .underline { width: 24cqw; }
+.screen.flat .underline { width: 9cqw; height: .4cqw; }
+.screen.lap .underline { width: 15cqw; height: .5cqw; }
 .sheen { position: absolute; inset: 0; border-radius: 22%; pointer-events: none; opacity: 0; mix-blend-mode: screen;
   background: linear-gradient(100deg, transparent 38%, rgba(177,74,237,.0) 40%, rgba(196,120,255,.75) 50%, rgba(177,74,237,0) 60%, transparent 62%);
   background-size: 300% 100%; background-position: 100% 0; }
@@ -196,17 +208,6 @@ button { font: inherit; }
 .dir.run .screen.a.live:not(.skipped) .name { animation-delay: .85s; }
 .dir.run .screen.a.live:not(.skipped) .tag { animation-delay: .9s; }
 .dir.run .screen.a.live:not(.skipped) .fine { animation-delay: 1.15s; }
-
-.dir.run .screen.b.live:not(.skipped) .bar { animation: grow .25s cubic-bezier(.3,.7,.3,1) both; }
-.dir.run .screen.b.live:not(.skipped) .slabel { animation: fade .2s ease-out both; }
-.dir.run .screen.b.live:not(.skipped) .s1 > * { animation-delay: .05s; }
-.dir.run .screen.b.live:not(.skipped) .s2 > * { animation-delay: .28s; }
-.dir.run .screen.b.live:not(.skipped) .s3 > * { animation-delay: .5s; }
-.dir.run .screen.b.live:not(.skipped) .trace { animation: wipe .7s cubic-bezier(.4,.2,.3,1) .1s both; }
-.dir.run .screen.b.live:not(.skipped) .logo-wrap { animation: pop .4s cubic-bezier(.2,.8,.2,1.1) .75s both; }
-.dir.run .screen.b.live:not(.skipped) .name { animation-delay: 1s; }
-.dir.run .screen.b.live:not(.skipped) .tag { animation-delay: 1s; }
-.dir.run .screen.b.live:not(.skipped) .fine { animation-delay: 1.25s; animation-duration: .35s; }
 
 .dir.run .screen.c.live:not(.skipped) .gate { animation: gate .6s cubic-bezier(.5,0,.4,1) .15s both; }
 .dir.run .screen.c.live:not(.skipped) .sheen { animation: sheen .6s cubic-bezier(.5,0,.4,1) .15s backwards; }
@@ -268,8 +269,10 @@ button { font: inherit; }
   .page { padding-block: 28px 56px; gap: 48px; }
   .flow { grid-template-columns: minmax(0, 1fr); }
   .outer-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .inner-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .inner-row .cell.live { grid-column: 1 / -1; order: -1; }
+  .flat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flat-row .cell.live { grid-column: 1 / -1; order: -1; }
+  .lap-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .logo-note { font-size: 9.5px; }
   .cell figcaption { font-size: 11.5px; }
   .ph { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .axis .ph-label { display: none; }
@@ -282,14 +285,14 @@ button { font: inherit; }
 <main class="page">
 <header class="intro">
 <p class="eyebrow">Apex DuoView · v1.0-beta.3 · opening screen</p>
-<h1>Three ways to open Apex DuoView</h1>
-<p class="lede">The opening has two parts. While the app starts, iOS shows the launch screen, which Apple allows only as a still image, so each still below is drawn to match the first frame of its intro and the hand-off is invisible. The intro then plays once per launch, takes about 1.5 seconds, and a tap anywhere skips it. Text appears only in the intro, because launch screens should carry no text.</p>
+<h1>Two ways to open Apex DuoView</h1>
+<p class="lede">The opening has two parts. While the app starts, iOS shows the launch screen, which Apple allows only as a still image, so each still below is drawn to match the first frame of its intro and the hand-off is invisible. The intro then plays once per launch, takes about 1.5 seconds, and a tap anywhere skips it. Text appears only in the intro, because launch screens should carry no text. Screens are drawn to the Duo's real shapes: the inner screen open flat (951 × 669 pt, fold down the middle), the inner screen turned for laptop use (669 × 951 pt, fold across), and the closed outer screen, whose real size is still to be measured.</p>
 <ol class="flow">
 <li><b>Launch still</b><span>Frame 0. What iOS shows while the app loads.</span></li>
 <li><b>Intro</b><span>Plays live here. Tap a playing screen to skip it, or press Replay.</span></li>
 <li><b>End frame</b><span>Holds briefly, then fades into the app.</span></li>
 </ol>
-<nav class="jump" aria-label="Directions"><a href="#dir-a"><span class="letter">A</span>Night circuit<em>Every lap, every angle.</em></a><a href="#dir-b"><span class="letter">B</span>Telemetry<em>Every sector, side by side.</em></a><a href="#dir-c"><span class="letter">C</span>Minimal<em>Unfold the race.</em></a></nav>
+<nav class="jump" aria-label="Directions"><a href="#dir-a"><span class="letter">A</span>Night circuit<em>Every lap, every angle.</em></a><a href="#dir-c"><span class="letter">C</span>Minimal<em>Unfold the race.</em></a></nav>
 </header>
 
 <section class="dir" id="dir-a" data-dir="a" style="--dur:1.6s">
@@ -299,7 +302,7 @@ button { font: inherit; }
 <div class="controls"><button type="button" class="replay" id="replay-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.2v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay</button><span class="rm-note">Reduce Motion is on, so the intro plays as a short fade.</span></div>
 </header>
 <div class="board">
-<div class="row-label"><b>Closed</b> outer screen, portrait 9:19.5</div>
+<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: real size to be measured on your Duo</span></div>
 <div class="row outer-row"><figure class="cell still"><div class="device outer"><div class="bezel"><div class="screen a outer still" data-state="still" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky1" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
@@ -321,8 +324,7 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
 </div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Night circuit intro on the outer screen"><div class="device outer"><div class="bezel"><div class="screen a outer live" data-state="live" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
@@ -345,10 +347,9 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-</div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device outer"><div class="bezel"><div class="screen a outer end" data-state="end" aria-hidden="true">
+</div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device outer"><div class="bezel"><div class="screen a outer end" data-state="end" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky9" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
 <radialGradient id="lamp10"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
@@ -369,12 +370,11 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
 </div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
-<div class="row-label"><b>Open</b> inner screen, about 1:1.1 portrait</div>
-<div class="row inner-row"><figure class="cell still"><div class="device inner"><div class="bezel"><div class="screen a inner still" data-state="still" aria-hidden="true">
+<div class="row-label"><b>Open flat</b> inner screen, 951 × 669 pt, landscape. Fold band at x 456–496.</div>
+<div class="row flat-row"><figure class="cell still"><div class="device flat"><div class="bezel"><div class="screen a flat still" data-state="still" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky13" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
 <radialGradient id="lamp14"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
@@ -395,10 +395,9 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Night circuit intro on the inner screen"><span class="art-tag">artwork from Higgsfield, after your OK</span><div class="device inner"><div class="bezel"><div class="screen a inner live" data-state="live" aria-hidden="true">
+<div class="fold flat"></div></div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Night circuit intro on the inner screen, open flat"><span class="art-tag">artwork from Higgsfield, after your OK</span><div class="device flat"><div class="bezel"><div class="screen a flat live" data-state="live" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky17" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
 <radialGradient id="lamp18"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
@@ -419,10 +418,9 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device inner"><div class="bezel"><div class="screen a inner end" data-state="end" aria-hidden="true">
+<div class="fold flat"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device flat"><div class="bezel"><div class="screen a flat end" data-state="end" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky21" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
 <radialGradient id="lamp22"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
@@ -443,11 +441,58 @@ button { font: inherit; }
 <path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
 <path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
 </svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
-<p class="art-note">The backgrounds here are CSS and SVG stand-ins: artwork from Higgsfield, after your OK.</p>
+<div class="fold flat"></div></div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
+<div class="row-label"><b>Laptop</b> inner screen turned, 669 × 951 pt. Fold band at y 456–496: the upper half stands up, the lower half lies flat.</div>
+<div class="row lap-row"><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Night circuit intro on the inner screen, turned for laptop"><div class="device lap"><div class="bezel"><div class="screen a lap live" data-state="live" aria-hidden="true">
+<div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
+<defs><radialGradient id="sky25" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
+<radialGradient id="lamp26"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
+<radialGradient id="pool28"><stop offset="0" stop-color="#030304" stop-opacity=".95"/><stop offset=".6" stop-color="#030304" stop-opacity=".55"/><stop offset="1" stop-color="#030304" stop-opacity="0"/></radialGradient>
+<linearGradient id="fade27" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#050507" stop-opacity="0"/><stop offset="1" stop-color="#050507" stop-opacity=".9"/></linearGradient></defs>
+<rect width="200" height="200" fill="url(#sky25)"/><ellipse cx="100" cy="74" rx="46" ry="40" fill="url(#pool28)"/>
+<circle cx="62" cy="18" r="22" fill="url(#lamp26)" opacity=".45"/><circle cx="128" cy="10" r="26" fill="url(#lamp26)" opacity=".35"/><circle cx="168" cy="44" r="18" fill="url(#lamp26)" opacity=".3"/>
+<circle cx="62" cy="18" r=".9" fill="#ffd9a0"/><circle cx="128" cy="10" r="1" fill="#ffd9a0"/><circle cx="168" cy="44" r=".8" fill="#ffd9a0"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#2a2b33" stroke-width="40"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#111217" stroke-width="37"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#ffb04a" stroke-opacity=".05" stroke-width="12"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 19)" fill="none" stroke="#c4101f" stroke-width="2.4" stroke-dasharray="4 4"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 19)" fill="none" stroke="#d9d9de" stroke-width="2.4" stroke-dasharray="4 4" stroke-dashoffset="4"/>
+<rect width="200" height="200" fill="url(#fade27)"/>
+</svg></div>
+<div class="fx"><svg class="fx-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
+<path class="trail t1" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 -5)" fill="none" stroke="#ff2a3c" stroke-width="1.3" stroke-linecap="round"/>
+<path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
+<path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
+</svg></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
+<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
+<div class="fold lap"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device lap"><div class="bezel"><div class="screen a lap end" data-state="end" aria-hidden="true">
+<div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
+<defs><radialGradient id="sky29" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
+<radialGradient id="lamp30"><stop offset="0" stop-color="#ffb04a" stop-opacity=".55"/><stop offset="1" stop-color="#ffb04a" stop-opacity="0"/></radialGradient>
+<radialGradient id="pool32"><stop offset="0" stop-color="#030304" stop-opacity=".95"/><stop offset=".6" stop-color="#030304" stop-opacity=".55"/><stop offset="1" stop-color="#030304" stop-opacity="0"/></radialGradient>
+<linearGradient id="fade31" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#050507" stop-opacity="0"/><stop offset="1" stop-color="#050507" stop-opacity=".9"/></linearGradient></defs>
+<rect width="200" height="200" fill="url(#sky29)"/><ellipse cx="100" cy="74" rx="46" ry="40" fill="url(#pool32)"/>
+<circle cx="62" cy="18" r="22" fill="url(#lamp30)" opacity=".45"/><circle cx="128" cy="10" r="26" fill="url(#lamp30)" opacity=".35"/><circle cx="168" cy="44" r="18" fill="url(#lamp30)" opacity=".3"/>
+<circle cx="62" cy="18" r=".9" fill="#ffd9a0"/><circle cx="128" cy="10" r="1" fill="#ffd9a0"/><circle cx="168" cy="44" r=".8" fill="#ffd9a0"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#2a2b33" stroke-width="40"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#111217" stroke-width="37"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" fill="none" stroke="#ffb04a" stroke-opacity=".05" stroke-width="12"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 19)" fill="none" stroke="#c4101f" stroke-width="2.4" stroke-dasharray="4 4"/>
+<path d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 19)" fill="none" stroke="#d9d9de" stroke-width="2.4" stroke-dasharray="4 4" stroke-dashoffset="4"/>
+<rect width="200" height="200" fill="url(#fade31)"/>
+</svg></div>
+<div class="fx"><svg class="fx-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
+<path class="trail t1" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 -5)" fill="none" stroke="#ff2a3c" stroke-width="1.3" stroke-linecap="round"/>
+<path class="trail t2" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 2)" fill="none" stroke="#ffe6dc" stroke-width=".7" stroke-linecap="round"/>
+<path class="trail t3" pathLength="100" d="M-40 178 C 30 166, 70 148, 100 140 S 165 116, 245 110" transform="translate(0 8)" fill="none" stroke="#ff4a58" stroke-width=".9" stroke-linecap="round"/>
+</svg></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every lap, every angle.</div></div></div>
+<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
+<div class="fold lap"></div></div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
+<p class="art-note">The backgrounds here are CSS and SVG stand-ins: artwork from Higgsfield, after your OK. The logo is today's square one.</p>
 </div>
 <div class="dir-detail">
 <div class="timeline" style="--end:100.00%" aria-label="Intro timing">
@@ -460,99 +505,8 @@ button { font: inherit; }
 <div><dt>Version</dt><dd class="mono">v1.0-beta.3</dd></div>
 <div><dt>Small print</dt><dd>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.<br>Requires an F1 TV subscription</dd></div>
 <div><dt>Launch still</dt><dd>Night-track artwork with the logo at 86% size and no glow. No text.</dd></div>
-</dl>
-</div>
-</section>
-<section class="dir" id="dir-b" data-dir="b" style="--dur:1.6s">
-<header class="dir-head">
-<div class="dir-title"><span class="letter">B</span><h2>Telemetry</h2><span class="dur-chip">1.6 s intro</span></div>
-<p class="feel">Technical and precise: it opens like the timing screens the app shows during a session, then the logo lands on top.</p>
-<div class="controls"><button type="button" class="replay" id="replay-b"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.2v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay</button><span class="rm-note">Reduce Motion is on, so the intro plays as a short fade.</span></div>
-</header>
-<div class="board">
-<div class="row-label"><b>Closed</b> outer screen, portrait 9:19.5</div>
-<div class="row outer-row"><figure class="cell still"><div class="device outer"><div class="bezel"><div class="screen b outer still" data-state="still" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-</div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Telemetry intro on the outer screen"><div class="device outer"><div class="bezel"><div class="screen b outer live" data-state="live" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-</div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device outer"><div class="bezel"><div class="screen b outer end" data-state="end" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-</div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
-<div class="row-label"><b>Open</b> inner screen, about 1:1.1 portrait</div>
-<div class="row inner-row"><figure class="cell still"><div class="device inner"><div class="bezel"><div class="screen b inner still" data-state="still" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Telemetry intro on the inner screen"><span class="art-tag">artwork from Higgsfield, after your OK</span><div class="device inner"><div class="bezel"><div class="screen b inner live" data-state="live" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device inner"><div class="bezel"><div class="screen b inner end" data-state="end" aria-hidden="true">
-<div class="art"><div class="grid-bg"></div><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="7"/>
-<path d="M58 58 L128 50 Q148 48 150 64 L151 80 Q151 92 139 94 L116 97 Q104 99 106 112 L110 138 Q112 154 96 155 L66 156 Q50 156 49 140 L46 74 Q45 60 58 58 Z" fill="none" stroke="#ffffff" stroke-opacity=".14" stroke-width=".6"/>
-<path d="M43 100 L 52 100" stroke="#ffffff" stroke-opacity=".35" stroke-width=".8"/>
-</svg></div>
-<div class="fx"><div class="sectors"><div class="sec s1"><span class="slabel">S1</span><span class="bar"></span></div><div class="sec s2"><span class="slabel">S2</span><span class="bar"></span></div><div class="sec s3"><span class="slabel">S3</span><span class="bar"></span></div></div>
-<svg class="trace" viewBox="0 0 100 20" preserveAspectRatio="none"><path class="tr2" d="M0 18 L 9 18 L 11 10 L 21 10 L 23 19 L 28 19 L 31 12 L 47 12 L 50 19 L 55 19 L 58 13 L 70 13 L 73 19 L 79 19 L 82 11 L 100 11" fill="none" stroke="#B14AED" stroke-opacity=".55" stroke-width="1" vector-effect="non-scaling-stroke"/><path class="tr1" d="M0 15 C 4 15, 6 5, 12 4 L 20 4 C 23 4, 23 17, 27 17 C 30 17, 31 7, 36 5 L 46 4 C 49 4, 49 18, 53 18 C 56 18, 57 9, 61 7 L 68 6 C 71 6, 71 15, 74 16 C 77 17, 78 6, 84 4 L 94 4 C 97 4, 98 11, 100 12" fill="none" stroke="#E9E9EC" stroke-opacity=".75" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg></div>
-<div class="logo-wrap"><div class="logo"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Every sector, side by side.</div></div>
-<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>End frame</b><span>At 1.6 s, then into the app</span></figcaption></figure></div>
-<p class="art-note">The backgrounds here are CSS and SVG stand-ins: artwork from Higgsfield, after your OK.</p>
-</div>
-<div class="dir-detail">
-<div class="timeline" style="--end:100.00%" aria-label="Intro timing">
-<div class="ph"><span class="ph-label">Sector bars draw in: yellow, green, purple<em>0.05–0.75 s</em></span><span class="ph-track"><i style="left:3.12%;width:43.75%"></i></span></div><div class="ph"><span class="ph-label">Speed trace draws across<em>0.10–0.80 s</em></span><span class="ph-track"><i style="left:6.25%;width:43.75%"></i></span></div><div class="ph"><span class="ph-label">Logo pops in<em>0.75–1.15 s</em></span><span class="ph-track"><i style="left:46.88%;width:25.00%"></i></span></div><div class="ph"><span class="ph-label">Name and tagline rise in<em>1.00–1.40 s</em></span><span class="ph-track"><i style="left:62.50%;width:25.00%"></i></span></div><div class="ph"><span class="ph-label">Version and small print fade in<em>1.25–1.60 s</em></span><span class="ph-track"><i style="left:78.12%;width:21.88%"></i></span></div>
-<div class="ph axis"><span class="ph-label">seconds</span><span class="ph-track ticks"><span style="left:0.00%">0.0</span><span style="left:25.00%">0.4</span><span style="left:50.00%">0.8</span><span style="left:75.00%">1.2</span><span style="left:100.00%">1.6</span><b class="playhead"></b></span></div>
-</div>
-<dl class="spec">
-<div><dt>Name</dt><dd>Apex DuoView</dd></div>
-<div><dt>Tagline</dt><dd>Every sector, side by side.</dd></div>
-<div><dt>Version</dt><dd class="mono">v1.0-beta.3</dd></div>
-<div><dt>Small print</dt><dd>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.<br>Requires an F1 TV subscription</dd></div>
-<div><dt>Launch still</dt><dd>Grid and track-outline artwork only. No logo, no text.</dd></div>
+<div><dt>Logo, open flat</dt><dd>Centred in the left half, well clear of the fold; the track and light trails fill the right half and run across the crease.</dd></div>
+<div><dt>Logo, laptop</dt><dd>Upper (standing) half; small print on the lower (flat) half.</dd></div>
 </dl>
 </div>
 </section>
@@ -563,47 +517,53 @@ button { font: inherit; }
 <div class="controls"><button type="button" class="replay" id="replay-c"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.2v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay</button><span class="rm-note">Reduce Motion is on, so the intro plays as a short fade.</span></div>
 </header>
 <div class="board">
-<div class="row-label"><b>Closed</b> outer screen, portrait 9:19.5</div>
+<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: real size to be measured on your Duo</span></div>
 <div class="row outer-row"><figure class="cell still"><div class="device outer"><div class="bezel"><div class="screen c outer still" data-state="still" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
 </div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Minimal intro on the outer screen"><div class="device outer"><div class="bezel"><div class="screen c outer live" data-state="live" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-</div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device outer"><div class="bezel"><div class="screen c outer end" data-state="end" aria-hidden="true">
+</div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device outer"><div class="bezel"><div class="screen c outer end" data-state="end" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
 </div></div></div><figcaption><b>End frame</b><span>At 1.4 s, then into the app</span></figcaption></figure></div>
-<div class="row-label"><b>Open</b> inner screen, about 1:1.1 portrait</div>
-<div class="row inner-row"><figure class="cell still"><div class="device inner"><div class="bezel"><div class="screen c inner still" data-state="still" aria-hidden="true">
+<div class="row-label"><b>Open flat</b> inner screen, 951 × 669 pt, landscape. Fold band at x 456–496.</div>
+<div class="row flat-row"><figure class="cell still"><div class="device flat"><div class="bezel"><div class="screen c flat still" data-state="still" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Minimal intro on the inner screen"><span class="art-tag">artwork from Higgsfield, after your OK</span><div class="device inner"><div class="bezel"><div class="screen c inner live" data-state="live" aria-hidden="true">
+<div class="fold flat"></div></div></div></div><figcaption><b>Launch still</b><span>Frame 0, shown by iOS</span></figcaption></figure><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Minimal intro on the inner screen, open flat"><span class="art-tag">artwork from Higgsfield, after your OK</span><div class="device flat"><div class="bezel"><div class="screen c flat live" data-state="live" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span></figcaption></figure><figure class="cell end"><div class="device inner"><div class="bezel"><div class="screen c inner end" data-state="end" aria-hidden="true">
+<div class="fold flat"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device flat"><div class="bezel"><div class="screen c flat end" data-state="end" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
-<div class="fx"><div class="gate"></div><div class="underline"></div></div>
-<div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div>
-<div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
 <div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
-<div class="crease"></div></div></div></div><figcaption><b>End frame</b><span>At 1.4 s, then into the app</span></figcaption></figure></div>
-<p class="art-note">The backgrounds here are CSS and SVG stand-ins: artwork from Higgsfield, after your OK.</p>
+<div class="fold flat"></div></div></div></div><figcaption><b>End frame</b><span>At 1.4 s, then into the app</span></figcaption></figure></div>
+<div class="row-label"><b>Laptop</b> inner screen turned, 669 × 951 pt. Fold band at y 456–496: the upper half stands up, the lower half lies flat.</div>
+<div class="row lap-row"><figure class="cell live" role="button" tabindex="0" aria-label="Skip the Minimal intro on the inner screen, turned for laptop"><div class="device lap"><div class="bezel"><div class="screen c lap live" data-state="live" aria-hidden="true">
+<div class="art"><div class="carbon"></div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
+<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
+<div class="fold lap"></div></div></div></div><figcaption><b>Intro, live</b><span>Tap the screen to skip</span><span class="logo-note">New wide logo coming: your OK needed.</span></figcaption></figure><figure class="cell end"><div class="device lap"><div class="bezel"><div class="screen c lap end" data-state="end" aria-hidden="true">
+<div class="art"><div class="carbon"></div></div>
+<div class="fx"><div class="gate"></div></div>
+<div class="lockup"><div class="logo-wrap"><div class="logo"></div><div class="sheen"></div></div><div class="underline"></div><div class="copy"><div class="name">Apex DuoView</div><div class="tag">Unfold the race.</div></div></div>
+<div class="fine"><div class="ver">v1.0-beta.3</div><p>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.</p><p>Requires an F1 TV subscription</p></div>
+<div class="fold lap"></div></div></div></div><figcaption><b>End frame</b><span>At 1.4 s, then into the app</span></figcaption></figure></div>
+<p class="art-note">The backgrounds here are CSS and SVG stand-ins: artwork from Higgsfield, after your OK. The logo is today's square one.</p>
 </div>
 <div class="dir-detail">
 <div class="timeline" style="--end:87.50%" aria-label="Intro timing">
@@ -616,6 +576,8 @@ button { font: inherit; }
 <div><dt>Version</dt><dd class="mono">v1.0-beta.3</dd></div>
 <div><dt>Small print</dt><dd>Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.<br>Requires an F1 TV subscription</dd></div>
 <div><dt>Launch still</dt><dd>The logo on near-black with a faint carbon texture. Today&#x27;s launch screen is the same logo on flat near-black. No text.</dd></div>
+<div><dt>Logo, open flat</dt><dd>Spans the fold on purpose, centred on the crease, which stays visible across it. Suits the wide logo that is coming.</dd></div>
+<div><dt>Logo, laptop</dt><dd>Upper (standing) half; small print on the lower (flat) half.</dd></div>
 </dl>
 </div>
 </section>
@@ -623,20 +585,17 @@ button { font: inherit; }
 <section class="gen" id="generate">
 <p class="eyebrow">After you choose</p>
 <h2>What I'd generate</h2>
-<p class="lede">One set of four images for the outer screen per direction, and an optional square set for the inner screen. You pick one image from a set and it replaces the stand-in in both frames. Every prompt avoids vehicles, liveries, people, text, flags and any racing-series or team marks.</p>
+<p class="lede">One set of four images for the outer screen per direction, and an optional landscape set for the inner screen; the laptop view crops that landscape set to portrait. You pick one image from a set and it replaces the stand-in in every frame. Every prompt avoids vehicles, liveries, people, text, flags and any racing-series or team marks.</p>
 <div class="gen-grid">
-<article class="gen-card"><h3><span class="letter">A</span>Night circuit</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait 9:16, outer screen</span><button type="button" class="copy-btn" data-target="prompt-a-1" id="copy-prompt-a-1">Copy</button></div>
-<p class="prompt" id="prompt-a-1">Night-time motor racing circuit seen from a low, elevated angle. Empty wet asphalt sweeping through a long corner low in the frame, red-and-white kerbs, floodlights with a warm sodium glow in a dark sky. Deep blacks, cinematic, high contrast, still and calm, no motion blur. Upper-middle of the frame dark and empty for a logo. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li><li><div class="set-head"><span>Set 2 · square, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-a-2" id="copy-prompt-a-2">Copy</button></div>
-<p class="prompt" id="prompt-a-2">The same night circuit scene in square framing, a wider view of the corner in the lower third, the centre dark and empty for a logo. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li></ol><p class="in-code">The app draws the red and white light trails and the logo glow, so the image stays a still, empty track.</p></article>
-<article class="gen-card"><h3><span class="letter">B</span>Telemetry</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait 9:16, outer screen</span><button type="button" class="copy-btn" data-target="prompt-b-1" id="copy-prompt-b-1">Copy</button></div>
-<p class="prompt" id="prompt-b-1">Abstract motorsport telemetry background on near-black: a fine measurement grid and the faint, thin outline of an invented racing circuit, monochrome grey and white, very low contrast. Minimal, precise, sharp, plenty of dark space in the centre. No coloured accents, no text, no numbers, no logos, no vehicles, no people.</p></li><li><div class="set-head"><span>Set 2 · square, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-b-2" id="copy-prompt-b-2">Copy</button></div>
-<p class="prompt" id="prompt-b-2">The same telemetry background in square framing, the invented circuit outline centred and smaller, monochrome and very low contrast. No coloured accents, no text, no numbers, no logos, no vehicles, no people.</p></li></ol><p class="in-code">The app draws the sector bars and the speed trace in its own timing colours, so the image stays monochrome.</p></article>
-<article class="gen-card"><h3><span class="letter">C</span>Minimal</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait 9:16, outer screen</span><button type="button" class="copy-btn" data-target="prompt-c-1" id="copy-prompt-c-1">Copy</button></div>
-<p class="prompt" id="prompt-c-1">Near-black matte surface with a faint carbon-weave texture and a soft vignette. Minimal, premium, almost empty, monochrome. No light streaks, no text, no logos, no vehicles, no people.</p></li><li><div class="set-head"><span>Set 2 · square, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-c-2" id="copy-prompt-c-2">Copy</button></div>
-<p class="prompt" id="prompt-c-2">The same near-black carbon-weave surface in square framing with a soft vignette, monochrome and almost empty. No light streaks, no text, no logos, no vehicles, no people.</p></li></ol><p class="in-code">The app draws the purple sweep and the underline, so the image is only the dark surface.</p></article>
+<article class="gen-card"><h3><span class="letter">A</span>Night circuit</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (ratio set after you measure)</span><button type="button" class="copy-btn" data-target="prompt-a-1" id="copy-prompt-a-1">Copy</button></div>
+<p class="prompt" id="prompt-a-1">Night-time motor racing circuit seen from a low, elevated angle. Empty wet asphalt sweeping through a long corner low in the frame, red-and-white kerbs, floodlights with a warm sodium glow in a dark sky. Deep blacks, cinematic, high contrast, still and calm, no motion blur. Upper-middle of the frame dark and empty for a logo. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li><li><div class="set-head"><span>Set 2 · landscape about 10:7, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-a-2" id="copy-prompt-a-2">Copy</button></div>
+<p class="prompt" id="prompt-a-2">The same night circuit scene in landscape framing, about 10:7, a wider view of the corner in the lower third. Keep the left half and the centre dark and calm, with the subject near the centre so a portrait crop still works. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li></ol><p class="in-code">The app draws the red and white light trails and the logo glow, so the image stays a still, empty track.</p></article>
+<article class="gen-card"><h3><span class="letter">C</span>Minimal</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (ratio set after you measure)</span><button type="button" class="copy-btn" data-target="prompt-c-1" id="copy-prompt-c-1">Copy</button></div>
+<p class="prompt" id="prompt-c-1">Near-black matte surface with a faint carbon-weave texture and a soft vignette. Minimal, premium, almost empty, monochrome. No light streaks, no text, no logos, no vehicles, no people.</p></li><li><div class="set-head"><span>Set 2 · landscape about 10:7, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-c-2" id="copy-prompt-c-2">Copy</button></div>
+<p class="prompt" id="prompt-c-2">The same near-black carbon-weave surface in landscape framing, about 10:7, with a soft vignette, monochrome and almost empty. No light streaks, no text, no logos, no vehicles, no people.</p></li></ol><p class="in-code">The app draws the purple sweep and the underline, so the image is only the dark surface.</p></article>
 </div>
-<p class="credits"><b>About 1 credit per set of 4 images; all three directions ≈ 3–6 credits</b><span>Nothing is generated until you approve the quote.</span></p>
-<p class="closing">Reply with A, B or C, or a mix (for example A's artwork with C's motion), and I'll quote the credits for that set.</p>
+<p class="credits"><b>About 0.25 credits per image, 1 credit per set of 4.</b><span>Nothing is generated until you approve the quote.</span></p>
+<p class="closing">Reply with A or C, or a mix (for example A's artwork with C's motion), and I'll quote the credits for that set.</p>
 </section>
 </main>
 
