@@ -89,8 +89,14 @@ PY
 [ -n "$PICK" ] || fail "No iPhone found. Plug it in with a cable, unlock it, tap Trust, then run this again."
 read -r UDID DEVMODE PAIRED <<<"$PICK"
 [ "$PAIRED" = "unpaired" ] && fail "The phone isn't paired with this Mac yet. Unlock it, tap Trust, then run this again."
-[ "$DEVMODE" = "disabled" ] && fail "Developer Mode is off on the phone. Settings > Privacy & Security > Developer Mode > on (it restarts), then run this again."
 say "Found your phone."
+if [ "$DEVMODE" = "disabled" ]; then
+  # iOS only shows the Developer Mode switch after a Mac has tried to put an app on the phone,
+  # so carry on: this attempt is what makes it appear.
+  printf '\nDeveloper Mode is off on the phone. This run will try anyway, which makes the switch appear.\n'
+  printf 'Afterwards: on the phone, Settings > Privacy & Security > Developer Mode (at the bottom) > on,\n'
+  printf 'let it restart, tap Turn On, then run this script again.\n'
+fi
 
 # --- 4. Project, build, install, open. -----------------------------------------------------------
 say "Regenerating the Xcode project…"
