@@ -39,7 +39,8 @@
   - no new cases on existing public enums;
   - no new stored properties on existing types unless they have defaults;
   - no change to `TimingArchive.topics(for:)`, `LiveFeed`, `LayoutEngine.optionIDs` or anything else the app reads;
-  - every existing test passes unmodified.
+  - every existing test passes unmodified;
+  - the build 16 harness's pure app files (see Checking app code) still typecheck against the branch.
 - **Tasks 8–14 merge only after the race (Sun 22 Nov).** They change `DuoApp/`, `Config/`, `project.yml`, `DuoApp/Info.plist`, the README's app claims, the app's loading or its layout options. They may be written and reviewed on branches before then.
 - If a hotfix to build 16 is needed during the weekend, it goes first. Any beta.4 branch is then rebased onto it.
 
@@ -164,7 +165,7 @@
 1. **A seek, scrub or rewind across a clip or an event.**
    - Nothing fires: no card, haptic or auto-play.
    - Rewinding past a playing clip's `Utc` stops it, and later clips leave every list, count and tick.
-   - Tests: Task 2 (`seekAcrossYellowFiresNothing`, `quietTwoSecondsAfterSeek`, `backwardOrLongStepIsASeek`); Task 10 harness (`rewindStopsPlayingClip`, `ticksOnlyUpToPictureTime`).
+   - Tests: Task 2 (`seekAcrossYellowFiresNothing`, `seekAcrossClipDoesNotAutoPlay`, `quietTwoSecondsAfterSeek`, `backwardOrLongStepIsASeek`); Task 10 harness (`rewindStopsPlayingClip`, `ticksOnlyUpToPictureTime`).
 2. **Clip audio refused or failing.**
    - On 401/403 the clip is fetched once more with the token, to the same URL only.
    - A second refusal or a network error gives "Couldn't load this clip".
@@ -262,15 +263,15 @@ Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, t
     - `pit(car: String)`, `radio(car: String)`, `out(car: String)`;
     - `passed(car: String, other: String, position: Int)`: `car` passes `other` for P`position`;
     - `purpleSector(car: String)`.
-  - `public struct CompanionEvent: Sendable, Equatable { t: UTCms; lap: Int?; kind: CompanionEventKind }`. Track events carry the leader's lap, as `RaceEvents` does. Car events carry that car's lap (count + 1, as the radio labels). Both are nil outside races.
+  - `public struct CompanionEvent: Sendable, Equatable { t: UTCms; lap: Int?; kind: CompanionEventKind }`. Track events carry the leader's lap, as `RaceEvents` does. Car events carry that car's lap (count + 1, as the radio labels). Both are nil outside races and before lights out (the pre-race yellows read "Yellow flag", not "Lap 1").
   - `public enum PictureMotion: Sendable { case play, seek }`
   - `public struct EventDetector: Sendable`:
     - statics: `seekQuietMs: Int64 = 2000`, `yellowRepeatMs: Int64 = 60_000`, `jumpMs: Int64 = 10_000`;
     - `public init()`;
-    - `public mutating func step(to t: UTCms, motion: PictureMotion, session: LoadedSession, radio: RadioClips, favourite: String?) -> [CompanionEvent]`.
+    - `public mutating func step(to t: UTCms, motion: PictureMotion, session: LoadedSession, radio: RadioClips, favourite: String?, listening: Set<String> = []) -> [CompanionEvent]`. `listening` holds the racing numbers whose clips auto-play or flash (the Scanner's driver, the Rivals pair, every car for the Radio panel's flash). Their crossed clips come back as `.radio(car:)` under the same crossing and seek rules. The favourite's are always reported.
     - It returns the events in `(previous t, t]`, oldest first. The first step, a `.seek`, a backward step or a step over `jumpMs` only set the baseline and start the quiet period.
     - Track events: entering yellow from clear, entering SC, VSC or red from anything else, and each `Finished`. Yellow fires at most once per `yellowRepeatMs` of picture time.
-    - Favourite events only, all off when `favourite` is nil:
+    - Favourite events (radio also for `listening`), all off when `favourite` is nil and `listening` is empty:
       - `pit` (InPit false→true);
       - `radio` (a clip's `utc` crossed);
       - `out` (Retired or Stopped false→true);
@@ -295,6 +296,8 @@ Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, t
   - `passedOnePlaceNamesOther`
   - `pitCycleShuffleNoPassed`
   - `radioEventOnlyWhenCrossed`: a clip whose `utc` is still ahead gives nothing.
+  - `listenedCarsRadioCrossed`: with no favourite, a listened car's clip comes back as `.radio`.
+  - `seekAcrossClipDoesNotAutoPlay`: a seek past a listened car's clip gives nothing.
   - Schedule tests:
     - `spacingTwoSeconds`;
     - `strongerReplacesWaiting`;
@@ -558,8 +561,8 @@ Task 10 works either way (no token first, then once with it). The answer goes in
   - `TranscribeProbe.swift`
 - Modify:
   - `DuoApp/Support/AppModel.swift`: own `CompanionSettings` and one `RadioController` per watched session, beside `TimingController`.
-  - `DuoApp/Multiview/MultiviewController.swift`: `func setFeedVolume(_ volume: Float)` on the audible feed's `player.volume`, leaving `isMuted` (the role rule) alone.
-  - `DuoApp/Player/PlayerController.swift`: the same.
+  - `DuoApp/Multiview/MultiviewController.swift`: conform to `PlaybackHost` (below). `setFeedVolume` sets the audible feed's `player.volume` and leaves `isMuted` (the role rule) alone. `seekGeneration` goes up on every `seek(toSeconds:)` and on the main feed's `AVPlayerItem.timeJumpedNotification`.
+  - `DuoApp/Player/PlayerController.swift`: the same. `timeJumpedNotification` covers the system scrubber.
   - `DuoApp/Multiview/MultiviewControls.swift` and `DuoApp/Player/PlayerView.swift`: the "Radio" button beside Map.
   - `DuoApp/Timing/FloatingPanels.swift`: the Radio panel. Its frame is saved per posture as `"radio"`.
   - `DuoApp/Timing/RaceEngineerConsole.swift`: replace the "Saved for beta.4: team radio" spot with the engineered driver's last three clips with ▶.
@@ -588,7 +591,9 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - `static func tickFractions(...)`: the deck's ticks, only up to picture time unless whole race.
   - `@MainActor @Observable final class RadioController`:
     - `init(settings: CompanionSettings, timing: TimingController, http: any HTTPClient, token: @escaping @Sendable () async -> String?)`;
-    - `func attach(ducking: any RadioDucking)` and `func detach()`, where `@MainActor protocol RadioDucking: AnyObject { func setFeedVolume(_ volume: Float); var playbackRate: Double { get } }`;
+    - `func attach(host: any PlaybackHost)` and `func detach()`, where `@MainActor protocol PlaybackHost: AnyObject { func setFeedVolume(_ volume: Float); var playbackRate: Double { get }; var seekGeneration: Int { get } }`. Both the multiview and the single-feed player attach. A changed `seekGeneration` between two ticks is a `.seek`;
+    - it runs its own `EventDetector` with `listening` = every car. A clip crossed in normal play makes its row `isNew` for 3 s (one soft flash); a clip that appears through a seek never flashes;
+    - `func listen(_ cars: Set<String>)`, and `var crossed: AsyncStream<RadioClip>`: clips of listened cars crossed in normal play. Tasks 12 and 14 auto-play from it, never from rows appearing;
     - `private(set) var rows: [RadioRowModel]` (2 Hz, at picture time), `var filter: RadioFilter`;
     - `func play(path: String, pan: Float = 0)`, `func stop()`, `private(set) var playing: String?`, `private(set) var notice: String?`;
     - `func clips(for number: String, limit: Int?) -> [RadioRowModel]`.
@@ -644,8 +649,9 @@ Task 10 works either way (no token first, then once with it). The answer goes in
 **Interfaces:**
 - Consumes: `TranscriptionQueue`, `TranscriptResult` (Task 1).
 - Produces:
+  - `enum TranscriberReadiness: Sendable, Equatable { case ready, downloadingModel, unavailable, permissionDenied }`, declared in the pure `TranscriptState.swift` so the harness can take it.
   - `actor Transcriber`:
-    - `func prepare() async -> TranscriberReadiness`, where `TranscriberReadiness` is `.ready`, `.downloadingModel`, `.unavailable` or `.permissionDenied`;
+    - `func prepare() async -> TranscriberReadiness`;
     - `func transcribe(fileURL: URL, hints: [String]) async throws -> TranscriptResult`.
     - The engine:
       - `SpeechTranscriber` in a `SpeechAnalyzer` with `analyzeSequence(from:)`;
@@ -702,7 +708,8 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - `static func scannerHeader(...)`.
   - `@MainActor @Observable final class CompanionController`:
     - `init(settings: CompanionSettings, timing: TimingController, radio: RadioController)`;
-    - each 500 ms tick calls `EventDetector.step`; seeks report `.seek` from the multiview's seek path;
+    - `func attach(host: any PlaybackHost)` (Task 10), from both `MultiviewView` and `PlayerView`. In the single-feed player it drives haptics only (no pager, no cards);
+    - each 500 ms tick calls `EventDetector.step`. A changed `host.seekGeneration` since the last tick is a `.seek`;
     - `private(set) var cards: [CompanionEvent]` (newest first), `func dismissTop()`;
     - `func postureChanged(from: Posture, to: Posture)`: closed → open with a card showing jumps to the card's `t − rewindSeconds`;
     - `func tapCard()`: the jump on a phone without a fold, and on the Duo while closed;
@@ -717,7 +724,7 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - the feeds keep playing out of sight, with sound, on every page.
   - Radio Scanner:
     - code, team colour, position and lap; large-type transcripts scrolling; one big ▶ / ■;
-    - auto-play of new clips when "Play radio as it happens" is on, else "New radio — tap to play".
+    - the Scanner calls `radio.listen([driver])` and auto-plays from `radio.crossed` when "Play radio as it happens" is on; otherwise it shows "New radio — tap to play".
   - Gap Thermometer:
     - two codes at either end of a tall bar, the gap in large digits, ▼ or ▲;
     - the colour interpolates blue → amber → red by `heat`;
@@ -772,7 +779,7 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - `var supported: Bool` (`capabilitiesForHardware().supportsHaptics`);
     - `func play(_ kind: HapticKind)`: haptics-only patterns; the engine restarts from its reset and stopped handlers;
     - `private(set) var lastShown: (HapticKind, Date)?` for "Show haptics on screen", set on the same path as the real haptic.
-  - The single-feed player gets haptics and the Radio panel, not the pager.
+  - The single-feed player gets haptics and the Radio panel, not the pager: `PlayerView` attaches the `CompanionController` through `PlaybackHost` (Task 12).
 
 - [ ] **Step 1: HapticPatterns**, and its harness checks: `redIs0_8s`, `eachKindHasPattern`, `labelsMatchSettings`.
 - [ ] **Step 2: HapticsPlayer**, the scheduling path and the debug label. Settings › Haptics, hidden without haptic hardware, with "Feel it" per event.
@@ -826,7 +833,7 @@ Task 14's Step 3 follows the answer.
   - Tapping the car ahead or behind switches both screens (beta.3's tap-a-car rules).
 - [ ] **Step 3: Rivals and the mixer.**
   - Strips: the last transcript and ▶; a tap on a strip's header changes that driver.
-  - Clips auto-play when the setting is on; each is panned to its screen's ear. Commentary stays centred.
+  - Rivals calls `radio.listen` with the pair and auto-plays from `radio.crossed` when the setting is on. Each clip is panned to its screen's ear; commentary stays centred.
   - The mixer follows T-R1's answer.
 - [ ] **Step 4: Self-check** (harness `apptc21`). Build 21, CHANGELOG.
 - [ ] **Step 5: Commit** "Book: Onboard and Logbook, Ear-Matched Rivals; the hinge mixer (build 21)".
