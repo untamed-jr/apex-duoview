@@ -187,7 +187,7 @@
 
 ## Pre-freeze tasks (DuoCore only; may merge any time)
 
-Task 1 and the radio parts of Tasks 2 and 5 wait for the radio groundwork, being built by another worker, to reach `main`. Tasks 3, 4, 6 and 7 need nothing.
+Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, to reach `main` (they read `RadioClips`). Task 6 needs Task 2's types. Tasks 3, 4 and 7 need nothing and can start at once.
 
 ### Task 1: Radio logic (groundwork, landing separately): verify and complete
 
@@ -579,10 +579,10 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - `static func cacheURL(base: URL, sessionKey: String, clipPath: String) -> URL`: the file name is the clip's last path segment;
     - `static func fetch(_ url: URL, http: any HTTPClient, token: @Sendable () async -> String?) async -> RadioFetchResult`, where `RadioFetchResult` is `.data(Data)`, `.refused` or `.failed`;
     - `static func expired(modified: Date, now: Date) -> Bool`: 7 days.
-  - `struct RadioRowModel: Equatable, Sendable { path; number; tla; teamColour; label: String?; header: String?; transcript: TranscriptLine; isNew: Bool }`, where `enum TranscriptLine { case none, transcribing, text(String), noWords, unavailable }`.
+  - `struct RadioRowModel: Equatable, Sendable { path; number; tla; teamColour; label: String?; header: String?; transcript: TranscriptLine; isNew: Bool }`, where `enum TranscriptLine { case none, transcribing, text(String), noWords }`. Whether transcripts are available at all is a panel-level line (Task 11's `TranscriptState`), not a row's.
   - `enum RadioModels` (pure):
     - `static func label(_ l: RadioLapLabel) -> String?`: the Global Constraints formats;
-    - `static func rows(clips: [RadioClip], session: LoadedSession, transcripts: [String: TranscriptResult], state: TranscriptState) -> [RadioRowModel]`;
+    - `static func rows(clips: [RadioClip], session: LoadedSession, transcripts: [String: TranscriptResult], transcribing: String?) -> [RadioRowModel]`: `transcribing` is the path in progress;
     - `static func emptyText(filter: RadioFilter, tla: String?) -> String`;
     - `static func shouldStop(playing: RadioClip, pictureTime: UTCms?) -> Bool`;
     - `static func tickFractions(...)`: the deck's ticks, only up to picture time unless whole race.
@@ -713,7 +713,8 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - horizontal swipe changes the feed, driver or pair;
     - opens on `lastClosedPage`;
     - the first-time hint;
-    - sizes come from `GeometryReader` and type scales with the height (no fixed outer-screen numbers).
+    - sizes come from `GeometryReader` and type scales with the height (no fixed outer-screen numbers);
+    - the feeds keep playing out of sight, with sound, on every page.
   - Radio Scanner:
     - code, team colour, position and lap; large-type transcripts scrolling; one big ▶ / ■;
     - auto-play of new clips when "Play radio as it happens" is on, else "New radio — tap to play".
