@@ -26,7 +26,8 @@ public struct RadioFileTime: Sendable, Hashable {
         func two(_ n: Int) -> String { n < 10 ? "0\(n)" : "\(n)" }
         let text = "\(year)-\(two(month))-\(two(day))T\(two(hour)):\(two(minute)):\(two(second))Z"
         guard (1000...9999).contains(year), let local = SignalR.utc(text) else { return nil }
-        return F1Values.sub(local, Int64(gmtOffsetSeconds) * 1000)
+        let (ms, overflow) = Int64(gmtOffsetSeconds).multipliedReportingOverflow(by: 1000)
+        return F1Values.sub(local, overflow ? (gmtOffsetSeconds > 0 ? .max : .min) : ms)
     }
 
     /// "…_YYYYMMDD_HHMMSS.ext" at the end of a path; nil for anything else.
@@ -53,13 +54,13 @@ public struct RadioFileTime: Sendable, Hashable {
 public struct RadioClip: Sendable, Hashable {
     /// When F1 published the clip (its `Utc`): the clip exists from this moment of picture time.
     /// Later than when the words were said (São Paulo 2026: 6 to 50 s after the file name's time).
-    public var utc: UTCms
+    public let utc: UTCms
     /// The car's number, as DriverList keys it ("1", "12").
-    public var racingNumber: String
+    public let racingNumber: String
     /// Under the session's folder: "TeamRadio/ANT_12_20261108_141229.mp3".
-    public var path: String
+    public let path: String
     /// The time in the file name, when it has one; the track's local time (`RadioFileTime`).
-    public var fileTime: RadioFileTime?
+    public let fileTime: RadioFileTime?
 
     public init(utc: UTCms, racingNumber: String, path: String) {
         self.utc = utc

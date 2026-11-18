@@ -23,6 +23,17 @@ import Testing
         }
     }
 
+    @Test func extremeGmtOffsetsDoNotTrap() {
+        let clip = RadioClip(utc: 1, racingNumber: "12", path: "TeamRadio/ANT_12_20261108_141229.mp3")
+        for offset in [Int.max, Int.min, Int.max / 1000 + 1, Int.min / 1000 - 1] {
+            // Saturates instead of trapping; the exact value is not the point.
+            #expect(clip.fileTime?.utc(gmtOffsetSeconds: offset) != nil, "\(offset)")
+            #expect(clip.fileUtc(gmtOffsetSeconds: offset) != nil, "\(offset)")
+        }
+        #expect((clip.fileUtc(gmtOffsetSeconds: Int.max) ?? 0) < -9_000_000_000_000_000_000)
+        #expect((clip.fileUtc(gmtOffsetSeconds: Int.min) ?? 0) > 9_000_000_000_000_000_000)
+    }
+
     @Test func raceFixtureListThenKeyed() throws {
         let clips = RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream")).all
         // The opening list (two pre-race clips published together), then entries keyed "2" and "3".
