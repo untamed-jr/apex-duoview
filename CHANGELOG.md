@@ -66,10 +66,14 @@ Builds 11 to 16. In short:
 - **Sturdier against bad data from F1:** a 0 ms lap no longer crashes the pit circle; positions
   outside 1–99, laps outside 0–999, temperatures outside −50 to 100 °C and wild map coordinates
   are ignored.
+- **Tiles in a row are all the same height** (found on the Duo, 2026-11-18): a row whose first tile
+  had no second line, such as Replays starting with "Race", cut the text off the tiles after it.
+  Every tile now keeps room for two title lines and the line below.
 
 ### Untested — check later (build 16)
 
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
+- The same-height tiles: the Replays row on the Race Weekend tab shows every tile's text in full.
 - Live, joined part-way (Las Vegas): "From the start" or a rewind more than 90 s before the join
   shows empty panels with "Timing catching up"; within 90 s the state on joining with the label;
   the Scrub Deck's lap axis stays empty until F1's archive arrives.

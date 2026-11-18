@@ -65,20 +65,23 @@ struct TileView: View {
         NavigationLink(value: route) {
             VStack(alignment: .leading, spacing: 0) {
                 picture
+                // Every tile keeps room for two title lines and the subtitle line, so all tiles in a
+                // row are the same height. A lazy row takes its height from its first tile, so a
+                // short first tile used to cut the text off the tiles after it.
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .rowTitle(.subheadline)
-                        .lineLimit(2)
+                        .lineLimit(2, reservesSpace: true)
                         .multilineTextAlignment(.leading)
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.textSecondary)
-                            .lineLimit(1)
-                    }
+                    Text(subtitle.isEmpty ? " " : subtitle)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .accessibilityHidden(subtitle.isEmpty)
                 }
                 .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(width: width, alignment: .leading)
             .card()
