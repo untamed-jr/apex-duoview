@@ -15,4 +15,9 @@ Per topic, in both:
 
 Also: `Index-2026.json` (the season index with only the Mexico City and São Paulo meetings) and `circuit-14-2026.json` (MultiViewer's Interlagos circuit, whole).
 
-Total: 2.85 MB (the script refuses anything over 3 MB).
+**Long slices** (whole sessions, for the radio checks; no Position, CarData or weather):
+- `sp26-race-long/` — the race's whole TeamRadio, TrackStatus, LapCount, SessionStatus, RaceControlMessages, DriverList, SessionInfo and Heartbeat. TimingData is reduced to `NumberOfLaps`, `Position`, `InPit`, `PitOut`, `Retired` and `Stopped` per car (every line that still says something, about 104 KB; deltas, so the merge is unchanged for those keys). 30 radio clips from 8 drivers.
+- `sp26-quali-long/` — qualifying's whole TeamRadio, TrackStatus, SessionStatus, RaceControlMessages, ExtrapolatedClock, DriverList, SessionInfo and Heartbeat. 36 clips from 15 drivers. No TimingData, so no qualifying part.
+The script scans both for tokens, signed URLs and account data and prints `check:secretScan:` lines (all must read 0 hits). Rebuild with `python3 spike/trim_fixtures.py <absolute path to the raw folder>`.
+
+Total: 3.12 MB (the script refuses anything over 3.3 MB).

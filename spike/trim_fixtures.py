@@ -24,7 +24,14 @@ Per topic:
 Lines are written with LF endings (the repo's `* text=auto` would rewrite CRLF), the archive's
 BOM kept at the start of each stream file. Offsets are the archive's own.
 
-Python 3 standard library only. Run from anywhere: python3 spike/trim_fixtures.py
+Long slices (whole-session radio checks; no Position, CarData or weather):
+  sp26-race-long  - whole TeamRadio, TrackStatus, LapCount, SessionStatus, RaceControlMessages,
+                    DriverList, SessionInfo, Heartbeat; TimingData reduced to NumberOfLaps, Position,
+                    InPit, PitOut, Retired and Stopped per car (every line kept that still says anything).
+  sp26-quali-long - whole TeamRadio, TrackStatus, SessionStatus, RaceControlMessages,
+                    ExtrapolatedClock, DriverList, SessionInfo, Heartbeat.
+
+Python 3 standard library only. Run from anywhere: python3 spike/trim_fixtures.py [RAW_FOLDER]
 """
 import base64
 import json
@@ -35,10 +42,11 @@ import sys
 import zlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "spike", "beta3-fixtures")
+# Raw folder: the first argument, else spike/beta3-fixtures (it lives only in the main checkout).
+RAW = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(ROOT, "spike", "beta3-fixtures")
 OUT = os.path.join(ROOT, "Packages", "DuoCore", "Tests", "LiveTimingTests", "Fixtures")
 BOM = "﻿"
-BUDGET = 3_000_000
+BUDGET = 3_300_000
 CARDATA_BYTES = 150_000
 MINUTE = 60_000
 
@@ -209,6 +217,43 @@ def trim_session(folder, out_name, start_off, end_off, cardata):
         nxt = lines[len(kept)]
         partial = stamp(nxt[0]) + nxt[1][: len(nxt[1]) // 2]
         write_stream(os.path.join(dst, "CarData.z.slice.jsonStream"), kept, cut_last=partial)
+    return dst
+
+
+LONG_KEEP = ("NumberOfLaps", "Position", "InPit", "PitOut", "Retired", "Stopped")
+
+
+def reduce_timing(text):
+    """A TimingData line cut to LONG_KEEP per car; None when nothing is left."""
+    cars = json.loads(text).get("Lines")
+    if not isinstance(cars, dict):
+        return None
+    kept = {}
+    for n, d in cars.items():
+        if isinstance(d, dict):
+            r = {k: d[k] for k in LONG_KEEP if k in d}
+            if r:
+                kept[n] = r
+    return json.dumps({"Lines": kept}, ensure_ascii=False, separators=(",", ":")) if kept else None
+
+
+def trim_long(folder, out_name, topics, reduce):
+    src = os.path.join(RAW, folder)
+    dst = os.path.join(OUT, out_name)
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    os.makedirs(dst)
+    for name in ("DriverList.json", "SessionInfo.json"):
+        copy_file(os.path.join(src, name), os.path.join(dst, name))
+    for topic in topics:
+        write_stream(os.path.join(dst, topic + ".jsonStream"), read_stream(os.path.join(src, topic + ".jsonStream")))
+    if reduce:
+        kept = []
+        for off, text in read_stream(os.path.join(src, "TimingData.jsonStream")):
+            r = reduce_timing(text)
+            if r is not None:
+                kept.append((off, r))
+        write_stream(os.path.join(dst, "TimingData.jsonStream"), kept)
     return dst
 
 
@@ -430,6 +475,69 @@ def report(race_dir, quali_dir, race_lo, quali_q1):
     check("carDataChannel45Present", ch45)
 
 
+def radio_clips(folder):
+    """[(utc_ms, racing_number, path)] oldest first, first path wins (Android's addRadio)."""
+    seen, out = set(), []
+    for _, text in read_stream(os.path.join(folder, "TeamRadio.jsonStream")):
+        caps = json.loads(text).get("Captures", [])
+        if isinstance(caps, dict):
+            caps = [caps[k] for k in sorted(caps, key=lambda k: (not k.isdigit(), int(k) if k.isdigit() else 0, k))]
+        for c in caps:
+            if c["Path"] in seen:
+                continue
+            seen.add(c["Path"])
+            out.append((utc_ms(c["Utc"]), c["RacingNumber"], c["Path"]))
+    return sorted(out, key=lambda c: c[0])  # stable: ties keep arrival order
+
+
+def report_long(race_dir, quali_dir):
+    print("== long slices (radio)")
+    tla = {n: v["Tla"] for n, v in read_json(os.path.join(race_dir, "DriverList.json")).items() if isinstance(v, dict)}
+    start = heartbeat_start(read_stream(os.path.join(race_dir, "Heartbeat.jsonStream")))
+    clips = radio_clips(race_dir)
+    check("longRaceClipCount", len(clips))
+    counts = {}
+    for _, n, _ in clips:
+        counts[tla[n]] = counts.get(tla[n], 0) + 1
+    check("longRaceClipsPerDriver", sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+    status = [(start + off, json.loads(t)["Status"]) for off, t in read_stream(os.path.join(race_dir, "SessionStatus.jsonStream"))]
+    started = [u for u, s in status if s == "Started"][0]
+    finished = [u for u, s in status if s == "Finished"][0]
+    check("longRaceStartedUtc", started)
+    check("longRaceFinishedUtc", finished)
+    check("longRaceBeforeStartCount", sum(1 for c in clips if c[0] < started))
+    check("longRaceAfterFlagCount", sum(1 for c in clips if c[0] > finished))
+    check("longRaceAfterFlagDrivers", [tla[c[1]] for c in clips if c[0] > finished])
+    td = read_stream(os.path.join(race_dir, "TimingData.jsonStream"))
+
+    def laps_at(num, t):
+        laps = None
+        for off, text in td:
+            if start + off > t:
+                break
+            d = json.loads(text)["Lines"].get(num, {})
+            if "NumberOfLaps" in d:
+                laps = d["NumberOfLaps"]
+        return laps
+    ant = [c for c in clips if tla[c[1]] == "ANT"]
+    check("longRaceAntClips", [(c[0], c[2], laps_at(c[1], c[0])) for c in ant])
+    # picture time of lap 23: ANT's NumberOfLaps reaches 22
+    t23 = [start + off for off, text in td if json.loads(text)["Lines"].get("12", {}).get("NumberOfLaps") == 22][0]
+    vis = [c for c in clips if c[0] <= t23]
+    check("longRaceLap23PictureTime", t23)
+    check("longRaceVisibleAtLap23", (len(vis), [c[0] for c in vis]))
+    qclips = radio_clips(quali_dir)
+    check("longQualiClipCount", len(qclips))
+    check("longQualiDriverCount", len({c[1] for c in qclips}))
+    # Tripwire for the public repo: the slices must hold no token, signed URL or account data.
+    bad = re.compile(r"(authorization|bearer|subscriptiontoken|x-amz|signature=|access_token|password|e-?mail|@[a-z0-9-]+\.[a-z]{2,}|https?://[^\"\s]*\?)", re.I)
+    for folder in (race_dir, quali_dir):
+        for name in sorted(os.listdir(folder)):
+            with open(os.path.join(folder, name), encoding="utf-8-sig") as f:
+                hits = bad.findall(f.read())
+            check(f"secretScan:{os.path.basename(folder)}/{name}", f"{len(hits)} hits {sorted(set(map(str, hits)))[:3]}")
+
+
 def main():
     if not os.path.isdir(RAW):
         sys.exit(f"missing {RAW}: unpack the owner's beta3-fixtures.zip there first")
@@ -445,6 +553,10 @@ def main():
     race_dir = trim_session("2026-11-08_Race", "sp26-race", race_lo - 2 * MINUTE, race_lo + 12 * MINUTE, cardata=False)
     quali_dir = trim_session("2026-11-07_Qualifying", "sp26-quali", quali_q1, quali_q1 + 12 * MINUTE, cardata=True)
     trim_index()
+    race_long = trim_long("2026-11-08_Race", "sp26-race-long",
+                          ["Heartbeat", "TeamRadio", "TrackStatus", "LapCount", "SessionStatus", "RaceControlMessages"], True)
+    quali_long = trim_long("2026-11-07_Qualifying", "sp26-quali-long",
+                           ["Heartbeat", "TeamRadio", "TrackStatus", "SessionStatus", "RaceControlMessages", "ExtrapolatedClock"], False)
 
     print("== sizes")
     total = 0
@@ -459,6 +571,7 @@ def main():
     print(f"windows: race {stamp(race_lo - 2 * MINUTE)}–{stamp(race_lo + 12 * MINUTE)} (lights out {stamp(race_lo)}, "
           f"RCM RACE START {stamp(starts[0])}); quali {stamp(quali_q1)}–{stamp(quali_q1 + 12 * MINUTE)}")
     report(race_dir, quali_dir, race_lo, quali_q1)
+    report_long(race_long, quali_long)
 
 
 if __name__ == "__main__":
