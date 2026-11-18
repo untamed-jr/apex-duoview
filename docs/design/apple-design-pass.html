@@ -1,0 +1,130 @@
+<title>Apple Design Pass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column of decision cards, a sticky tally on top; same family as the beta 3 test checklist. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4; --ok: #138a4b; --ok-bg: #e3f5ea; --alt: #b45309; --alt-bg: #fdf0dc;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { padding-top: 24px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+  border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar b { color: var(--fg); }
+.save { margin-left: auto; font-family: var(--f-mono); font-size: 12px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.q[data-s="agree"] { border-color: var(--ok); }
+.q[data-s="other"] { border-color: var(--alt); }
+.qhead { display: flex; gap: 10px; align-items: baseline; }
+.num { font-family: var(--f-mono); color: var(--accent); font-size: 13px; flex: none; }
+h2 { font-size: 19px; line-height: 1.25; }
+.ask { margin: 0; }
+.rec { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.rec b { font-family: var(--f-display); letter-spacing: .02em; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"][data-v="agree"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="other"] { background: var(--alt-bg); border-color: var(--alt); color: var(--alt); font-weight: 600; }
+.seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { font-size: 13px; color: var(--muted); }
+textarea { font: inherit; width: 100%; box-sizing: border-box; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+.foot { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · Apple design pass · Liquid Glass</div>
+    <h1>Ten changes to match Apple's design</h1>
+    <p class="lede">From Apple's Liquid Glass and Human Interface Guidelines pages you sent, checked against every screen of the app. Each one has my recommendation: tap "Agree" or "Something else" and say what you'd like instead. Your answers save here and Claude reads them.</p>
+  </header>
+  <div class="bar" role="status"><span><b id="n-done">0</b> of 10 answered</span><span><b id="n-agree">0</b> agree</span><span><b id="n-other">0</b> something else</span><span class="save" id="save">Saved on this device only</span></div>
+  <main id="list" class="wrap" style="gap:14px"></main>
+  <p class="foot">Nothing here is built until you've answered, and not before the Las Vegas weekend is over. Your racing look stays: dark background, F1-style red, narrow San Francisco type.</p>
+</div>
+
+<script>
+const QS = [
+  { id: "q1", t: "Video controls float on glass", a: "In multiview, the top bar (Close, Race, Map, Feeds) and the bottom bar (timeline, play, speed) are hand-made dark boxes today. Apple puts controls over video on clear glass so the picture shows through.", r: "Clear glass for both bars, grouped so they blend as one, with a light dark layer behind them when the picture is bright. Same buttons, same places. (The single-feed player already uses Apple's own controls, which are glass.)" },
+  { id: "q2", t: "Labels and buttons on each feed", a: "The \"16 Leclerc · SOUND\" label, the speaker button and the driver card on each feed are dark boxes.", r: "Small clear-glass pills. Only SOUND keeps the red, so you can see at a glance which feed you hear (Apple: tint only the one thing that matters)." },
+  { id: "q3", t: "The floating map and timing tower", a: "They float over the video as dark panels.", r: "Regular glass (the more solid kind Apple uses for text-heavy panels), so the tower stays easy to read over a busy picture. When they're docked in a layout (not floating), they stay solid." },
+  { id: "q4", t: "Cards and lists stay solid", a: "Apple says glass is for controls that float, not for the content itself.", r: "Keep the video tiles, the Scrub Deck, the Race Engineer console and the Settings rows as solid dark cards, as now. No change." },
+  { id: "q5", t: "Buttons and banners", a: "The Settings gear, the \"Continue watching\" banner, the next-live prompt and buttons like \"Watch multiview\" are custom-drawn.", r: "Apple's glass button style for all of them. The main action on a screen (like \"Watch multiview\") keeps a red background; others are plain glass. At most one or two red buttons per screen." },
+  { id: "q6", t: "The tab bar's colour", a: "The tab bar is already Apple's glass. Today the selected tab is red.", r: "Follow Apple: over colourful race pictures, keep the tab bar white and grey, and save red for the one main action and for LIVE. Say \"Something else\" if you'd rather keep the red tab." },
+  { id: "q7", t: "Text that grows with your text size", a: "All text uses Apple's San Francisco font and grows with the iPhone's text size, except a few tiny labels drawn inside the map, pit circle, tower and Scrub Deck, and tower rows that are a fixed 22 pt tall.", r: "Make those grow too, with the tower rows getting taller as text grows. Keep the narrow (condensed) San Francisco style as the app's look." },
+  { id: "q8", t: "Easier to tap", a: "Apple asks for touch areas of at least 44 × 44 pt. Several are smaller: the map's buttons (30 pt), the banner close buttons (25–32 pt), tower rows, rival rows, the panel resize handle and the player's Close button.", r: "Make every touch area at least 44 × 44 pt. They look the same size; only the area you can tap gets bigger." },
+  { id: "q9", t: "VoiceOver can reach everything", a: "VoiceOver can't select cars on the map or the pit circle, and moving or resizing the floating panels is drag-only.", r: "Each car on the map and pit circle becomes something VoiceOver can read and select, and the panels get Move and Resize actions that don't need dragging." },
+  { id: "q10", t: "When to do it", a: "This touches most screens, so it's best done in one go.", r: "In the small polish build after beta 4, together with the new opening screen, so the whole app changes look at once and beta 4 stays about radio and the closed phone." },
+];
+const LABEL = { agree: "Agree", other: "Something else" };
+const state = {}; let db = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem("adp") || "{}")); } catch (e) {} }
+function saveLocal() { try { localStorage.setItem("adp", JSON.stringify(state)); } catch (e) {} }
+function tally() {
+  const v = Object.values(state);
+  document.getElementById("n-done").textContent = v.filter(x => x.s).length;
+  document.getElementById("n-agree").textContent = v.filter(x => x.s === "agree").length;
+  document.getElementById("n-other").textContent = v.filter(x => x.s === "other").length;
+}
+function render() {
+  document.getElementById("list").innerHTML = QS.map((q, i) => {
+    const v = state[q.id] || {};
+    return `<section class="q" data-s="${v.s || ""}" aria-labelledby="h-${q.id}">
+      <div class="qhead"><span class="num">${String(i + 1).padStart(2, "0")}</span><h2 id="h-${q.id}">${esc(q.t)}</h2></div>
+      <p class="ask">${esc(q.a)}</p>
+      <p class="rec"><b>Recommended:</b> ${esc(q.r)}</p>
+      <div class="seg" role="group" aria-label="Your answer to ${esc(q.t)}">${["agree", "other"].map(s => `<button type="button" data-id="${q.id}" data-v="${s}" aria-pressed="${v.s === s}">${LABEL[s]}</button>`).join("")}</div>
+      <label for="n-${q.id}">${v.s === "other" ? "What you'd like instead" : "Note (optional)"}</label>
+      <textarea id="n-${q.id}" data-id="${q.id}" placeholder="${v.s === "other" ? "Tell Claude what you'd prefer" : "Anything to add"}">${esc(v.n || "")}</textarea>
+    </section>`;
+  }).join("");
+  tally();
+}
+async function put(id) {
+  const v = state[id]; saveLocal(); tally();
+  if (!db) return;
+  try { await db.collection("answers").doc(id).set({ s: v.s || "", n: v.n || "", at: new Date().toISOString() }); document.getElementById("save").textContent = "Saved for Claude"; }
+  catch (e) { document.getElementById("save").textContent = "Couldn't save online; kept on this device"; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  const id = b.dataset.id; const cur = state[id] || {};
+  state[id] = { ...cur, s: cur.s === b.dataset.v ? "" : b.dataset.v };
+  render(); put(id);
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const id = t.dataset.id; state[id] = { ...(state[id] || {}), n: t.value };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => put(id), 600);
+});
+loadLocal(); render();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) return;
+    document.getElementById("save").textContent = "Saved for Claude";
+    const snap = await db.collection("answers").get();
+    (snap.docs || snap).forEach(d => { const data = d.data ? d.data() : d; const id = d.id; if (QS.some(q => q.id === id)) state[id] = { s: data.s || "", n: data.n || "" }; });
+    saveLocal(); render();
+  } catch (e) { db = null; }
+})();
+</script>
