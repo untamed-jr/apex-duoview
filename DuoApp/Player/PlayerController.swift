@@ -667,9 +667,10 @@ final class PlayerController {
         case F1TVError.network(let reason):
             let text = sanitized(reason)
             return text.isEmpty ? "Couldn't load F1 TV." : "Couldn't load F1 TV: \(text)"
-        case F1TVError.server(let status, _):
-            // Only the number: F1 TV's reply text is never shown.
-            return "Couldn't load F1 TV (error \(status))."
+        case let error as F1TVError where !error.detail.isEmpty:
+            // F1 TV's own reason (its error number and words), without any link.
+            let text = sanitized(error.detail)
+            return text.isEmpty ? "Couldn't load F1 TV." : "Couldn't load F1 TV: \(text)."
         default:
             return "Couldn't load F1 TV."
         }

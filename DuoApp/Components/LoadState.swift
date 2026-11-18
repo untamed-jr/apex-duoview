@@ -50,7 +50,7 @@ func loadMessage(_ error: Error) -> String {
     case .refused(let status): return "F1 TV refused the request (\(status))."
     case .noVideoPlan: return "this account has no video plan."
     case .network(let reason): return reason
-    case .server(let status, _): return "F1 TV answered with an error (\(status))."
+    case .server: return "F1 TV answered with an \(error.detail)."
     case .badResponse(let reason): return reason
     case .protectedContent: return "this content is protected."
     case .multiviewUnavailable: return "not available for this race."

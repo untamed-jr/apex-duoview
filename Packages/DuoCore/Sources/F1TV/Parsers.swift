@@ -262,9 +262,10 @@ public enum Parsers {
 
     /// The stream to play. Throws `.badResponse` when F1 TV sends no usable `url`.
     public static func play(_ json: JSONValue) throws -> PlayInfo {
+        if let reason = f1Reason(json) { throw F1TVError.badResponse("F1 TV said: \(reason)") }
         let result = json["resultObj"]
         guard let url = URL(string: result["url"].string), !result["url"].string.isEmpty else {
-            throw F1TVError.badResponse("PLAY returned no stream URL")
+            throw F1TVError.badResponse("F1 TV sent no video link")
         }
         return PlayInfo(
             url: url,
@@ -278,6 +279,7 @@ public enum Parsers {
     /// Throws `.badResponse` for no usable feed, `.multiviewUnavailable` for one feed or a `.mpd`
     /// URL, and `.protectedContent` when a license URL is present.
     public static func multiPlay(_ json: JSONValue) throws -> MultiPlayInfo {
+        if let reason = f1Reason(json) { throw F1TVError.badResponse("F1 TV said: \(reason)") }
         let result = json["resultObj"]
         // Older races (pipeline 1, e.g. 2021) answer with one plain stream and no `tme` block:
         // F1 TV has no multiview for them.
@@ -301,6 +303,23 @@ public enum Parsers {
     }
 
     // MARK: Helpers
+
+    /// F1 TV's own reason when a reply is an error (`resultCode` present and not "OK"): its
+    /// `message`, then `errorDescription` in brackets, at most 120 characters. Nil otherwise.
+    static func f1Reason(_ json: JSONValue) -> String? {
+        let code = json["resultCode"].string
+        guard !code.isEmpty, code.uppercased() != "OK" else { return nil }
+        let message = json["message"].string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let description = json["errorDescription"].string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text: String
+        switch (message.isEmpty, description.isEmpty) {
+        case (false, false): text = message == description ? message : "\(message) (\(description))"
+        case (false, true): text = message
+        case (true, false): text = description
+        case (true, true): text = code
+        }
+        return String(text.prefix(120))
+    }
 
     /// The timing archive's keys from a tile's `emfAttributes`, as Android reads them: the year
     /// from the tile, else the meeting's start date. Nil without a year or a meeting to look in.

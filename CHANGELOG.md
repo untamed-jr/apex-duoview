@@ -73,15 +73,18 @@ Builds 11 to 16. In short:
   strip on the right. Settings › Fold now also shows the screen's safe edges.
 - **Older races say "Not available for this race" in multiview** (found on the Duo, 2026-11-18,
   Abu Dhabi 2021): F1 TV answers the multiview request for races on its older video system with
-  one plain stream, which showed "Couldn't load F1 TV." Watch them with the single-feed player.
-  When F1 TV itself refuses a request, the message now ends with its error number.
+  one plain stream, which showed "Couldn't load F1 TV."
+- **"Couldn't load F1 TV" now says why** (found on the Duo, 2026-11-18: Abu Dhabi 2021 wouldn't
+  play in any view): when F1 TV answers with an error, the message ends with its error number and
+  its own words (links are never shown), so a failing race can be diagnosed from the screen.
 
 ### Untested — check later (build 16)
 
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
 - The same-height tiles: the Replays row on the Race Weekend tab shows every tile's text in full.
 - Closed: the feed reaches both side edges of the outer screen; note what Settings › Fold › "Safe edges" says with the phone closed.
-- Abu Dhabi 2021 › Watch multiview says "Not available for this race"; its single-feed Watch plays.
+- Abu Dhabi 2021: Watch and Watch multiview now say why they fail (send the words after
+  "Couldn't load F1 TV:"); if F1 TV only lacks multiview there, multiview says "Not available for this race".
 - Live, joined part-way (Las Vegas): "From the start" or a rewind more than 90 s before the join
   shows empty panels with "Timing catching up"; within 90 s the state on joining with the label;
   the Scrub Deck's lap axis stays empty until F1's archive arrives.
