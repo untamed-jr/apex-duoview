@@ -439,6 +439,69 @@ import Testing
         #expect(empty.transcribing == nil)
     }
 
+    @Test func cancelledKeepsTheClipForNextTime() {
+        let all = clips(1, 2)
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c1")
+        // A report for a clip that isn't running changes nothing.
+        queue.cancelled(path: "c2")
+        #expect(queue.transcribing == "c1")
+        // The panel closed mid-clip: not running, not skipped, not a failure.
+        queue.cancelled(path: "c1")
+        #expect(queue.transcribing == nil)
+        #expect(queue.skipped.isEmpty)
+        #expect(queue.failuresInRow == 0)
+        #expect(queue.waitingUntil == nil)
+        // Back as the next clip, and a stale cancel afterwards does nothing.
+        #expect(queue.next(from: all, at: 0, now: 1_000)?.path == "c1")
+        queue.cancelled(path: "c2")
+        #expect(queue.transcribing == "c1")
+        // Cancelling after a failure streak doesn't add to it.
+        queue.failed(path: "c1", at: 0)
+        queue.cancelled(path: "c1")
+        #expect(queue.failuresInRow == 1)
+        #expect(queue.skipped == ["c1"])
+    }
+
+    @Test func wholeRaceHasNoPictureTimeGate() {
+        // nil picture time: every clip is due, oldest first, however far ahead.
+        let all = clips(10, 20, 5000)
+        var queue = TranscriptionQueue()
+        var order: [String] = []
+        while let clip = queue.next(from: all, at: nil, now: 0) {
+            order.append(clip.path)
+            queue.finished(path: clip.path, result: "x")
+        }
+        #expect(order == ["c10", "c20", "c5000"])
+    }
+
+    @Test func gatedAccessorsHideLaterClips() {
+        let all = clips(100, 150)
+        var queue = TranscriptionQueue()
+        // Picture at 100 s: the running clip can be one published up to 2 minutes later.
+        #expect(queue.next(from: all, at: 140_000, now: 0)?.path == "c150")
+        var clipList = RadioClips()
+        for c in all {
+            clipList.add(line(#"00:00:01.000{"Captures":[{"Utc":"\#(iso(c.utc))","RacingNumber":"1","Path":"\#(c.path)"}]}"#))
+        }
+        #expect(clipList.all.count == 2)
+        // Boundary: utc == t is visible; one ms earlier is not.
+        #expect(queue.transcribing(visibleAt: 150_000, in: clipList) == "c150")
+        #expect(queue.transcribing(visibleAt: 149_999, in: clipList) == nil)
+        #expect(queue.transcribing(visibleAt: nil, in: clipList) == "c150")
+        // A running path that isn't among the clips shows nothing.
+        #expect(queue.transcribing(visibleAt: nil, in: RadioClips()) == nil)
+        queue.finished(path: "c150", result: "box")
+        let late = all[1], early = all[0]
+        #expect(queue.transcript(for: late, at: 150_000) == "box")
+        #expect(queue.transcript(for: late, at: 149_999) == nil)
+        #expect(queue.transcript(for: late, at: nil) == "box")
+        #expect(queue.transcript(for: early, at: nil) == nil)
+        queue.finished(path: "c100", result: "")
+        #expect(queue.transcript(for: early, at: 100_000) == TranscriptionQueue.noWords)
+        #expect(queue.transcript(for: early, at: 99_999) == nil)
+    }
+
     @Test func extremeTimesDontTrap() {
         var queue = TranscriptionQueue()
         let far = [RadioClip(utc: .min, racingNumber: "1", path: "a"), RadioClip(utc: .max, racingNumber: "1", path: "b")]

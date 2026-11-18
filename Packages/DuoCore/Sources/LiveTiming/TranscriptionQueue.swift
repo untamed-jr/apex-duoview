@@ -3,7 +3,21 @@ import Foundation
 /// Which radio clip to turn into text next, and what came of each: the rules of Android's
 /// transcription loop (`AppState.transcribeRadio`), as a value the app's transcriber drives.
 /// It holds no clips and runs nothing; the app asks `next`, transcribes that clip, and reports
-/// back with `finished`, `failed` or `timedOut`.
+/// back with `finished`, `failed`, `timedOut` or `cancelled`.
+///
+/// The app's contract:
+/// - Transcription runs only while radio is on screen. Closing the panel or leaving the session
+///   mid-clip is `cancelled(path:)`: the clip isn't skipped or counted as a failure, and comes
+///   back from the next `next` (Android rethrows CancellationException the same way).
+/// - The queue never fires a timer. The app's transcriber task enforces the 45 s itself and
+///   reports `timedOut(path:)`. While a job runs the app doesn't call `next` except to poll
+///   (it returns nil). If `next` ever replaces a running job (its own 45 s skip, once the wall
+///   clock is 45 s past the start), the app must cancel the old transcriber task.
+/// - `pictureTime` is picture time, or nil in "Show the whole race" (`visible(at: nil)`): then
+///   every clip is due, with no 2-minute limit, taken oldest first. Never pass a made-up large
+///   time for it.
+/// - The UI reads `transcribing(visibleAt:in:)` and `transcript(for:at:)`, never the raw
+///   `running` and `results`, which can belong to clips not yet visible.
 ///
 /// - One clip at a time: `next` gives nothing while one is running.
 /// - Nearest the picture first: of the clips without a result, not skipped and published no more
@@ -36,8 +50,11 @@ public struct TranscriptionQueue: Sendable, Equatable {
         public var startedAt: Int64
     }
 
-    /// Transcripts by clip path.
+    /// Transcripts by clip path. Internal use: keyed for clips up to 2 minutes ahead of picture
+    /// time, so the UI must read `transcript(for:at:)`.
     public private(set) var results: [String: String]
+    /// Internal use: can be a clip published after picture time; the UI must read
+    /// `transcribing(visibleAt:in:)`.
     public private(set) var running: Job?
     /// Clips that failed or timed out, not tried again until a wait ends.
     public private(set) var skipped: Set<String> = []
@@ -49,12 +66,32 @@ public struct TranscriptionQueue: Sendable, Equatable {
         self.results = results
     }
 
-    /// The path being transcribed ("Transcribing…"), if any.
+    /// The path being transcribed, if any. Internal use: it can be a clip not visible yet; the
+    /// UI must read `transcribing(visibleAt:in:)`.
     public var transcribing: String? { running?.path }
 
+    /// The path being transcribed ("Transcribing…"), only when that clip is visible at picture
+    /// time `t` (`utc ≤ t`; nil is the whole race). Nil when nothing runs or the clip isn't in
+    /// `clips`.
+    public func transcribing(visibleAt t: UTCms?, in clips: RadioClips) -> String? {
+        guard let path = running?.path, let clip = clips.all.first(where: { $0.path == path }) else { return nil }
+        return Self.isVisible(clip, at: t) ? path : nil
+    }
+
+    /// The transcript for `clip`, only when the clip is visible at picture time `t` (`utc ≤ t`;
+    /// nil is the whole race).
+    public func transcript(for clip: RadioClip, at t: UTCms?) -> String? {
+        Self.isVisible(clip, at: t) ? results[clip.path] : nil
+    }
+
+    private static func isVisible(_ clip: RadioClip, at t: UTCms?) -> Bool {
+        t.map { clip.utc <= $0 } ?? true
+    }
+
     /// The clip to transcribe now, marked as running from `now`; nil while one runs, while
-    /// waiting, or when no clip is due. `pictureTime` is picture time; `clips` are the session's.
-    public mutating func next(from clips: [RadioClip], at pictureTime: UTCms, now: Int64) -> RadioClip? {
+    /// waiting, or when no clip is due. `pictureTime` is picture time, nil for the whole race
+    /// (every clip due, oldest first); `clips` are the session's.
+    public mutating func next(from clips: [RadioClip], at pictureTime: UTCms?, now: Int64) -> RadioClip? {
         if let running {
             guard F1Values.sub(now, running.startedAt) >= Self.timeoutMs else { return nil }
             timedOut(path: running.path)
@@ -63,11 +100,17 @@ public struct TranscriptionQueue: Sendable, Equatable {
             guard now >= waitingUntil else { return nil }
             self.waitingUntil = nil
         }
-        let limit = F1Values.add(pictureTime, Self.aheadMs)
+        let limit = pictureTime.map { F1Values.add($0, Self.aheadMs) }
         var best: RadioClip?
         var bestDistance: Int64 = .max
-        for clip in clips where clip.utc <= limit && results[clip.path] == nil && !skipped.contains(clip.path) {
-            let distance = clip.utc > pictureTime ? F1Values.sub(clip.utc, pictureTime) : F1Values.sub(pictureTime, clip.utc)
+        for clip in clips where limit.map({ clip.utc <= $0 }) ?? true && results[clip.path] == nil && !skipped.contains(clip.path) {
+            // Whole race: no picture to be near, so every distance ties and the earliest in the list wins.
+            let distance: Int64
+            if let pictureTime {
+                distance = clip.utc > pictureTime ? F1Values.sub(clip.utc, pictureTime) : F1Values.sub(pictureTime, clip.utc)
+            } else {
+                distance = 0
+            }
             if best == nil || distance < bestDistance {
                 best = clip
                 bestDistance = distance
@@ -106,5 +149,13 @@ public struct TranscriptionQueue: Sendable, Equatable {
         guard running?.path == path else { return }
         running = nil
         skipped.insert(path)
+    }
+
+    /// The running clip was stopped by the app (panel closed, session left): not running any
+    /// more, but not skipped and not a failure, so the next `next` hands it out again. Ignored
+    /// when `path` isn't the running clip.
+    public mutating func cancelled(path: String) {
+        guard running?.path == path else { return }
+        running = nil
     }
 }
