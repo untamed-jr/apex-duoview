@@ -1226,6 +1226,168 @@ def set_test_base_url(base):
     CIRCUITS_BASE = root + "/api/v1/circuits/"
 
 
+# --- Radio probe for the iOS app's beta.4 (owner check T-A4) ---------------------------------
+
+RADIO_SESSION = "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/"
+RADIO_CLIPS = 3
+RADIO_DIR = "radio-probe"
+RADIO_MAX_BYTES = 20 << 20   # a team radio clip is a few hundred KB; stop reading at 20 MiB
+
+_MPEG_RATES = {3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000]}  # by version bits
+_MPEG_BITRATES = {  # kbps; (1 = MPEG 1, 2 = MPEG 2/2.5, layer) -> table indexed by the 4 bitrate bits
+    (1, 1): [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448],
+    (1, 2): [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384],
+    (1, 3): [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+    (2, 1): [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256],
+    (2, 2): [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+    (2, 3): [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160],
+}
+
+
+def id3v2_size(data):
+    """Bytes taken by a leading ID3v2 tag (0 if none)."""
+    if len(data) >= 10 and data[:3] == b"ID3":
+        size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F)
+        return 10 + size + (10 if data[5] & 0x10 else 0)
+    return 0
+
+
+def parse_mpeg_header(data, pos):
+    """The MPEG audio frame header at pos, or None if it isn't a valid one."""
+    if pos + 4 > len(data) or data[pos] != 0xFF or (data[pos + 1] & 0xE0) != 0xE0:
+        return None
+    b1, b2, b3 = data[pos + 1], data[pos + 2], data[pos + 3]
+    vbits, lbits = (b1 >> 3) & 3, (b1 >> 1) & 3
+    br_idx, sr_idx = b2 >> 4, (b2 >> 2) & 3
+    if vbits == 1 or lbits == 0 or br_idx in (0, 15) or sr_idx == 3:
+        return None
+    layer = 4 - lbits
+    table = _MPEG_BITRATES[(1 if vbits == 3 else 2, layer)]
+    mono = (b3 >> 6) == 3
+    samples = 384 if layer == 1 else (1152 if (layer == 2 or vbits == 3) else 576)
+    side = (17 if mono else 32) if vbits == 3 else (9 if mono else 17)
+    return {"version": {3: "1", 2: "2", 0: "2.5"}[vbits], "layer": layer, "bitrate_kbps": table[br_idx],
+            "sample_rate": _MPEG_RATES[vbits][sr_idx], "samples_per_frame": samples,
+            "mono": mono, "side_info": side}
+
+
+def probe_audio(data):
+    """What the first bytes say: {'format', 'sample_rate', 'bitrate_kbps', 'duration_s', 'duration_how'}.
+    Format is 'ID3' (tag first), 'MPEG frame sync' or 'unknown'. Duration comes from the Xing/Info frame
+    when there is one, else it is estimated from the first frame's bitrate (right for constant bitrate)."""
+    out = {"format": "unknown", "sample_rate": None, "bitrate_kbps": None, "duration_s": None, "duration_how": None}
+    skip = id3v2_size(data)
+    if skip:
+        out["format"] = "ID3"
+    hdr, pos = None, skip
+    for pos in range(skip, min(len(data) - 3, skip + 8192)):
+        hdr = parse_mpeg_header(data, pos)
+        if hdr:
+            break
+    if not hdr:
+        return out
+    if out["format"] == "unknown":
+        out["format"] = "MPEG frame sync"
+    out["sample_rate"], out["bitrate_kbps"] = hdr["sample_rate"], hdr["bitrate_kbps"]
+    xing_at = pos + 4 + hdr["side_info"]
+    tag = data[xing_at:xing_at + 4]
+    if tag in (b"Xing", b"Info") and len(data) >= xing_at + 12:
+        flags = struct.unpack(">I", data[xing_at + 4:xing_at + 8])[0]
+        if flags & 1:
+            frames = struct.unpack(">I", data[xing_at + 8:xing_at + 12])[0]
+            out["duration_s"] = frames * hdr["samples_per_frame"] / hdr["sample_rate"]
+            out["duration_how"] = "from the %s frame" % tag.decode()
+            return out
+    out["duration_s"] = (len(data) - pos) * 8 / (hdr["bitrate_kbps"] * 1000.0)
+    out["duration_how"] = "estimated from the first frame's bitrate"
+    return out
+
+
+def radio_clip_paths(raw, limit=RADIO_CLIPS):
+    """The first `limit` distinct clip paths in a TeamRadio.jsonStream: each line is a time stamp then JSON,
+    with Captures as a list (opening state) or an object keyed '0', '1'... (later messages)."""
+    paths = []
+    for line in raw.decode("utf-8-sig", "replace").splitlines():
+        brace = line.find("{")
+        if brace < 0:
+            continue
+        try:
+            obj = json.loads(line[brace:])
+        except ValueError:
+            continue
+        caps = obj.get("Captures") if isinstance(obj, dict) else None
+        if isinstance(caps, dict):
+            caps = [caps[k] for k in sorted(caps, key=lambda k: (0, int(k)) if str(k).isdigit() else (1, 0))]
+        for cap in caps if isinstance(caps, list) else []:
+            path = cap.get("Path") if isinstance(cap, dict) else None
+            if isinstance(path, str) and path and ".." not in path.split("/") and path not in paths:
+                paths.append(path)
+                if len(paths) >= limit:
+                    return paths
+    return paths
+
+
+def radio_try(url, dest, headers):
+    """One download. Returns (status text, bytes, body). Saves dest only on HTTP 200."""
+    conn, resp = https_request("GET", url, headers)
+    try:
+        if resp.status != 200:
+            resp.read(2048)
+            return "HTTP %d" % resp.status, 0, b""
+        data = resp.read(RADIO_MAX_BYTES + 1)
+        if len(data) > RADIO_MAX_BYTES:
+            return "HTTP 200 but over %s, not saved" % human_size(RADIO_MAX_BYTES), len(data), data[:8192]
+        with open(dest, "wb") as f:
+            f.write(data)
+        return "HTTP 200", len(data), data
+    except (OSError, http.client.HTTPException) as e:
+        return "error: %s" % scrub(e), 0, b""
+    finally:
+        conn.close()
+
+
+def run_radio(token, directory, session=RADIO_SESSION, ua=ANDROID_UA):
+    path = normalise_archive_path(session)
+    folder = os.path.join(directory, RADIO_DIR)
+    os.makedirs(folder, exist_ok=True)
+    say("Radio probe (T-A4). Session: %s" % path)
+    say("Saving clips into: %s  (private, git-ignored: share only this report)" % folder)
+    status, hdrs, body = fetch_bytes(archive_url(path + "TeamRadio.jsonStream"),
+                                     {"Authorization": "Bearer " + token, "User-Agent": ua})
+    if status != 200:
+        say("Couldn't read the session's TeamRadio file (HTTP %d). Check you are signed in, then run again." % status)
+        return 1
+    clips = radio_clip_paths(body)
+    if not clips:
+        say("The TeamRadio file lists no clips.")
+        return 1
+    say("Probing the first %d clip(s), each without the token and then with it." % len(clips))
+    say("")
+    answers = []
+    for i, clip in enumerate(clips, 1):
+        name = re.sub(r"[^\w.-]+", "_", clip.rsplit("/", 1)[-1])
+        url = archive_url(path + clip)
+        for label, extra in (("no token", {}), ("with token", {"Authorization": "Bearer " + token})):
+            dest = os.path.join(folder, "%d_%s_%s" % (i, "token" if extra else "notoken", name))
+            st, size, data = radio_try(url, dest, dict(extra, **{"User-Agent": ua}))
+            line = "clip %d (%s) %-10s: %s, %d bytes" % (i, name, label, st, size)
+            if size:
+                info = probe_audio(data)
+                dur = ("%.1f s (%s)" % (info["duration_s"], info["duration_how"])) if info["duration_s"] is not None else "duration unknown"
+                line += ", format %s, %s, %s, %s" % (
+                    info["format"], ("%d Hz" % info["sample_rate"]) if info["sample_rate"] else "sample rate unknown",
+                    ("%d kbps" % info["bitrate_kbps"]) if info["bitrate_kbps"] else "bitrate unknown", dur)
+            say(line)
+            answers.append((label, st == "HTTP 200"))
+    say("")
+    got = lambda lab: any(l == lab and ok for l, ok in answers)
+    say("Summary: without the token %s; with the token %s." % (
+        "clips came back" if got("no token") else "no clip came back",
+        "clips came back" if got("with token") else "no clip came back"))
+    say("This report holds no sign-in details and can be shared.")
+    return 0 if got("no token") or got("with token") else 1
+
+
 # --- Main -----------------------------------------------------------------------------------
 
 def main(argv=None):
@@ -1233,7 +1395,7 @@ def main(argv=None):
         description="Throwaway spike: record a live F1 session's raw live-timing messages to a .jsonl file, "
                     "or (--archive) download a finished session's static archive files, or (--fixtures) "
                     "make beta3-fixtures.zip for the iOS app, or (--circuit) save a MultiViewer circuit.",
-        usage="pbpaste | python3 timing_recorder.py [--archive <year/meeting/session/> | --fixtures]\n"
+        usage="pbpaste | python3 timing_recorder.py [--archive <year/meeting/session/> | --fixtures | --radio]\n"
               "       python3 timing_recorder.py --circuit KEY YEAR")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--archive", metavar="PATH",
@@ -1242,6 +1404,9 @@ def main(argv=None):
     mode.add_argument("--fixtures", action="store_true",
                       help="download the São Paulo Grand Prix 2026 timing fixtures for the iOS app's beta.3 "
                            "and zip them into beta3-fixtures.zip next to this script")
+    mode.add_argument("--radio", action="store_true",
+                      help="owner check T-A4: download three São Paulo 2026 race radio clips, first without "
+                           "the sign-in and then with it, and report status, size, format and duration")
     mode.add_argument("--circuit", nargs=2, metavar=("KEY", "YEAR"),
                       help="save MultiViewer's circuit file (no sign-in needed), e.g. --circuit 14 2026")
     parser.add_argument("--base-url", help=argparse.SUPPRESS)  # local tests only (127.0.0.1)
@@ -1264,6 +1429,7 @@ def main(argv=None):
 
     try:
         token, kind = read_signin("pbpaste | python3 spike/timing_recorder.py --fixtures" if args.fixtures
+                                  else "pbpaste | python3 spike/timing_recorder.py --radio" if args.radio
                                   else "pbpaste | python3 timing_recorder.py")
     except (ValueError, EOFError, KeyboardInterrupt) as e:
         print("Error: %s" % (e if str(e) else "cancelled"))
@@ -1286,6 +1452,20 @@ def main(argv=None):
                 os.remove(part)
             say("Stopped by an unexpected error: %s: %s" % (type(e).__name__, clean_reason(e)))
             say("No zip was made. Send this message (it holds no sign-in details) to the developers.")
+            return 1
+
+    if args.radio:
+        say("Radio probe for the iOS app's beta.4. Sign-in given as: %s" % kind)
+        try:
+            return run_radio(token, directory)
+        except (ValueError, FatalError, ConnectionError) as e:
+            say("Error: %s" % e)
+            return 1
+        except KeyboardInterrupt:
+            say("\nStopped by Ctrl+C.")
+            return 1
+        except Exception as e:
+            say("Stopped by an unexpected error: %s: %s" % (type(e).__name__, e))
             return 1
 
     if args.archive:
