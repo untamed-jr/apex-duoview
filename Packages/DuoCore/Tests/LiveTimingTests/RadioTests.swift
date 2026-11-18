@@ -257,3 +257,158 @@ import Testing
         #expect(label(5_000, in: quali) == .beforeStart)
     }
 }
+
+@Suite struct TranscriptionQueueTests {
+    /// Clips at these picture times (seconds), named "c<seconds>".
+    func clips(_ seconds: Int64...) -> [RadioClip] {
+        seconds.map { RadioClip(utc: $0 * 1000, racingNumber: "1", path: "c\($0)") }
+    }
+
+    @Test func nearestThePictureFirstUpToTwoMinutesAhead() {
+        let all = clips(10, 100, 200, 290, 320, 321)
+        var queue = TranscriptionQueue()
+        var order: [String] = []
+        var now: Int64 = 0
+        // Picture at 200 s: 320 is exactly 2 minutes ahead (in), 321 is past it (out). Behind has no limit.
+        while let clip = queue.next(from: all, at: 200_000, now: now) {
+            order.append(clip.path)
+            queue.finished(path: clip.path, result: "copy")
+            now += 1_000
+        }
+        #expect(order == ["c200", "c290", "c100", "c320", "c10"])
+        #expect(queue.transcribing == nil)
+        // As the picture moves on, 321 comes in range.
+        #expect(queue.next(from: all, at: 201_000, now: now)?.path == "c321")
+    }
+
+    @Test func tiesGoToTheEarlierClip() {
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: clips(90, 110), at: 100_000, now: 0)?.path == "c90")
+    }
+
+    @Test func fixtureOrder() throws {
+        let radio = RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream")).all
+        var queue = TranscriptionQueue()
+        var order: [String] = []
+        // A minute before ANT's race clip: it's in range and nearest; then backwards, two
+        // clips published together in the order they came.
+        while let clip = queue.next(from: radio, at: radio[3].utc - 60_000, now: 0) {
+            order.append(clip.path)
+            queue.finished(path: clip.path, result: "")
+        }
+        #expect(order == ["TeamRadio/ANT_12_20261108_141229.mp3", "TeamRadio/LEC_16_20261108_135537.mp3",
+                          "TeamRadio/NOR_1_20261108_132915.mp3", "TeamRadio/ANT_12_20261108_132331.mp3"])
+        // Nothing recognised is a result, so none of them comes back.
+        #expect(Set(queue.results.values) == [TranscriptionQueue.noWords])
+        #expect(queue.next(from: radio, at: .max, now: 0) == nil)
+    }
+
+    @Test func oneAtATimeAndA45SecondTimeoutSkips() {
+        let all = clips(100, 110)
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: all, at: 100_000, now: 1_000)?.path == "c100")
+        #expect(queue.transcribing == "c100")
+        // Asking again while it runs gives nothing, and doesn't restart its 45 s.
+        #expect(queue.next(from: all, at: 100_000, now: 20_000) == nil)
+        #expect(queue.next(from: all, at: 100_000, now: 45_999) == nil)
+        // 45 s after it began: skipped, and the next one starts.
+        #expect(queue.next(from: all, at: 100_000, now: 46_000)?.path == "c110")
+        #expect(queue.transcribing == "c110")
+        queue.finished(path: "c110", result: "box box")
+        // The skipped clip isn't tried again.
+        #expect(queue.next(from: all, at: 100_000, now: 50_000) == nil)
+        // A result arriving late for it is still kept.
+        queue.finished(path: "c100", result: "late words")
+        #expect(queue.results == ["c100": "late words", "c110": "box box"])
+    }
+
+    @Test func timeoutsDontCountAsFailures() {
+        let all = clips(1, 2, 3, 4)
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c1")
+        queue.timedOut(path: "c1")
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c2")
+        queue.failed(path: "c2", at: 0)
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c3")
+        queue.timedOut(path: "c3")
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c4")
+        queue.failed(path: "c4", at: 0)
+        #expect(queue.failuresInRow == 2)
+        #expect(queue.waitingUntil == nil)
+    }
+
+    @Test func threeFailuresInARowWaitTwoMinutesThenRetry() {
+        let all = clips(1, 2, 3, 4)
+        var queue = TranscriptionQueue()
+        for (i, path) in ["c1", "c2", "c3"].enumerated() {
+            #expect(queue.next(from: all, at: 0, now: Int64(i) * 1_000)?.path == path)
+            queue.failed(path: path, at: Int64(i) * 1_000)
+        }
+        // The third failure at 2 s: nothing until 2 minutes later.
+        #expect(queue.waitingUntil == 122_000)
+        #expect(queue.failuresInRow == 0)
+        #expect(queue.next(from: all, at: 0, now: 2_000) == nil)
+        #expect(queue.next(from: all, at: 0, now: 121_999) == nil)
+        // Then the failed clips are tried again, nearest first.
+        #expect(queue.next(from: all, at: 0, now: 122_000)?.path == "c1")
+        #expect(queue.waitingUntil == nil)
+    }
+
+    @Test func aResultEndsTheRun() {
+        let all = clips(1, 2, 3, 4)
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c1")
+        queue.failed(path: "c1", at: 0)
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c2")
+        queue.failed(path: "c2", at: 0)
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c3")
+        queue.finished(path: "c3", result: "copy")
+        #expect(queue.failuresInRow == 0)
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c4")
+        queue.failed(path: "c4", at: 0)
+        #expect(queue.waitingUntil == nil)
+    }
+
+    @Test func staleReportsAreIgnored() {
+        let all = clips(1, 2)
+        var queue = TranscriptionQueue()
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c1")
+        // A failure or timeout for a clip that isn't running changes nothing.
+        queue.failed(path: "c2", at: 0)
+        queue.timedOut(path: "c2")
+        #expect(queue.failuresInRow == 0)
+        #expect(queue.transcribing == "c1")
+        // c1 timed out (skipped) by the time its failure comes: not counted.
+        #expect(queue.next(from: all, at: 0, now: 45_000)?.path == "c2")
+        queue.failed(path: "c1", at: 45_000)
+        #expect(queue.failuresInRow == 0)
+        #expect(queue.transcribing == "c2")
+    }
+
+    @Test func resultsAreKeptByPath() {
+        let all = clips(1, 2, 3)
+        // Transcripts kept from before (a replay watched again) are never queued.
+        var queue = TranscriptionQueue(results: ["c1": "copy", "c2": TranscriptionQueue.noWords])
+        #expect(queue.next(from: all, at: 0, now: 0)?.path == "c3")
+        queue.finished(path: "c3", result: "  \n ")
+        #expect(queue.results["c3"] == "(no words recognised)")
+        #expect(queue.next(from: all, at: 0, now: 0) == nil)
+        // Text is kept as recognised, trimmed.
+        var other = TranscriptionQueue()
+        _ = other.next(from: all, at: 0, now: 0)
+        other.finished(path: "c1", result: " Box this lap. ")
+        #expect(other.results["c1"] == "Box this lap.")
+        var empty = TranscriptionQueue()
+        #expect(empty.next(from: [], at: 0, now: 0) == nil)
+        #expect(empty.transcribing == nil)
+    }
+
+    @Test func extremeTimesDontTrap() {
+        var queue = TranscriptionQueue()
+        let far = [RadioClip(utc: .min, racingNumber: "1", path: "a"), RadioClip(utc: .max, racingNumber: "1", path: "b")]
+        #expect(queue.next(from: far, at: .max, now: .max)?.path == "b")
+        #expect(queue.next(from: far, at: .max, now: .min) == nil)
+        queue.failed(path: "b", at: .max)
+        #expect(queue.next(from: far, at: .min, now: .max)?.path == "a")
+    }
+}
