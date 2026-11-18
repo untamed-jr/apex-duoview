@@ -137,5 +137,30 @@ class EndToEnd(unittest.TestCase):
         self.assertNotIn(TOKEN, out)
 
 
+class Failures(unittest.TestCase):
+    def test_refused_port_gives_error_line_not_abort(self):
+        with tempfile.TemporaryDirectory() as d:
+            st, size, data = tr.radio_try("http://127.0.0.1:1/x.mp3", os.path.join(d, "x"), {"Authorization": "Bearer " + TOKEN})
+        self.assertTrue(st.startswith("error: "))
+        self.assertEqual((size, data), (0, b""))
+        self.assertNotIn(TOKEN, st)
+
+    def test_report_has_no_local_path(self):
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), make_handler(False))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base_before = tr.ARCHIVE_BASE
+        try:
+            tr.set_test_base_url("http://127.0.0.1:%d" % srv.server_port)
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(out):
+                tr.run_radio(TOKEN, d)
+            self.assertNotIn(d, out.getvalue())
+            self.assertIn("spike/radio-probe/", out.getvalue())
+        finally:
+            srv.shutdown()
+            srv.server_close()
+            tr.ARCHIVE_BASE = base_before
+
+
 if __name__ == "__main__":
     unittest.main()

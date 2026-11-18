@@ -1329,7 +1329,10 @@ def radio_clip_paths(raw, limit=RADIO_CLIPS):
 
 def radio_try(url, dest, headers):
     """One download. Returns (status text, bytes, body). Saves dest only on HTTP 200."""
-    conn, resp = https_request("GET", url, headers)
+    try:
+        conn, resp = https_request("GET", url, headers)
+    except ConnectionError as e:
+        return "error: %s" % clean_reason(e), 0, b""
     try:
         if resp.status != 200:
             resp.read(2048)
@@ -1341,7 +1344,7 @@ def radio_try(url, dest, headers):
             f.write(data)
         return "HTTP 200", len(data), data
     except (OSError, http.client.HTTPException) as e:
-        return "error: %s" % scrub(e), 0, b""
+        return "error: %s" % clean_reason(e), 0, b""
     finally:
         conn.close()
 
@@ -1351,7 +1354,7 @@ def run_radio(token, directory, session=RADIO_SESSION, ua=ANDROID_UA):
     folder = os.path.join(directory, RADIO_DIR)
     os.makedirs(folder, exist_ok=True)
     say("Radio probe (T-A4). Session: %s" % path)
-    say("Saving clips into: %s  (private, git-ignored: share only this report)" % folder)
+    say("Saving clips into: spike/%s/  (private, git-ignored: share only this report)" % RADIO_DIR)
     status, hdrs, body = fetch_bytes(archive_url(path + "TeamRadio.jsonStream"),
                                      {"Authorization": "Bearer " + token, "User-Agent": ua})
     if status != 200:
