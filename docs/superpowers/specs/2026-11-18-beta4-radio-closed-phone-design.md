@@ -1,7 +1,7 @@
 # v1.0-beta.4 — Radio and the closed phone: design
 
-**Status: DRAFT for owner review.** Written 2026-11-18 by the controller; nothing here is approved
-yet. Owner decisions are under "Questions for the owner", each with a recommendation. Choices the
+**Status: APPROVED by the owner on 2026-11-18.** All ten "Questions for the owner" were answered
+"agree", so each recommendation below is now the decision. Choices the
 controller made are marked **(controller's call)**; features beyond the roadmap are **(added)**.
 
 ## Goal and exit test
