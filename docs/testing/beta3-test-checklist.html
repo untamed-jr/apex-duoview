@@ -234,6 +234,21 @@ const GROUPS = [
         ],
         pass: "every control and feed is read with a sensible name." },
     ]},
+  { id: "b4prep", title: "For beta 4 · on the Mac",
+    note: "One short run on the Mac, any evening before Sunday. It doesn't touch the app.",
+    items: [
+      { id: "b4-radio", t: "Radio check for beta 4 (T-A4)", h: "Tells us whether F1's team-radio sound files need your sign-in. Beta 4's radio is built on the answer. It uses the finished São Paulo race, so any evening works.", tags: ["Mac"], code: "T-A4",
+        steps: [
+          "In Safari or Chrome, sign in at https://account.formula1.com (the same way as for the beta 3 fixtures).",
+          "Copy the value of the \"login-session\" cookie so it is on the clipboard. Safari: Develop › Show Web Inspector › Storage › Cookies. Chrome: View › Developer › Developer Tools › Application › Cookies. Click the login-session row and copy its value. Never paste it into a chat.",
+          "Open Terminal and run: cd ~/apexview-duo && git pull",
+          "Then run: pbpaste | python3 spike/timing_recorder.py --radio",
+          "It takes under a minute. It tries the first three radio clips of the São Paulo race twice each: once without your sign-in and once with it. Each try prints one line (for example \"HTTP 200\" or \"HTTP 403\", the size and the sound format).",
+          "Select everything it printed from \"Radio probe (T-A4)\" to the end, copy it, and paste it into the note below. The report holds no sign-in details. Don't share the sound files it saved in spike/radio-probe/.",
+          "If it says it couldn't read the TeamRadio file, copy a fresh login-session cookie and run step 4 again. If it still fails, paste what it printed.",
+        ],
+        pass: "every try printed a line, and the summary says whether the clips play without the sign-in, only with it, or not at all." },
+    ]},
   { id: "b14", title: "Build 14 · Race Engineer and Scrub Deck",
     note: "Open the phone like a laptop on the São Paulo 2026 race replay.",
     items: [

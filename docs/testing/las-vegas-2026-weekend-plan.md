@@ -22,6 +22,8 @@ Las Vegas time is PST (UTC-8). Note that the late sessions fall on the next cale
 
 **Real iPhone Duo checks can be done in any session.**
 
+**One extra Mac check, any evening before Sunday (about 5 minutes):** the radio check for beta 4 (**b4-radio**, owner check T-A4, in the checklist group "For beta 4 · on the Mac"). It uses the finished São Paulo race, not a live session, and doesn't touch the app. Paste its printed report into the row's note.
+
 ## Before every session
 
 - Mac and simulator on Wi-Fi (the phone too, except for the mobile data check).
