@@ -494,6 +494,10 @@ Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, t
 **Interfaces:**
 - Consumes: Tasks 1 and 5.
 - Produces: `LoadedSession.radio`, `LoadedSession.raceControl`.
+- Merged API this task builds on:
+  - `RaceControlEntry` carries `category: String?` and `flag: String?` (F1's raw `Category` and `Flag`, nil when absent) and reads F1's multi-car form ("CARS 87 (BEA) AND 55 (SAI)") as well as "CAR 44 (HAM)" and `RacingNumber`.
+  - `RaceControlLog` is a struct with `mutating func add(_ line: StreamLine)` (the same de-duplication: same Utc and same text, the first kept), `all`, `init(lines:streamStart:)`, and the static `parse(lines:streamStart:)` and `entries(for:until:in:)`. The live feed and the archive top-up add through `RaceControlLog.add`, as clips go through `RadioClips.add`.
+  - The `Radio.swift` trap on extreme GMT offsets is already fixed (nothing to do here).
 
 - [ ] **Step 1: Write failing tests:**
   - `archiveLoadsRadio`
@@ -501,6 +505,8 @@ Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, t
   - `liveFeedHasRadio`
   - `liveReconnectAndTopUpKeepClipsOnce`
   - `incrementalRebuildMatchesFull`
+  - `archiveLoadMatchesLongRace`: the archive loader's `LoadedSession` (radio and race control included) equals the one `RadioRaceTests.longRace()` builds by hand for `sp26-race-long`;
+  - `raceControlResentIsKeptOnce`: a message sent again by a reconnect or the top-up is not repeated.
 - [ ] **Step 2: Run the tests.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run all tests.** Expected: PASS with 0 warnings. The build 16 harness's pure files still typecheck against this branch.
@@ -575,8 +581,12 @@ Task 10 works either way (no token first, then once with it). The answer goes in
 **Interfaces:**
 - Consumes:
   - `LoadedSession.radio` (Task 8), `RadioClips`, `RadioLapLabel`, `CompanionSettings` (Task 6);
+  - `TranscriptionQueue` (Task 1): transcripts are `[String: String]` keyed by clip path, with `TranscriptionQueue.noWords` as the "no words" text (there is no `TranscriptResult`). Rows read them only through `transcript(for:at:)` and `transcribing(visibleAt:in:)`, never from the raw `running` or `results`, so nothing later than picture time reaches a row;
+  - `CompanionEventKind.radio(car:path:)`, which carries the clip's path;
   - `TimingController.loadedSession`, `pictureTime`, `showWholeRace`;
   - `Tower.carNumber(forDriver:in:)`, `DeckAxis.markerTarget`.
+- Nil picture time. In DuoCore a nil `t` means "the whole race". In the app, `TimingController.pictureTime` is nil when there is no time yet. So build the cut as `showWholeRace ? nil : t`, and show nothing when `t` is nil (the same for `shouldStop` and `tickFractions`).
+- The favourite is private in `TimingController`: add an accessor for it, and convert it to a racing number with `Tower.carNumber(forDriver:in:)`.
 - Produces:
   - `enum RadioFetch` (pure):
     - `static func cacheURL(base: URL, sessionKey: String, clipPath: String) -> URL`: the file name is the clip's last path segment;
@@ -585,7 +595,7 @@ Task 10 works either way (no token first, then once with it). The answer goes in
   - `struct RadioRowModel: Equatable, Sendable { path; number; tla; teamColour; label: String?; header: String?; transcript: TranscriptLine; isNew: Bool }`, where `enum TranscriptLine { case none, transcribing, text(String), noWords }`. Whether transcripts are available at all is a panel-level line (Task 11's `TranscriptState`), not a row's.
   - `enum RadioModels` (pure):
     - `static func label(_ l: RadioLapLabel) -> String?`: the Global Constraints formats;
-    - `static func rows(clips: [RadioClip], session: LoadedSession, transcripts: [String: TranscriptResult], transcribing: String?) -> [RadioRowModel]`: `transcribing` is the path in progress;
+    - `static func rows(clips: [RadioClip], session: LoadedSession, queue: TranscriptionQueue, at t: UTCms?) -> [RadioRowModel]`: transcripts and the clip in progress come from `queue.transcript(for:at:)` and `queue.transcribing(visibleAt:in:)`; `t` is the cut (`showWholeRace ? nil : pictureTime`), and a nil picture time with the whole race off gives no rows;
     - `static func emptyText(filter: RadioFilter, tla: String?) -> String`;
     - `static func shouldStop(playing: RadioClip, pictureTime: UTCms?) -> Bool`;
     - `static func tickFractions(...)`: the deck's ticks, only up to picture time unless whole race.
@@ -647,12 +657,12 @@ Task 10 works either way (no token first, then once with it). The answer goes in
   - `CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: `TranscriptionQueue`, `TranscriptResult` (Task 1).
+- Consumes: `TranscriptionQueue` (Task 1). There is no `TranscriptResult`: a transcript is a `String`, and `TranscriptionQueue.noWords` stands for "no words".
 - Produces:
   - `enum TranscriberReadiness: Sendable, Equatable { case ready, downloadingModel, unavailable, permissionDenied }`, declared in the pure `TranscriptState.swift` so the harness can take it.
   - `actor Transcriber`:
     - `func prepare() async -> TranscriberReadiness`;
-    - `func transcribe(fileURL: URL, hints: [String]) async throws -> TranscriptResult`.
+    - `func transcribe(fileURL: URL, hints: [String]) async throws -> String` (a blank result means no words; the queue stores `noWords`).
     - The engine:
       - `SpeechTranscriber` in a `SpeechAnalyzer` with `analyzeSequence(from:)`;
       - locale from `supportedLocale(equivalentTo:)`, en-GB, then en-US;
@@ -660,9 +670,14 @@ Task 10 works either way (no token first, then once with it). The answer goes in
       - when `SpeechTranscriber.isAvailable` is false: `DictationTranscriber`, then `SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`;
       - never a server.
     - Hints go in `AnalysisContext.contextualStrings`: DriverList names and teams, plus Android's radio words. Read them from `origin/og-android` `Transcriber.kt`.
-  - `struct TranscriptStore` (pure): loads and saves `[String: TranscriptResult]` as `transcripts.json` beside the clips. A corrupt file reads as empty.
+  - `struct TranscriptStore` (pure): loads and saves `[String: String]` (clip path to transcript) as `transcripts.json` beside the clips. A corrupt file reads as empty. The queue is seeded from it with `TranscriptionQueue(results:)`.
   - `enum TranscriptState` (pure): the panel's line for each readiness: "Getting the speech model ready…", "Transcripts aren't available on this iPhone — clips still play", "Allow speech recognition in Settings to see transcripts".
-  - The controller enforces the 45 s timeout with a task group racing a sleep, then calls `queue.failed`.
+  - The controller drives the queue like this:
+    - `next(from:at:now:)` with `now` the monotonic clock in ms (e.g. system uptime × 1000, as `Int64`), using the queue's constants `aheadMs`, `timeoutMs`, `failuresBeforeWait` and `waitMs`;
+    - call `next` only while `prepare()` says `.ready`;
+    - the 45 s timeout is a task group racing a sleep, and on timeout the controller calls `timedOut(path:)`, NOT `failed`; `failed(path:at:)` is for a transcriber error;
+    - call `cancelled(path:)` when a radio surface closes;
+    - when `next` replaces the running job, cancel the old transcriber task and drop any late report from the cancelled task.
 
 - [ ] **Step 1: TranscriptStore and TranscriptState**, and their harness checks:
   - `storeRoundTrip`, `corruptStoreEmpty`;
@@ -700,6 +715,14 @@ Task 10 works either way (no token first, then once with it). The answer goes in
   - `CHANGELOG.md`
 
 **Interfaces:**
+- Merged API notes:
+  - `.radio(car:path:)` carries the clip path.
+  - Pass `listening: []` to this task's detector (auto-play comes from `radio.crossed`), or drop `.radio` cards for cars other than the favourite.
+  - After a `.seek`, remove the cards later than picture time.
+  - Validate the stored `scannerDriver` and `gapPair` against the session's cars before use.
+  - `rewindSeconds` is in seconds: multiply by 1000 before subtracting it from `t` (ms).
+  - The favourite is a racing number (see Task 10's accessor and `Tower.carNumber(forDriver:in:)`).
+  - `GapReading` has `.sameCar` as well as `.beforeFirstLap`; show nothing special for it (a pair is never the same car).
 - Consumes: `EventDetector`, `CompanionEvent` (Task 2), `GapPair` (Task 3), `ClosedPager`, `ClosedPage` (Task 4), `CompanionSettings`, `CardGroup` (Task 6), `RadioController` (Task 10), `FoldState.posture`.
 - Produces:
   - `enum CompanionModels` (pure):
@@ -765,6 +788,10 @@ Task 10 works either way (no token first, then once with it). The answer goes in
   - `CHANGELOG.md`
 
 **Interfaces:**
+- Merged API notes:
+  - `HapticSchedule` has no timer. Poll `due(now:)` on the 500 ms tick, and call `reset()` on a `.seek`.
+  - Play a haptic only when `haptics && hapticOn(kind)` and the hardware supports haptics.
+  - `now` is `TimeInterval` seconds here (the transcription queue uses ms).
 - Consumes: `HapticKind`, `HapticSchedule` (Task 2), `CompanionController.hapticEvents` (Task 12), `CompanionSettings`.
 - Produces:
   - `struct HapticPattern: Equatable, Sendable { events: [(time: Double, duration: Double?, intensity: Float, sharpness: Float)] }` (hand-written `==`), and `static func HapticPatterns.pattern(for: HapticKind) -> HapticPattern`. Each kind follows the spec's table:
@@ -815,6 +842,11 @@ Task 14's Step 3 follows the answer.
   - `CHANGELOG.md`
 
 **Interfaces:**
+- Merged API notes:
+  - `GapPair.defaultPair` is nil outside races: fall back to the neighbours in `ClosedPager.raceOrder`.
+  - The logbook's tyres are already formatted as Race Engineer's ("Medium", nil when unknown); show them as given.
+  - Race control uses `RaceControlEntry.category` and `flag` to filter blue flags (no text matching).
+  - `FoldState.hingeAngle` is `Double?`: a nil must not reach `HingeMixer.update`.
 - Consumes: Task 9's regions, `Logbook` and `RaceControlLog` (Task 5), `LoadedSession.raceControl` (Task 8), `HingeMixer` (Task 4), `GapPair.defaultPair` (Rivals' default pair), `FoldState.hingeAngle`, `RadioController.play(path:pan:)`.
 - Produces:
   - `enum BookModels` (pure):
