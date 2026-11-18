@@ -1,0 +1,84 @@
+<title>Apex DuoView Wordmark</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,600;0,700;1,900&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single column of dark "screens", each showing one lockup at a real Duo proportion. The frames stay dark in both themes; the page around them follows the viewer's theme. */
+:root {
+  --page: #f4f4f6; --ink: #16161a; --muted: #5f5f6a; --line: #dedee4;
+  --stage: #0a0a0b; --neon: #ff1a2e; --neon-deep: #ec0014; --kerb: #ffffff; --duo: #ececf1; --purple: #b14aed;
+  --f-mark: "Titillium Web", "Arial Black", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #101013; --ink: #ececf1; --muted: #9a9aa6; --line: #26262d; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #101013; --ink: #ececf1; --muted: #9a9aa6; --line: #26262d; color-scheme: dark }
+body { background: var(--page); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2 { font-family: var(--f-mark); margin: 0; text-wrap: balance; }
+h1 { font-size: 30px; line-height: 1.1; }
+h2 { font-size: 19px; }
+.lede, .cap { color: var(--muted); margin: 0; max-width: 64ch; }
+section { display: flex; flex-direction: column; gap: 10px; }
+.screen { background: var(--stage); border-radius: 18px; position: relative; overflow: hidden; width: 100%; max-width: 100%; display: grid; place-items: center; border: 1px solid #1f1f24; }
+.flat { aspect-ratio: 951 / 669; }
+.wide { aspect-ratio: 16 / 7; }
+.laptop { aspect-ratio: 669 / 951; max-width: 420px; }
+.fold-v::after { content: ""; position: absolute; top: 0; bottom: 0; left: calc(456 / 951 * 100%); width: calc(40 / 951 * 100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent); }
+.fold-h::after { content: ""; position: absolute; left: 0; right: 0; top: calc(456 / 951 * 100%); height: calc(40 / 951 * 100%); background: linear-gradient(180deg, transparent, rgba(255,255,255,.05), transparent); }
+.screen svg { width: 86%; height: auto; display: block; }
+.laptop svg { position: absolute; top: 14%; width: 84%; left: 8%; }
+.laptop .small { position: absolute; bottom: 9%; left: 10%; right: 10%; color: #8b8b95; font-size: clamp(8px, 1.6vw, 11px); text-align: center; line-height: 1.4; }
+.glow { filter: drop-shadow(0 0 6px rgba(255, 26, 46, .75)) drop-shadow(0 0 18px rgba(236, 0, 20, .45)); }
+.note { font-size: 13px; color: var(--muted); border-left: 3px solid var(--purple); padding-left: 10px; }
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <h1>APEX DuoView, the wide logo</h1>
+    <p class="lede">Built by hand in the style of your icon: "APEX" in red neon with a red-and-white kerb outline, "DuoView" set clean beside it so it stays sharp at any size. No credits used. Once you pick a Higgsfield "APEX" from the four, its artwork can replace the hand-drawn letters.</p>
+  </header>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <pattern id="kerb" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+        <rect width="11" height="22" fill="#ffffff"/><rect x="11" width="11" height="22" fill="#ec0014"/>
+      </pattern>
+      <symbol id="lockup-row" viewBox="0 0 1060 260">
+        <g transform="skewX(-12) translate(60 0)">
+          <text x="20" y="190" font-family="Titillium Web, Arial Black, sans-serif" font-weight="900" font-style="italic" font-size="200" letter-spacing="6" fill="none" stroke="url(#kerb)" stroke-width="16" stroke-linejoin="round">APEX</text>
+          <text x="20" y="190" font-family="Titillium Web, Arial Black, sans-serif" font-weight="900" font-style="italic" font-size="200" letter-spacing="6" fill="#0a0a0b" stroke="#ff1a2e" stroke-width="5" stroke-linejoin="round">APEX</text>
+        </g>
+        <text x="610" y="182" font-family="Titillium Web, sans-serif" font-weight="600" font-size="104" fill="#ececf1" letter-spacing="1">Duo<tspan fill="#ff1a2e">View</tspan></text>
+        <rect x="614" y="206" width="330" height="6" rx="3" fill="#b14aed"/>
+      </symbol>
+      <symbol id="lockup-stack" viewBox="0 0 700 380">
+        <g transform="skewX(-12) translate(70 0)">
+          <text x="40" y="200" font-family="Titillium Web, Arial Black, sans-serif" font-weight="900" font-style="italic" font-size="220" letter-spacing="6" fill="none" stroke="url(#kerb)" stroke-width="17" stroke-linejoin="round">APEX</text>
+          <text x="40" y="200" font-family="Titillium Web, Arial Black, sans-serif" font-weight="900" font-style="italic" font-size="220" letter-spacing="6" fill="#0a0a0b" stroke="#ff1a2e" stroke-width="5" stroke-linejoin="round">APEX</text>
+        </g>
+        <text x="350" y="330" text-anchor="middle" font-family="Titillium Web, sans-serif" font-weight="600" font-size="96" fill="#ececf1" letter-spacing="2">Duo<tspan fill="#ff1a2e">View</tspan></text>
+      </symbol>
+    </defs>
+  </svg>
+
+  <section>
+    <h2>1 · Side by side (the main wide logo)</h2>
+    <div class="screen wide"><svg class="glow" viewBox="0 0 1060 260" role="img" aria-label="APEX DuoView logo, side by side"><use href="#lockup-row"/></svg></div>
+    <p class="cap">For the opening screen, the README banner and the App Store. "DuoView" in white with "View" in the app's red, and a purple timing sweep under it.</p>
+  </section>
+
+  <section>
+    <h2>2 · On the open Duo (951 × 669, fold down the middle)</h2>
+    <div class="screen flat fold-v"><svg class="glow" viewBox="0 0 1060 260" role="img" aria-label="APEX DuoView logo on the open inner screen"><use href="#lockup-row"/></svg></div>
+    <p class="cap">Centred on the open screen, the fold runs through the end of "APEX". If you'd rather keep the logo off the fold, it can sit in one half instead, or put "APEX" on the left half and "DuoView" on the right.</p>
+  </section>
+
+  <section>
+    <h2>3 · Stacked, for the laptop pose (669 × 951)</h2>
+    <div class="screen laptop fold-h"><svg class="glow" viewBox="0 0 700 380" role="img" aria-label="APEX DuoView logo stacked"><use href="#lockup-stack"/></svg>
+      <p class="small">Unofficial app. Not associated with Formula 1 companies. F1, FORMULA ONE and related marks are trade marks of Formula One Licensing B.V.<br>Requires an F1 TV subscription</p></div>
+    <p class="cap">Logo on the upright half, small print on the half lying flat. The same stacked lockup fits the closed outer screen once you've measured it.</p>
+  </section>
+
+  <p class="note">Your call: (1) keep these hand-built letters, (2) swap "APEX" for the Higgsfield one you pick, or (3) a new Higgsfield set with the full "APEX DuoView" in the artwork, 4 options for 1 credit, only after your OK.</p>
+</div>
