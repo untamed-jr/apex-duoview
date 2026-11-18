@@ -69,6 +69,7 @@ struct SettingsView: View {
             LabeledContent("Hinge angle", value: Self.angleText(fold.hingeAngle))
             LabeledContent("Fold", value: Self.frameText(fold.foldFrame))
             LabeledContent("Screen", value: Self.sizeText(fold.rootSize))
+            LabeledContent("Safe edges", value: Self.insetsText(fold.safeInsets))
             LabeledContent("Source", value: fold.source == .fake ? "Simulated" : "Device")
         } header: {
             Text("Fold").sectionLabel()
@@ -208,6 +209,12 @@ struct SettingsView: View {
         guard fold.hingeReported else { return "Not reported yet" }
         guard let hinge = fold.systemHinge else { return "None (this device has no hinge)" }
         return "\(hinge.status.label), \(angleText(hinge.angleDegrees))"
+    }
+
+    /// Top, left, bottom, right, in points.
+    private static func insetsText(_ insets: ScreenInsets) -> String {
+        "top \(points(insets.top)), left \(points(insets.leading)), "
+            + "bottom \(points(insets.bottom)), right \(points(insets.trailing))"
     }
 
     private static func sizeText(_ size: CGSize) -> String {

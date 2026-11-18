@@ -1,6 +1,14 @@
 import CoreGraphics
 import Observation
 
+/// Safe-area insets in points, top, left (leading), bottom and right (trailing).
+struct ScreenInsets: Equatable {
+    var top: CGFloat = 0
+    var leading: CGFloat = 0
+    var bottom: CGFloat = 0
+    var trailing: CGFloat = 0
+}
+
 /// How the phone is folded. `standing` (on its edges) is left out: nothing in the iOS 27.1 SDK tells
 /// it apart (spec O3).
 enum Posture: String, Sendable, CaseIterable {
@@ -67,6 +75,8 @@ final class FoldState {
     /// The full-screen size of the root, in the same space as `foldFrame`; the fake fold frame is
     /// drawn in it.
     private(set) var rootSize: CGSize = .zero
+    /// The screen's safe-area insets as the system reports them (Settings › Fold shows them).
+    private(set) var safeInsets = ScreenInsets()
 
     @ObservationIgnored private var fakePosture: Posture = .unknown
     @ObservationIgnored private var fakeAngle: Double = 90
@@ -84,9 +94,10 @@ final class FoldState {
 
     /// The division region's frame and the tracked view's size, re-read on every layout or hinge
     /// change.
-    func applySystem(foldFrame: CGRect?, rootSize: CGSize) {
+    func applySystem(foldFrame: CGRect?, rootSize: CGSize, safeInsets: ScreenInsets = ScreenInsets()) {
         systemFoldFrame = foldFrame
         if self.rootSize != rootSize { self.rootSize = rootSize }
+        if self.safeInsets != safeInsets { self.safeInsets = safeInsets }
         switch source {
         case .system: publishSystem()
         case .fake: publishFake()

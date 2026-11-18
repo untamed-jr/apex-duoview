@@ -36,7 +36,8 @@ enum MultiviewLayout {
 
     /// The app's posture and fold, as the layout engine takes them, laid out inside `safeRect`
     /// (the safe area, in full-screen coordinates; the spec keeps tiles out of cutouts). Closed
-    /// when the whole screen is narrower than 600 pt or the posture is closed; book or laptop with
+    /// when the whole screen is narrower than 600 pt or the posture is closed, and then the full
+    /// width between the top and bottom insets; book or laptop with
     /// a fold the right way round in the safe area → that posture and the fold (in the safe
     /// area's space); anything else (flat, unknown, or a half-open phone whose fold doesn't fit)
     /// → flat, no fold. The result is the posture the tiles really use, so a remembered layout
@@ -46,7 +47,13 @@ enum MultiviewLayout {
         func result(_ posture: Multiview.Posture, _ fold: CGRect?) -> MultiviewLayoutInput {
             MultiviewLayoutInput(posture: posture, foldFrame: fold, screen: area.size, origin: area.origin)
         }
-        if screen.width < minimumOpenWidth || posture == .closed { return result(.closed, nil) }
+        if screen.width < minimumOpenWidth || posture == .closed {
+            // Closed, the one feed runs the screen's full width, under any side inset (video may
+            // sit under a side cutout; the controls stay in the safe area). Only the top and
+            // bottom insets apply. Found on the Duo's outer screen, which lost a strip on the right.
+            let closed = CGRect(x: 0, y: area.minY, width: screen.width, height: area.height)
+            return MultiviewLayoutInput(posture: .closed, foldFrame: nil, screen: closed.size, origin: closed.origin)
+        }
         let shifted = foldFrame?.offsetBy(dx: -area.minX, dy: -area.minY)
         switch posture {
         case .book:

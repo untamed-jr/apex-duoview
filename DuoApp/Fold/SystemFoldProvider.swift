@@ -53,11 +53,16 @@ private struct FoldRegionReader: View {
             let sample = FoldGeometry(
                 foldFrame: Self.divisionFrame(in: proxy),
                 size: proxy.size,
+                safeInsets: ScreenInsets(
+                    top: proxy.safeAreaInsets.top, leading: proxy.safeAreaInsets.leading,
+                    bottom: proxy.safeAreaInsets.bottom, trailing: proxy.safeAreaInsets.trailing),
                 hinge: hinge,
                 hingeReported: reported)
             Color.clear
                 .onChange(of: sample, initial: true) { _, newSample in
-                    state.applySystem(foldFrame: newSample.foldFrame, rootSize: newSample.size)
+                    state.applySystem(
+                        foldFrame: newSample.foldFrame, rootSize: newSample.size,
+                        safeInsets: newSample.safeInsets)
                 }
         }
         .ignoresSafeArea()
@@ -75,6 +80,8 @@ private struct FoldRegionReader: View {
 private struct FoldGeometry: Equatable {
     var foldFrame: CGRect?
     var size: CGSize
+    /// The safe area the reader extends over (it ignores it), for Settings › Fold.
+    var safeInsets: ScreenInsets
     var hinge: HingeReading?
     var hingeReported: Bool
 }
