@@ -9,7 +9,7 @@
   --bg: #f1f1f3; --surface: #ffffff; --ink: #141417; --ink-2: #565660; --ink-3: #7a7a84;
   --line: #dcdce2; --red: #c40012; --tag-bg: #fff4c2; --tag-ink: #5c4a00; --tag-line: #b89a1e;
   --f-bg: #0a0a0b; --f-ink: #e9e9ec; --f-ink-2: #a3a3ab; --f-ink-3: #85858d;
-  --outer-ar: 2 / 5; /* GUESS: outer screen width / height. Change this one value once measured on the Duo. */
+  --outer-ar: 466 / 678; /* Measured on the owner's Duo (Settings › Fold "Screen", closed), 2026-11-18. */
   --f-red: #ec0014; --f-purple: #b14aed; --f-green: #30d158; --f-yellow: #ffd60a;
   --display: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -91,8 +91,8 @@ button { font: inherit; }
 .screen { position: relative; overflow: hidden; container-type: inline-size; background: var(--f-bg); color: var(--f-ink); isolation: isolate; border-radius: 2.6cqw; }
 .screen.flat { aspect-ratio: 951 / 669; --half: 47.95cqw; }
 .screen.lap { aspect-ratio: 669 / 951; }
-/* outer screen: dashed guess, deliberately small and narrow; real size is not known yet */
-.device.outer { padding: 3cqw; border-radius: 13cqw; background: none; box-shadow: none; border: 1.5px dashed var(--ink-3); }
+/* outer screen: 466 × 678 pt, measured on the Duo */
+.device.outer { padding: 3cqw; border-radius: 13cqw; background: none; box-shadow: none; border: 1.5px solid var(--ink-3); }
 .device.outer .bezel { padding: 0; background: none; border-radius: 10cqw; }
 .screen.outer { aspect-ratio: var(--outer-ar); border-radius: 9cqw; }
 .screen > * { position: absolute; }
@@ -302,7 +302,7 @@ button { font: inherit; }
 <div class="controls"><button type="button" class="replay" id="replay-a"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.2v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay</button><span class="rm-note">Reduce Motion is on, so the intro plays as a short fade.</span></div>
 </header>
 <div class="board">
-<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: real size to be measured on your Duo</span></div>
+<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: 466 × 678 pt, measured on your Duo</span></div>
 <div class="row outer-row"><figure class="cell still"><div class="device outer"><div class="bezel"><div class="screen a outer still" data-state="still" aria-hidden="true">
 <div class="art"><svg class="art-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">
 <defs><radialGradient id="sky1" cx="50%" cy="-5%" r="95%"><stop offset="0" stop-color="#1c1630"/><stop offset=".5" stop-color="#0b0c14"/><stop offset="1" stop-color="#050507"/></radialGradient>
@@ -517,7 +517,7 @@ button { font: inherit; }
 <div class="controls"><button type="button" class="replay" id="replay-c"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.2v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Replay</button><span class="rm-note">Reduce Motion is on, so the intro plays as a short fade.</span></div>
 </header>
 <div class="board">
-<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: real size to be measured on your Duo</span></div>
+<div class="row-label"><b>Closed</b> outer screen <span class="measure">Outer screen: 466 × 678 pt, measured on your Duo</span></div>
 <div class="row outer-row"><figure class="cell still"><div class="device outer"><div class="bezel"><div class="screen c outer still" data-state="still" aria-hidden="true">
 <div class="art"><div class="carbon"></div></div>
 <div class="fx"><div class="gate"></div></div>
@@ -587,10 +587,10 @@ button { font: inherit; }
 <h2>What I'd generate</h2>
 <p class="lede">One set of four images for the outer screen per direction, and an optional landscape set for the inner screen; the laptop view crops that landscape set to portrait. You pick one image from a set and it replaces the stand-in in every frame. Every prompt avoids vehicles, liveries, people, text, flags and any racing-series or team marks.</p>
 <div class="gen-grid">
-<article class="gen-card"><h3><span class="letter">A</span>Night circuit</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (ratio set after you measure)</span><button type="button" class="copy-btn" data-target="prompt-a-1" id="copy-prompt-a-1">Copy</button></div>
+<article class="gen-card"><h3><span class="letter">A</span>Night circuit</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (466 × 678 pt)</span><button type="button" class="copy-btn" data-target="prompt-a-1" id="copy-prompt-a-1">Copy</button></div>
 <p class="prompt" id="prompt-a-1">Night-time motor racing circuit seen from a low, elevated angle. Empty wet asphalt sweeping through a long corner low in the frame, red-and-white kerbs, floodlights with a warm sodium glow in a dark sky. Deep blacks, cinematic, high contrast, still and calm, no motion blur. Upper-middle of the frame dark and empty for a logo. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li><li><div class="set-head"><span>Set 2 · landscape about 10:7, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-a-2" id="copy-prompt-a-2">Copy</button></div>
 <p class="prompt" id="prompt-a-2">The same night circuit scene in landscape framing, about 10:7, a wider view of the corner in the lower third. Keep the left half and the centre dark and calm, with the subject near the centre so a portrait crop still works. No vehicles, no people, no light trails, no text, no logos, no flags, no sponsor boards.</p></li></ol><p class="in-code">The app draws the red and white light trails and the logo glow, so the image stays a still, empty track.</p></article>
-<article class="gen-card"><h3><span class="letter">C</span>Minimal</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (ratio set after you measure)</span><button type="button" class="copy-btn" data-target="prompt-c-1" id="copy-prompt-c-1">Copy</button></div>
+<article class="gen-card"><h3><span class="letter">C</span>Minimal</h3><ol class="sets"><li><div class="set-head"><span>Set 1 · portrait, outer screen (466 × 678 pt)</span><button type="button" class="copy-btn" data-target="prompt-c-1" id="copy-prompt-c-1">Copy</button></div>
 <p class="prompt" id="prompt-c-1">Near-black matte surface with a faint carbon-weave texture and a soft vignette. Minimal, premium, almost empty, monochrome. No light streaks, no text, no logos, no vehicles, no people.</p></li><li><div class="set-head"><span>Set 2 · landscape about 10:7, inner screen (optional)</span><button type="button" class="copy-btn" data-target="prompt-c-2" id="copy-prompt-c-2">Copy</button></div>
 <p class="prompt" id="prompt-c-2">The same near-black carbon-weave surface in landscape framing, about 10:7, with a soft vignette, monochrome and almost empty. No light streaks, no text, no logos, no vehicles, no people.</p></li></ol><p class="in-code">The app draws the purple sweep and the underline, so the image is only the dark surface.</p></article>
 </div>

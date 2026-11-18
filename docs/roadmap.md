@@ -150,7 +150,8 @@ be designed with the owner before it is built:
   - "APEX" wordmark: job `5056dcae-d508-4e2e-b577-533a5d5683ca` (16:9), to be saved as
     `Design/Wordmark-APEX.png`.
   The owner saves both from the Higgsfield gallery; they are not in the repo yet.
-- Still open: the outer screen's real size, measured on the Duo.
+- Outer screen measured (owner, 2026-11-18, Settings › Fold "Screen" with the phone closed):
+  **466 × 678 pt**, portrait.
 
 ## Screenshots
 

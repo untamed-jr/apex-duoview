@@ -133,7 +133,7 @@
 
 **Screens**
 - Inner screen 951×669 pt flat, fold at x 456–496; 669×951 turned for laptop.
-- **The outer screen's size is unknown** until the owner measures it (Task 12). Closed layouts take their size from the view (`GeometryReader`) and scale type from it. There are no hard-coded outer-screen numbers anywhere.
+- **The outer screen is 466 × 678 pt** (portrait), measured by the owner on 2026-11-18 in Settings › Fold. Closed layouts still take their size from the view (`GeometryReader`) and scale type from it; the measured size is for mockups and checks, not hard-coded in the app.
 - The closed layout applies wherever the multiview's is used (narrower than 600 pt, or posture closed), so also on any iPhone.
 
 **Build, fixtures, commits**
