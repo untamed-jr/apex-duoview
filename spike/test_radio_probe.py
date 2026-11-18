@@ -13,7 +13,7 @@ import urllib.parse
 
 import timing_recorder as tr
 
-TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJlMTIzNDU2"  # synthetic
+TOKEN = "stub-token+not/real=0123456789"  # synthetic, plain text (no JWT shape); has characters that URL-encode
 SESSION = "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/"
 
 
@@ -135,6 +135,19 @@ class EndToEnd(unittest.TestCase):
         self.assertIn("no token  : HTTP 403, 0 bytes", out)
         self.assertEqual(len(files), 3)  # only the with-token downloads are saved
         self.assertNotIn(TOKEN, out)
+
+
+class Masking(unittest.TestCase):
+    def test_added_secret_is_masked_plain_and_encoded(self):
+        tr.add_secret(TOKEN)
+        self.assertNotIn(TOKEN, tr.scrub("Bearer " + TOKEN))
+        self.assertNotIn(urllib.parse.quote(TOKEN, safe=""), tr.scrub("?t=" + urllib.parse.quote(TOKEN, safe="")))
+
+    def test_jwt_shape_is_masked_without_being_added(self):
+        # Assembled at run time so no JWT-shaped literal sits in this public file.
+        jwt = ".".join(["ey" + "J" + "a" * 12, "b" * 12, "c" * 12])
+        self.assertNotIn(jwt, tr.scrub("Authorization: " + jwt))
+        self.assertIn("<masked-jwt>", tr.scrub("x " + jwt))
 
 
 class Failures(unittest.TestCase):
