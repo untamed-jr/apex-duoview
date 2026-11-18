@@ -147,6 +147,84 @@ import F1TV
         #expect(EventDetector.yellowRepeatMs == 60_000 && EventDetector.seekQuietMs == 2_000 && EventDetector.jumpMs == 10_000)
     }
 
+    @Test func forwardBaselinesKeepTheYellowRule() {
+        // Yellow at 10 s; a forward seek of 20 s, and then a step over jumpMs, must not let a
+        // second yellow through inside 60 s of picture time.
+        let stamps = ["00:00:10.000", "00:00:11.000", "00:00:40.000", "00:00:41.000", "00:01:05.000", "00:01:06.000", "00:01:20.000"]
+        let session = Self.timing([], track: Self.yellows(stamps))
+        var d = EventDetector()
+        let first = Self.run(&d, session, from: Self.s + 5_000, to: Self.s + 15_000, stepMs: 1_000)
+        #expect(first.map(\.t) == [Self.s + 10_000])
+        // Forward seek of 20 s: baseline at 35 s; the yellow at 40 s is 30 s after the first.
+        _ = d.step(to: Self.s + 35_000, motion: .seek, session: session, radio: RadioClips(), favourite: nil)
+        let second = Self.run(&d, session, from: Self.s + 35_000, to: Self.s + 50_000, stepMs: 1_000, seekFirst: false)
+        #expect(second.isEmpty)
+        // A jump over 10 s of picture time (50 s to 62 s) is a baseline too; 65 s is 55 s after the first.
+        _ = d.step(to: Self.s + 62_000, motion: .play, session: session, radio: RadioClips(), favourite: nil)
+        let third = Self.run(&d, session, from: Self.s + 62_000, to: Self.s + 68_000, stepMs: 1_000, seekFirst: false)
+        #expect(third.isEmpty)
+        // 80 s is 70 s after the first yellow: allowed.
+        let fourth = Self.run(&d, session, from: Self.s + 68_000, to: Self.s + 85_000, stepMs: 1_000, seekFirst: false)
+        #expect(fourth.map(\.t) == [Self.s + 80_000])
+    }
+
+    @Test func rewindBeforeTheLastYellowFiresItAgain() {
+        let session = Self.timing([], track: Self.yellows(["00:00:10.000", "00:00:11.000"]))
+        var d = EventDetector()
+        #expect(Self.run(&d, session, from: Self.s + 5_000, to: Self.s + 15_000, stepMs: 1_000).map(\.t) == [Self.s + 10_000])
+        // Back to 3 s (before the yellow) and play over it again, past the quiet period.
+        #expect(d.step(to: Self.s + 3_000, motion: .seek, session: session, radio: RadioClips(), favourite: nil).isEmpty)
+        let again = Self.run(&d, session, from: Self.s + 3_000, to: Self.s + 15_000, stepMs: 1_000, seekFirst: false)
+        #expect(again.map(\.t) == [Self.s + 10_000])
+    }
+
+    @Test func smallBackwardStepIsAnEmptyStepNotABaseline() {
+        // Yellow at 10.4 s. Step to 10.2 s, back 200 ms: no baseline, so nothing is lost.
+        let session = Self.timing([], track: Self.yellows(["00:00:10.400", "00:00:11.000"]))
+        var d = EventDetector()
+        _ = d.step(to: Self.s + 5_000, motion: .seek, session: session, radio: RadioClips(), favourite: nil)
+        _ = d.step(to: Self.s + 10_000, motion: .play, session: session, radio: RadioClips(), favourite: nil)
+        #expect(d.step(to: Self.s + 9_800, motion: .play, session: session, radio: RadioClips(), favourite: nil).isEmpty)
+        let events = d.step(to: Self.s + 10_500, motion: .play, session: session, radio: RadioClips(), favourite: nil)
+        #expect(events.map(\.t) == [Self.s + 10_400])
+        // It doesn't reset the yellow rule either: a back step of 200 ms leaves the yellow remembered.
+        let again = Self.timing([], track: Self.yellows(["00:00:10.000", "00:00:10.100", "00:00:10.600", "00:00:10.700"]))
+        var e = EventDetector()
+        _ = e.step(to: Self.s + 5_000, motion: .seek, session: again, radio: RadioClips(), favourite: nil)
+        #expect(e.step(to: Self.s + 10_050, motion: .play, session: again, radio: RadioClips(), favourite: nil).map(\.t) == [Self.s + 10_000])
+        _ = e.step(to: Self.s + 9_850, motion: .play, session: again, radio: RadioClips(), favourite: nil)
+        #expect(e.step(to: Self.s + 10_800, motion: .play, session: again, radio: RadioClips(), favourite: nil).isEmpty)
+        // 600 ms back is a baseline: quiet 2 s, so the yellow just after it is not reported.
+        var f = EventDetector()
+        _ = f.step(to: Self.s + 5_000, motion: .seek, session: session, radio: RadioClips(), favourite: nil)
+        _ = f.step(to: Self.s + 10_000, motion: .play, session: session, radio: RadioClips(), favourite: nil)
+        #expect(f.step(to: Self.s + 9_400, motion: .play, session: session, radio: RadioClips(), favourite: nil).isEmpty)
+        #expect(f.step(to: Self.s + 10_500, motion: .play, session: session, radio: RadioClips(), favourite: nil).isEmpty)
+    }
+
+    @Test func twoClipsOfOneCarAtOneMomentKeepTheirOwnPaths() {
+        let radio = RadioClips(lines: [Self.radioLine("00:00:05.000", [
+            (Self.s + 20_000, "12", "A_12_20261108_140000"), (Self.s + 20_000, "12", "A_12_20261108_140001")])])
+        var d = EventDetector()
+        let events = Self.run(&d, Self.timing([]), radio: radio, from: Self.s + 10_000, to: Self.s + 30_000, favourite: "12")
+        #expect(events.map(\.kind) == [.radio(car: "12", path: "TeamRadio/A_12_20261108_140000.mp3"),
+                                       .radio(car: "12", path: "TeamRadio/A_12_20261108_140001.mp3")])
+    }
+
+    @Test func favouritePitsBeforeLightsOutAreNotEvents() throws {
+        let session = try RadioRaceTests.longRace()
+        let started = RadioRaceTests.started
+        let from = started - 2_700_000   // covers the pre-race pit-lane exits and entries
+        var d = EventDetector()
+        let events = Self.run(&d, session, from: from, to: started + 5_400_000, stepMs: 5_000, favourite: "12")
+        let mine = events.filter { $0.kind == .pit(car: "12") || $0.kind == .out(car: "12") }
+        #expect(mine.allSatisfy { $0.t >= started })
+        // The real stops are the ones RaceEvents lists for the car after the start, all still reported.
+        let real = RaceEvents.list(until: started + 5_400_000, session: session).filter { $0.kind == .pit(car: "12") }
+        #expect(!real.isEmpty)
+        #expect(events.filter { $0.kind == .pit(car: "12") }.map(\.t) == real.map(\.t).filter { $0 > from + EventDetector.seekQuietMs })
+    }
+
     @Test func trackEventsForScVscRedAndChequered() {
         // Yellow, then SC (4) ("in this lap" is the same SC), VSC (6, 7), clear, red (5), clear.
         let session = Self.timing([], track: lines(
@@ -205,7 +283,7 @@ import F1TV
         let session = Self.timing(Self.driverLines)
         var d = EventDetector()
         let events = Self.run(&d, session, radio: radio, from: Self.s + 5_000, to: Self.s + 50_000, stepMs: 1_000, favourite: "12")
-        #expect(events.map(\.kind) == [.pit(car: "12"), .purpleSector(car: "12"), .out(car: "12"), .radio(car: "12")])
+        #expect(events.map(\.kind) == [.pit(car: "12"), .purpleSector(car: "12"), .out(car: "12"), .radio(car: "12", path: "TeamRadio/A_12_20261108_140000.mp3")])
         #expect(events.map(\.t) == [10_000, 20_000, 30_000, 40_000].map { Self.s + $0 })
         // Car events carry that car's lap: laps done 4, so lap 5.
         #expect(events.map(\.lap) == [5, 5, 5, 5])
@@ -275,7 +353,7 @@ import F1TV
         let before = Self.run(&d, session, radio: radio, from: Self.s + 10_000, to: Self.s + 19_999, favourite: "12")
         #expect(before.isEmpty)
         let at = d.step(to: Self.s + 20_000, motion: .play, session: session, radio: radio, favourite: "12")
-        #expect(at.map(\.kind) == [.radio(car: "12")])
+        #expect(at.map(\.kind) == [.radio(car: "12", path: "TeamRadio/A_12_20261108_140000.mp3")])
         #expect(at.map(\.t) == [Self.s + 20_000])
         // Not again.
         #expect(d.step(to: Self.s + 20_500, motion: .play, session: session, radio: radio, favourite: "12").isEmpty)
@@ -287,7 +365,7 @@ import F1TV
         let session = Self.timing([])
         var d = EventDetector()
         let events = Self.run(&d, session, radio: radio, from: Self.s + 10_000, to: Self.s + 30_000, listening: ["44"])
-        #expect(events.map(\.kind) == [.radio(car: "44")])
+        #expect(events.map(\.kind) == [.radio(car: "44", path: "TeamRadio/A_44_20261108_140000.mp3")])
     }
 
     @Test func seekAcrossClipDoesNotAutoPlay() {

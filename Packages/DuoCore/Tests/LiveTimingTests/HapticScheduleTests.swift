@@ -40,7 +40,7 @@ import Foundation
         #expect(HapticKind.from(.yellow) == .yellow)
         #expect(HapticKind.from(.pit(car: "1")) == .pits)
         #expect(HapticKind.from(.purpleSector(car: "1")) == .purpleSector)
-        #expect(HapticKind.from(.radio(car: "1")) == nil)
+        #expect(HapticKind.from(.radio(car: "1", path: "TeamRadio/A_1_20261108_140000.mp3")) == nil)
         #expect(HapticKind.from(.out(car: "1")) == nil)
         #expect(HapticKind.from(.passed(car: "1", other: "2", position: 3)) == nil)
     }

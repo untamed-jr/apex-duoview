@@ -4,7 +4,7 @@ import Foundation
 public enum CompanionEventKind: Sendable, Equatable {
     case yellow, safetyCar, vsc, red, chequered
     case pit(car: String)
-    case radio(car: String)
+    case radio(car: String, path: String)
     case out(car: String)
     /// `car` passes `other` and takes P`position`.
     case passed(car: String, other: String, position: Int)
@@ -43,6 +43,8 @@ public struct EventDetector: Sendable {
     public static let yellowRepeatMs: Int64 = 60_000
     /// A step over this much picture time is a jump, not playback.
     public static let jumpMs: Int64 = 10_000
+    /// A step back of less than this is a wobble in the clock, not a seek.
+    public static let backStepMs: Int64 = 500
 
     private var previous: UTCms?
     private var quietUntil: UTCms = .min
@@ -50,19 +52,23 @@ public struct EventDetector: Sendable {
 
     public init() {}
 
-    /// The events in `(previous t, t]`, oldest first. The first step, a `.seek`, a step back and
-    /// a step over `jumpMs` set the baseline and start the quiet period instead: they give
-    /// nothing, and neither does the quiet period that follows.
+    /// The events in `(previous t, t]`, oldest first. The first step, a `.seek`, a step back of
+    /// `backStepMs` or more and a step over `jumpMs` set the baseline and start the quiet period
+    /// instead: they give nothing, and neither does the quiet period that follows. A baseline
+    /// forgets the last yellow only when it rewinds to before it, so a forward seek or jump can't
+    /// let a second yellow through inside `yellowRepeatMs`. A step back of less than `backStepMs`
+    /// (a clock wobble) is an empty step: nothing is reported, and nothing is reset.
     ///
     /// `favourite` is the driver's racing number (pits, out, purple sector, a pass, radio) and
     /// `listening` holds the numbers whose radio is reported without being the favourite's; the
     /// favourite's radio always is. With neither, only the track's events come back.
     public mutating func step(to t: UTCms, motion: PictureMotion, session: LoadedSession, radio: RadioClips,
                               favourite: String?, listening: Set<String> = []) -> [CompanionEvent] {
+        if motion == .play, let from = previous, t < from, F1Values.sub(from, t) < Self.backStepMs { return [] }
         guard motion == .play, let from = previous, t >= from, F1Values.sub(t, from) <= Self.jumpMs else {
             previous = t
             quietUntil = F1Values.add(t, Self.seekQuietMs)
-            lastYellow = nil
+            if let last = lastYellow, t < last { lastYellow = nil }
             return []
         }
         previous = t
@@ -180,8 +186,10 @@ public struct EventDetector: Sendable {
                     let state = history.states[i], t = history.times[i]
                     defer { before = state }
                     guard let was = before else { continue }
-                    if state.inPit, !was.inPit { add(t, .pit(car: car)) }
-                    if (state.retired || state.stopped), !(was.retired || was.stopped) { add(t, .out(car: car)) }
+                    // Before lights out a race has no pit stops or retirements to report (as RaceEvents).
+                    let live = !(session.info.isRace && isBeforeStart(t, session: session))
+                    if live, state.inPit, !was.inPit { add(t, .pit(car: car)) }
+                    if live, (state.retired || state.stopped), !(was.retired || was.stopped) { add(t, .out(car: car)) }
                     for k in state.sectors.indices where state.sectors[k] == .overallBest {
                         if k >= was.sectors.count || was.sectors[k] != .overallBest {
                             add(t, .purpleSector(car: car))
@@ -229,7 +237,7 @@ public struct EventDetector: Sendable {
                                     cars: Set<String>) -> [CompanionEvent] {
         guard !cars.isEmpty else { return [] }
         return radio.all.filter { $0.utc > from && $0.utc <= to && cars.contains($0.racingNumber) }.map {
-            CompanionEvent(t: $0.utc, lap: carLap($0.racingNumber, at: $0.utc, session: session), kind: .radio(car: $0.racingNumber))
+            CompanionEvent(t: $0.utc, lap: carLap($0.racingNumber, at: $0.utc, session: session), kind: .radio(car: $0.racingNumber, path: $0.path))
         }
     }
 }

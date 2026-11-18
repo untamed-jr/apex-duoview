@@ -144,7 +144,7 @@ import LiveTiming
         #expect(CardGroup.of(.vsc) == .flags)
         #expect(CardGroup.of(.red) == .flags)
         #expect(CardGroup.of(.pit(car: "1")) == .myStopsAndRadio)
-        #expect(CardGroup.of(.radio(car: "1")) == .myStopsAndRadio)
+        #expect(CardGroup.of(.radio(car: "1", path: "TeamRadio/A_1_20261108_140000.mp3")) == .myStopsAndRadio)
         #expect(CardGroup.of(.out(car: "1")) == .myStopsAndRadio)
         #expect(CardGroup.of(.passed(car: "1", other: "2", position: 3)) == .myPositions)
         #expect(CardGroup.of(.chequered) == .chequered)
