@@ -212,6 +212,7 @@ import Testing
         #expect(label(99_999) == .lap(1))
         #expect(label(100_000) == .lap(2))
         #expect(label(199_999) == .lap(2))
+        // Car 44's count is 1 until 200 s, so no car is on lap 2 yet: car 1 still reads lap 1.
         #expect(label(199_999, "1") == .lap(1))
         // The leader's flag: after it, every car.
         #expect(label(200_000) == .afterFlag)
@@ -223,6 +224,28 @@ import Testing
         #expect(label(150_000, "") == .unknown)
         // Car 1 is known from its first timing line, with no count yet: lap 1.
         #expect(label(10_500, "1") == .lap(1))
+    }
+
+    @Test func noCountIsLapOneOnlyUntilAnyCarReachesLapTwo() {
+        let session = RaceFixture.synthetic(
+            timing: lines(#"00:00:01.000{"Lines":{"44":{"Position":"1"},"1":{"Position":"2"}}}"#,
+                          #"00:01:40.000{"Lines":{"44":{"NumberOfLaps":1}}}"#,
+                          #"00:03:20.000{"Lines":{"44":{"NumberOfLaps":2}}}"#,
+                          #"00:06:40.000{"Lines":{"44":{"NumberOfLaps":3}}}"#),
+            sessionStatus: lines(#"00:00:00.500{"Status":"Inactive"}"#, #"00:00:10.000{"Status":"Started"}"#),
+            start: 1_000_000)
+        func label(_ offset: Int64, _ car: String) -> RadioLapLabel {
+            RadioClips.lapLabel(for: RadioClip(utc: 1_000_000 + offset, racingNumber: car, path: "p"), in: session)
+        }
+        // A leader on count 1 doesn't end it: car 1 still reads lap 1.
+        #expect(label(150_000, "1") == .lap(1))
+        // The instant a car's count is 2 (its Utc, inclusive) a car with none is unknown, and stays so.
+        #expect(label(199_999, "1") == .lap(1))
+        #expect(label(200_000, "1") == .unknown)
+        #expect(label(300_000, "1") == .unknown)
+        // Cars with a count are unaffected; a later count (lap 3 at 400 s) doesn't change an earlier clip.
+        #expect(label(250_000, "44") == .lap(3))
+        #expect(label(250_000, "99") == .unknown)
     }
 
     @Test func raceLabelsWithoutTheStart() {

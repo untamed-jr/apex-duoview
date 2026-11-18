@@ -191,8 +191,9 @@ extension RadioClips {
     /// - a race once "Finished" (or "Finalised", "Ends"): `.afterFlag`;
     /// - a race: the car's lap count at `Utc` plus one. A car timing shows with no count yet,
     ///   after a start the feed saw, is on lap 1 (2026 sends no NumberOfLaps until lap 1 ends;
-    ///   Android shows nothing there). A car timing hasn't shown, or no count with no known start
-    ///   (joined under way), is `.unknown`;
+    ///   Android shows nothing there), but only while no car has a count of 2 or more at `Utc`:
+    ///   once any car does, a car with no count is `.unknown`. A car timing hasn't shown, or no
+    ///   count with no known start (joined under way), is `.unknown`;
     /// - qualifying (and sprint qualifying): the part and the clock;
     /// - anything else: the time since the start.
     public static func lapLabel(for clip: RadioClip, in session: LoadedSession) -> RadioLapLabel {
@@ -206,7 +207,10 @@ extension RadioClips {
             if let now, finished.contains(now) { return .afterFlag }
             guard let car = session.timing.state(of: clip.racingNumber, at: t) else { return .unknown }
             if let laps = car.numberOfLaps { return .lap(laps + 1) }
-            return started == nil ? .unknown : .lap(1)
+            guard started != nil else { return .unknown }
+            // Lap 1 only while the field is on it: no car has finished lap 2's count yet (at or before `t`).
+            let anyOnLapTwo = session.timing.at(t).values.contains { ($0.numberOfLaps ?? 0) >= 2 }
+            return anyOnLapTwo ? .unknown : .lap(1)
         }
         if session.info.isQualifying {
             return .qualifying(part: session.timing.sessionPart(at: t), remainingMs: session.header.clockRemainingMs(at: t))
