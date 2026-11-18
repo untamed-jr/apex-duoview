@@ -134,7 +134,12 @@ be designed with the owner before it is built:
   related marks are trade marks of Formula One Licensing B.V." (the usual wording in unofficial
   F1 apps), plus "Requires an F1 TV subscription".
 - Images come from Higgsfield only after a credit quote the owner approves.
-- When: after beta.3, at the owner's choice (beta.4 or a small polish build).
+- When: a small polish build after beta.4 (owner, 2026-11-18).
+- Direction chosen (owner, 2026-11-18): **A, "Night circuit"**: a dark, floodlit wet corner of an
+  invented circuit, the logo scaling in with light trails drawn by the app, tagline "Every lap,
+  every angle." Mockups: `docs/design/opening-screen-mockups.html`; wide wordmark drafts:
+  `docs/design/logo-lockups.html`. Still open: the wordmark (hand-built or Higgsfield), which
+  artwork image, the outer screen's real size, and final artwork at full resolution (a quote first).
 
 ## Screenshots
 
