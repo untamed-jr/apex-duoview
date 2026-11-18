@@ -51,9 +51,38 @@ import F1TV
         #expect(RaceControlLog.entries(for: "63", until: nil, in: all).map(\.text) == ["INCIDENT INVOLVING CAR 63 (RUS) NOTED"])
         // Two cars in one message, and a number written twice counts once.
         let two = RaceControlLog.parse(lines: lines(
-            #"00:00:01.000{"Messages":[{"Utc":"\#(iso(Self.s))","RacingNumber":"4","Message":"CAR 4 (NOR) AND CAR 81 (PIA) COLLIDED, CAR 4 (NOR)"}]}"#),
+            #"00:00:01.000{"Messages":[{"Utc":"\#(iso(Self.s))","RacingNumber":"4","Message":"CARS 87 (BEA) AND 55 (SAI) NOTED, CAR 4 (NOR) TOO"}]}"#),
             streamStart: Self.s)
-        #expect(two.first?.cars == ["4", "81"])
+        // The RacingNumber first, then the text's cars, each once.
+        #expect(two.first?.cars == ["4", "87", "55"])
+    }
+
+    @Test func raceControlKeepsCategoryAndFlag() {
+        let all = Self.control()
+        #expect(all[0].flag == "BLUE")
+        #expect(all[0].category == "Flag")
+        #expect(all[1].flag == nil)
+        #expect(all[1].category == "Other")
+    }
+
+    @Test func raceControlAddedLineByLineDedups() {
+        var log = RaceControlLog(streamStart: Self.s)
+        let first = lines(#"00:00:01.000{"Messages":[{"Utc":"\#(iso(Self.s + 5_000))","Message":"CAR 1 (VER) A"}]}"#)
+        let early = lines(#"00:00:02.000{"Messages":[{"Utc":"\#(iso(Self.s))","Message":"B"}]}"#)
+        for l in first + early + first { log.add(l) }
+        #expect(log.all.map(\.text) == ["B", "CAR 1 (VER) A"])
+        #expect(log.all == RaceControlLog.parse(lines: first + early, streamStart: Self.s))
+    }
+
+    @Test func longRaceMultiCarInvestigationReachesBothLogbooks() throws {
+        let session = try RadioRaceTests.longRace()
+        let control = RaceControlLog.parse(lines: try Fixture.lines("sp26-race-long/RaceControlMessages.jsonStream"),
+                                           streamStart: session.streamStart)
+        for number in ["87", "55"] {
+            let hits = RaceControlLog.entries(for: number, until: nil, in: control)
+            #expect(hits.contains { $0.text.contains("CARS 87 (BEA) AND 55 (SAI)") }, "\(number)")
+        }
+        #expect(control.contains { $0.flag == "BLUE" })
     }
 
     @Test func raceControlByNumberField() {

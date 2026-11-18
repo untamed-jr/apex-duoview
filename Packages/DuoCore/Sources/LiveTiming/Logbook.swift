@@ -5,35 +5,65 @@ import F1TV
 public struct RaceControlEntry: Sendable, Equatable {
     public var t: UTCms
     public var text: String
-    /// Racing numbers: the message's `RacingNumber`, then every "CAR 44 (HAM)" in the text, each once.
+    /// Racing numbers: the message's `RacingNumber`, then every "CAR 44 (HAM)" and every number
+    /// in a "CARS 87 (BEA) AND 55 (SAI)" list in the text, each once.
     public var cars: [String]
+    /// F1's raw `Category` ("Flag", "Other"…) and `Flag` ("BLUE", "YELLOW"…); nil when absent.
+    public var category: String?
+    public var flag: String?
 
-    public init(t: UTCms, text: String, cars: [String]) {
+    public init(t: UTCms, text: String, cars: [String], category: String? = nil, flag: String? = nil) {
         self.t = t
         self.text = text
         self.cars = cars
+        self.category = category
+        self.flag = flag
     }
 }
 
-/// Race control messages by car, for the Logbook.
-public enum RaceControlLog {
-    /// The messages of RaceControlMessages lines (read as `TrackFlags` reads them: a list or
-    /// index-keyed entries; a message without a readable Utc takes its line's time), oldest first,
-    /// equal times in the order sent. A message sent again with the same time and words is kept
-    /// once (the first), as beta.3 listed them. Messages with no text are skipped.
-    public static func parse(lines: [StreamLine], streamStart: UTCms) -> [RaceControlEntry] {
-        var seen: Set<String> = []
-        var out: [RaceControlEntry] = []
-        for m in TrackFlags.controlMessages(lines, streamStart: streamStart) {
+/// Race control messages by car, for the Logbook. Whole session: what is shown must be cut at
+/// picture time (`entries(for:until:in:)`).
+public struct RaceControlLog: Sendable, Equatable {
+    /// Oldest first, equal times in the order sent.
+    public private(set) var all: [RaceControlEntry] = []
+    private var seen: Set<String> = []
+    private let streamStart: UTCms
+
+    public init(streamStart: UTCms) { self.streamStart = streamStart }
+
+    public init(lines: [StreamLine], streamStart: UTCms) {
+        self.streamStart = streamStart
+        for line in lines { add(line) }
+    }
+
+    /// Adds a line's messages (the live feed adds lines as they come), read as `TrackFlags` reads
+    /// them: a list or index-keyed entries; a message without a readable Utc takes its line's
+    /// time. A message sent again with the same time and words is kept once (the first), as
+    /// beta.3 listed them. Messages with no text are skipped.
+    public mutating func add(_ line: StreamLine) {
+        for m in TrackFlags.controlMessages([line], streamStart: streamStart) {
             let text = m.message["Message"].string
             guard !text.isEmpty, seen.insert("\(m.utc)|\(text)").inserted else { continue }
             var cars: [String] = []
             func add(_ number: String) { if !number.isEmpty, !cars.contains(number) { cars.append(number) } }
-            add(racingNumber(m.message["RacingNumber"]))
-            for number in carNumbers(in: text) { add(number) }
-            out.append(RaceControlEntry(t: m.utc, text: text, cars: cars))
+            add(Self.racingNumber(m.message["RacingNumber"]))
+            for number in Self.carNumbers(in: text) { add(number) }
+            let category = m.message["Category"].string, flag = m.message["Flag"].string
+            let entry = RaceControlEntry(t: m.utc, text: text, cars: cars,
+                                         category: category.isEmpty ? nil : category, flag: flag.isEmpty ? nil : flag)
+            // After every entry at or before its time: sorted, and arrival order on ties.
+            var lo = all.startIndex, hi = all.endIndex
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if all[mid].t <= entry.t { lo = mid + 1 } else { hi = mid }
+            }
+            all.insert(entry, at: lo)
         }
-        return out.enumerated().sorted { ($0.element.t, $0.offset) < ($1.element.t, $1.offset) }.map(\.element)
+    }
+
+    /// The messages of RaceControlMessages lines, oldest first, equal times in the order sent.
+    public static func parse(lines: [StreamLine], streamStart: UTCms) -> [RaceControlEntry] {
+        RaceControlLog(lines: lines, streamStart: streamStart).all
     }
 
     /// The entries about `car` at or before `t` (picture time; nil is the whole race), in order.
@@ -50,13 +80,20 @@ public enum RaceControlLog {
         return ""
     }
 
-    private static let carPattern = try? NSRegularExpression(pattern: #"\bCAR (\d{1,3})\b"#)
+    /// "CAR 44 (HAM)" and the multi-car "CARS 87 (BEA) AND 55 (SAI)": every "number (CODE)".
+    private static let carPattern = try? NSRegularExpression(pattern: #"\b(\d{1,3}) \([A-Z]{3}\)"#)
+    private static let singlePattern = try? NSRegularExpression(pattern: #"\bCAR (\d{1,3})\b"#)
 
     private static func carNumbers(in text: String) -> [String] {
-        guard let regex = carPattern else { return [] }
-        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { m in
-            Range(m.range(at: 1), in: text).map { String(text[$0]) }
+        let range = NSRange(text.startIndex..., in: text)
+        var found: [(Int, String)] = []
+        for regex in [singlePattern, carPattern] {
+            guard let regex else { continue }
+            for m in regex.matches(in: text, range: range) {
+                if let r = Range(m.range(at: 1), in: text) { found.append((m.range.location, String(text[r]))) }
+            }
         }
+        return found.sorted { $0.0 < $1.0 }.map(\.1)
     }
 }
 
