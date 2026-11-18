@@ -68,10 +68,9 @@ import F1TV
         // Whole session, in 10 s plays so it is quick: still below jumpMs, so nothing is skipped.
         let events = Self.run(&d, session, from: start + 60_000, to: start + 3 * 3_600_000, stepMs: 5_000)
         let reds = events.filter { $0.kind == .red }
-        print("REDS", reds.map(\.t))
         #expect(reds.count == 2)
         // 18:02:25 and 20:03:20 UTC (race control's flag a little before TrackStatus's).
-        let wanted: [UTCms] = [1_794_078_145_000, 1_794_085_400_000]
+        let wanted: [UTCms] = [1_794_074_545_000, 1_794_081_800_000]
         for (event, at) in zip(reds, wanted) { #expect(abs(event.t - at) <= 5_000) }
         #expect(reds.allSatisfy { $0.lap == nil })
         // Qualifying has no lap on any track event.
