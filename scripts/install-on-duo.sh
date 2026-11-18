@@ -81,15 +81,16 @@ for d in devices:
         continue
     score = (conn.get("transportType") == "wired") * 2 + (conn.get("tunnelState") == "connected")
     if best is None or score > best[0]:
-        best = (score, hw["udid"], dev.get("developerModeStatus", ""), conn.get("pairingState", ""))
+        model = (hw.get("marketingName") or hw.get("productType") or "iPhone").replace(" ", "_")
+        best = (score, hw["udid"], dev.get("developerModeStatus", ""), conn.get("pairingState", ""), model)
 if best:
-    print(best[1], best[2] or "-", best[3] or "-")
+    print(best[1], best[2] or "-", best[3] or "-", best[4])
 PY
 )"
 [ -n "$PICK" ] || fail "No iPhone found. Plug it in with a cable, unlock it, tap Trust, then run this again."
-read -r UDID DEVMODE PAIRED <<<"$PICK"
+read -r UDID DEVMODE PAIRED MODEL <<<"$PICK"
 [ "$PAIRED" = "unpaired" ] && fail "The phone isn't paired with this Mac yet. Unlock it, tap Trust, then run this again."
-say "Found your phone."
+say "Found your phone: ${MODEL//_/ }. If that is not your iPhone Duo, unplug the other phone and run this again."
 if [ "$DEVMODE" = "disabled" ]; then
   # iOS only shows the Developer Mode switch after a Mac has tried to put an app on the phone,
   # so carry on: this attempt is what makes it appear.
