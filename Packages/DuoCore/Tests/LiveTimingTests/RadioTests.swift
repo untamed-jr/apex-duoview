@@ -139,4 +139,121 @@ import Testing
         #expect(radio.visible(at: nil, driver: "44").isEmpty)
         #expect(RadioClips().visible(at: nil).isEmpty)
     }
+
+    // MARK: Lap labels
+
+    @Test func raceLabelsFromTheFixture() throws {
+        let session = try RaceFixture.race()
+        let clips = RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream")).all
+        // Three pre-race clips (lights out is 17:03:23.965Z), then ANT at 17:13:06.215Z: F1's
+        // NumberOfLaps for car 12 was 6 from 17:12:08.239Z (checked in Python over the committed
+        // TimingData), so lap 7, as Android's lapAt.
+        #expect(clips.map { RadioClips.lapLabel(for: $0, in: session) } == [.beforeStart, .beforeStart, .beforeStart, .lap(7)])
+    }
+
+    @Test func raceLabelReadsNothingAfterTheClip() throws {
+        // A session cut at each clip's Utc labels it as the whole session does.
+        let full = try RaceFixture.race()
+        for clip in RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream")).all {
+            let cut = try RaceFixture.load("sp26-race", streamStart: Fixture.raceStart, cutAt: clip.utc)
+            #expect(RadioClips.lapLabel(for: clip, in: cut) == RadioClips.lapLabel(for: clip, in: full))
+        }
+    }
+
+    @Test func raceLabelsAroundTheStartAndTheFlag() {
+        let session = RaceFixture.synthetic(
+            timing: lines(#"00:00:01.000{"Lines":{"44":{"Position":"1"},"1":{"Position":"2"}}}"#,
+                          #"00:01:40.000{"Lines":{"44":{"NumberOfLaps":1}}}"#,
+                          #"00:03:20.000{"Lines":{"44":{"NumberOfLaps":2}}}"#),
+            sessionStatus: lines(#"00:00:00.500{"Status":"Inactive"}"#,
+                                 #"00:00:10.000{"Status":"Started"}"#,
+                                 #"00:03:20.000{"Status":"Finished"}"#,
+                                 #"00:05:00.000{"Status":"Finalised"}"#),
+            start: 1_000_000)
+        func label(_ offset: Int64, _ car: String = "44") -> RadioLapLabel {
+            RadioClips.lapLabel(for: RadioClip(utc: 1_000_000 + offset, racingNumber: car, path: "p"), in: session)
+        }
+        #expect(label(0) == .beforeStart)
+        #expect(label(9_999) == .beforeStart)
+        // Lights out with no count yet: F1 sends none until lap 1 ends, so lap 1 (Android shows nothing).
+        #expect(label(10_000) == .lap(1))
+        #expect(label(99_999) == .lap(1))
+        #expect(label(100_000) == .lap(2))
+        #expect(label(199_999) == .lap(2))
+        #expect(label(199_999, "1") == .lap(1))
+        // The leader's flag: after it, every car.
+        #expect(label(200_000) == .afterFlag)
+        #expect(label(200_000, "1") == .afterFlag)
+        #expect(label(400_000) == .afterFlag)
+        // A car with no timing at all, during the race: lap 1 as well.
+        #expect(label(50_000, "99") == .lap(1))
+    }
+
+    @Test func raceLabelsWithoutTheStart() {
+        // Joined with the race under way: the opening state says "Started", so the start isn't
+        // known and a car with no count yet has no lap.
+        var joined = RaceFixture.synthetic(timing: lines(#"00:00:30.000{"Lines":{"44":{"NumberOfLaps":12}}}"#), start: 1_000_000)
+        joined.sessionStatus = SessionStatusTimeline.build(lines: lines(#"00:00:00.000{"Status":"Started"}"#),
+                                                           streamStart: 1_000_000, snapshotLines: [0])
+        func label(_ offset: Int64, _ car: String = "44", in session: LoadedSession) -> RadioLapLabel {
+            RadioClips.lapLabel(for: RadioClip(utc: 1_000_000 + offset, racingNumber: car, path: "p"), in: session)
+        }
+        #expect(label(10_000, in: joined) == .unknown)
+        #expect(label(30_000, in: joined) == .lap(13))
+        #expect(label(30_000, "1", in: joined) == .unknown)
+        // Joined before lights out: "Inactive" on joining is still before the start.
+        var early = joined
+        early.sessionStatus = SessionStatusTimeline.build(lines: lines(#"00:00:00.000{"Status":"Inactive"}"#),
+                                                          streamStart: 1_000_000, snapshotLines: [0])
+        #expect(label(10_000, in: early) == .beforeStart)
+        // Joined after the flag.
+        var late = joined
+        late.sessionStatus = SessionStatusTimeline.build(lines: lines(#"00:00:00.000{"Status":"Finished"}"#),
+                                                         streamStart: 1_000_000, snapshotLines: [0])
+        #expect(label(30_000, in: late) == .afterFlag)
+        // No SessionStatus at all: only the count.
+        let bare = RaceFixture.synthetic(timing: lines(#"00:00:30.000{"Lines":{"44":{"NumberOfLaps":12}}}"#), start: 1_000_000)
+        #expect(label(10_000, in: bare) == .unknown)
+        #expect(label(30_000, in: bare) == .lap(13))
+    }
+
+    @Test func qualifyingLabelsFromTheFixture() throws {
+        var session = try RaceFixture.quali()
+        session.header = HeaderTimeline.build(lapCount: [], clock: try Fixture.lines("sp26-quali/ExtrapolatedClock.jsonStream"),
+                                              weather: [], streamStart: Fixture.qualiStart)
+        let labels = RadioClips(lines: try Fixture.lines("sp26-quali/TeamRadio.jsonStream")).all
+            .map { RadioClips.lapLabel(for: $0, in: session) }
+        // Checked in Python over the committed files. Four clips before Q1 started (18:00:02.309Z).
+        #expect(Array(labels[..<4]) == Array(repeating: .beforeStart, count: 4))
+        // RUS at 18:00:54.281Z: the clock said 17:59 and running at 18:00:01.011Z, so 17:05.730 left.
+        #expect(labels[4] == .qualifying(part: 1, remainingMs: 1_025_730))
+        // ANT at 18:01:54.570Z (seven digits of fraction, cut to the millisecond): 16:05.441 left.
+        #expect(labels[5] == .qualifying(part: 1, remainingMs: 965_441))
+        // The rest under Q1's red flag: the clock stopped at 15:37.
+        #expect(Array(labels[6...]) == Array(repeating: .qualifying(part: 1, remainingMs: 937_000), count: 10))
+    }
+
+    @Test func practiceAndQualifyingByHand() {
+        var practice = RaceFixture.synthetic(type: "Practice", timing: [],
+                                             sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#,
+                                                                  #"01:00:10.000{"Status":"Finished"}"#),
+                                             start: 1_000_000)
+        func label(_ offset: Int64, in session: LoadedSession) -> RadioLapLabel {
+            RadioClips.lapLabel(for: RadioClip(utc: 1_000_000 + offset, racingNumber: "44", path: "p"), in: session)
+        }
+        #expect(label(9_999, in: practice) == .beforeStart)
+        #expect(label(10_000, in: practice) == .practice(elapsedMs: 0))
+        #expect(label(754_000, in: practice) == .practice(elapsedMs: 744_000))
+        // After the session's end the time keeps counting: practice has no flag label.
+        #expect(label(3_610_001, in: practice) == .practice(elapsedMs: 3_600_001))
+        // Without a known start, no elapsed time.
+        practice.sessionStatus = SessionStatusTimeline()
+        #expect(label(10_000, in: practice) == .unknown)
+
+        // Qualifying with no clock and no parts: both unknown, still qualifying.
+        let quali = RaceFixture.synthetic(type: "Qualifying", timing: [],
+                                          sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#), start: 1_000_000)
+        #expect(label(20_000, in: quali) == .qualifying(part: nil, remainingMs: nil))
+        #expect(label(5_000, in: quali) == .beforeStart)
+    }
 }

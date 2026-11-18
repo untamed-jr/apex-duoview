@@ -165,3 +165,54 @@ public struct RadioClips: Sendable, Equatable {
         return items.filter { if case .object = $0 { return true } else { return false } }
     }
 }
+
+/// What a radio clip's row is headed with: where the session was when F1 published the clip.
+/// The app writes the words ("Lap 23", "Before the start", "Q2 · 8:12 left", "12:24").
+public enum RadioLapLabel: Sendable, Equatable {
+    /// Before the session's first start (in a race, lights out).
+    case beforeStart
+    /// A race: the driver's lap, F1's count of laps done plus one, as Android's `lapAt`.
+    case lap(Int)
+    /// A race, once it was finished (the leader's chequered flag), for every car.
+    case afterFlag
+    /// Qualifying: the part running (TimingData's SessionPart) and the session clock
+    /// (ExtrapolatedClock); either can be missing.
+    case qualifying(part: Int?, remainingMs: Int64?)
+    /// Practice: the time since the session started (red flags included).
+    case practice(elapsedMs: Int64)
+    /// Nothing to say: a race joined under way and a car with no lap count yet, or a practice
+    /// session whose start isn't known.
+    case unknown
+}
+
+extension RadioClips {
+    /// The label for `clip`, from the session's data at the clip's `Utc` only (nothing after it):
+    /// - before the first "Started": `.beforeStart` (also when the feed joined while "Inactive");
+    /// - a race once "Finished" (or "Finalised", "Ends"): `.afterFlag`;
+    /// - a race: the car's lap count at `Utc` plus one. With no count yet after a start the feed
+    ///   saw, lap 1 (2026 sends no NumberOfLaps until lap 1 ends; Android shows nothing there);
+    ///   with no count and no known start (joined under way), `.unknown`;
+    /// - qualifying (and sprint qualifying): the part and the clock;
+    /// - anything else: the time since the start.
+    public static func lapLabel(for clip: RadioClip, in session: LoadedSession) -> RadioLapLabel {
+        let t = clip.utc
+        let status = session.sessionStatus
+        let started = status.started
+        let now = status.status(at: t)
+        if let started, t < started { return .beforeStart }
+        if started == nil, now == "Inactive" { return .beforeStart }
+        if session.info.isRace {
+            if let now, finished.contains(now) { return .afterFlag }
+            if let laps = session.timing.state(of: clip.racingNumber, at: t)?.numberOfLaps { return .lap(laps + 1) }
+            return started == nil ? .unknown : .lap(1)
+        }
+        if session.info.isQualifying {
+            return .qualifying(part: session.timing.sessionPart(at: t), remainingMs: session.header.clockRemainingMs(at: t))
+        }
+        guard let started else { return .unknown }
+        return .practice(elapsedMs: F1Values.sub(t, started))
+    }
+
+    /// The statuses F1 gives a race once its chequered flag is out.
+    static let finished: Set<String> = ["Finished", "Finalised", "Ends"]
+}
