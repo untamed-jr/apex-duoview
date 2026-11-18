@@ -138,8 +138,15 @@ be designed with the owner before it is built:
 - Direction chosen (owner, 2026-11-18): **A, "Night circuit"**: a dark, floodlit wet corner of an
   invented circuit, the logo scaling in with light trails drawn by the app, tagline "Every lap,
   every angle." Mockups: `docs/design/opening-screen-mockups.html`; wide wordmark drafts:
-  `docs/design/logo-lockups.html`. Still open: the wordmark (hand-built or Higgsfield), which
-  artwork image, the outer screen's real size, and final artwork at full resolution (a quote first).
+  `docs/design/logo-lockups.html`.
+- Picked (owner, 2026-11-18):
+  - **Artwork:** night-track draft 2 (Higgsfield job `7f421f62-f43f-4cbe-8105-7244fb6b3009`, 9:16).
+  - **Logo:** Higgsfield neon "APEX" draft 6 (job `191b73ae-6e10-4138-9858-17aae08fce69`, 16:9), with
+    "DuoView" set beside it in the app's type ("View" in red), as in the hand-built lockup.
+  - Both are low-quality drafts, not in the repo yet. The owner saves the finals into `Design/`
+    from their Higgsfield gallery.
+- Still open: the outer screen's real size, measured on the Duo; and full-resolution redos of the
+  two picks, quoted first and made only after the owner's OK.
 
 ## Screenshots
 
