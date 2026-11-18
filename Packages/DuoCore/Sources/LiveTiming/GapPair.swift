@@ -27,7 +27,9 @@ public enum GapPair {
 
     /// 0 at 3000 ms or more, 0.5 at 2000, 1 at 1000 or less, linear between.
     public static func heat(gapMs: Int) -> Double {
-        min(max(Double(3000 - gapMs) / 2000, 0), 1)
+        if gapMs >= 3000 { return 0 }
+        if gapMs <= 1000 { return 1 }
+        return Double(3000 - gapMs) / 2000
     }
 
     /// The pair's gap at `t` (picture time), from timing at or before it. Adjacent cars use F1's
@@ -39,10 +41,11 @@ public enum GapPair {
         let states = session.timing.at(t)
         guard states.values.contains(where: { $0.lineCrossedAt != nil }) else { return .beforeFirstLap }
         // A car that is out, or in the pits, is no gap; the first of the pair says.
+        // Out beats the pits: "{CODE} is out — swipe for another pair".
         for car in [a, b] {
             guard let s = states[car], s.position != nil, !s.retired, !s.stopped else { return .out(car: car) }
-            if s.inPit { return .inPit(car: car) }
         }
+        for car in [a, b] where states[car]?.inPit == true { return .inPit(car: car) }
         guard let sa = states[a], let sb = states[b], let pa = sa.position, let pb = sb.position, a != b else {
             return .beforeFirstLap
         }
@@ -138,7 +141,9 @@ public enum GapPair {
         let present = cars.contains { $0.state.position == frontPlace }
         // A front car that has gone out sits between two places: stepping back lands on the car
         // behind it.
-        let target = before + step - (!present && step > 0 ? 1 : 0)
+        // Clamped first: no field is anywhere near 1000 places, and an extreme step must not overflow.
+        let steps = min(max(step, -1000), 1000)
+        let target = before + steps - (!present && steps > 0 ? 1 : 0)
         guard target >= 0, target + 1 < cars.count else { return nil }
         return (cars[target].number, cars[target + 1].number)
     }

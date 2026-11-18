@@ -155,6 +155,29 @@ import Foundation
         #expect(try #require(GapPair.shifted(("2", "3"), by: 1, at: Self.t, session: out)) == ("3", "5"))
     }
 
+    @Test func extremeInputsDoNotTrap() {
+        #expect(GapPair.heat(gapMs: Int.min) == 1)
+        #expect(GapPair.heat(gapMs: Int.max) == 0)
+        let session = Self.session()
+        #expect(GapPair.shifted(("2", "3"), by: Int.max, at: Self.t, session: session) == nil)
+        #expect(GapPair.shifted(("2", "3"), by: Int.min, at: Self.t, session: session) == nil)
+    }
+
+    @Test func outBeatsPit() {
+        let both = Self.session(extra: [timingLine("00:01:45.000", [
+            ("3", #""InPit":true"#), ("4", #""Retired":true,"Stopped":true"#),
+        ])])
+        #expect(GapPair.reading("3", "4", at: Self.t, session: both) == .out(car: "4"))
+        #expect(GapPair.reading("4", "3", at: Self.t, session: both) == .out(car: "4"))
+    }
+
+    @Test func shiftFromPairWithFrontCarOut() throws {
+        // 3 has retired; the pair (3, 4) is read from its place, between 2 and 4.
+        let out = Self.session(extra: [timingLine("00:01:45.000", [("3", #""Retired":true,"Stopped":true"#)])])
+        #expect(try #require(GapPair.shifted(("3", "4"), by: 1, at: Self.t, session: out)) == ("4", "5"))
+        #expect(try #require(GapPair.shifted(("3", "4"), by: -1, at: Self.t, session: out)) == ("2", "4"))
+    }
+
     @Test func nothingAfterT() {
         let later = timingLine("00:02:00.000", [("3", #""IntervalToPositionAhead":{"Value":"+0.800"}"#)])
         let session = Self.session(extra: [later])
