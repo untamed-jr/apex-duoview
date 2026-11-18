@@ -108,6 +108,42 @@ public struct RadioClips: Sendable, Equatable {
         }
     }
 
+    /// The clips that exist at picture time `t`: published at or before it (`utc ≤ t`), as
+    /// Android's `clip.utc <= now`. `t` nil is "Show the whole race": every clip. With `driver`
+    /// (a racing number), only that car's.
+    public func visible(at t: UTCms?, driver: String? = nil) -> [RadioClip] {
+        let shown = t.map { t in all.prefix { $0.utc <= t } } ?? all[...]
+        guard let driver else { return Array(shown) }
+        return shown.filter { $0.racingNumber == driver }
+    }
+
+    /// Where clip audio lives: F1's live timing archive.
+    public static let audioBase = "https://livetiming.formula1.com/static/"
+
+    /// A clip's MP3: `audioBase` + the session's `Path` (SessionInfo; a missing closing slash is
+    /// added) + the clip's `Path`, percent-encoded ("São" is "S%C3%A3o"), as Android's
+    /// `radioBase + clip.path`. Nil when either is empty or has an empty, "." or ".." segment or
+    /// a leading "/": the address always stays under the archive, so a request that carries the
+    /// F1 TV sign-in (the fallback, if F1 refuses one without) can only go there.
+    public static func audioURL(sessionPath: String, clipPath: String) -> URL? {
+        let session = sessionPath.hasSuffix("/") ? String(sessionPath.dropLast()) : sessionPath
+        let path = session + "/" + clipPath
+        let segments = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !session.isEmpty, !clipPath.isEmpty,
+              !segments.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }),
+              let encoded = path.addingPercentEncoding(withAllowedCharacters: pathAllowed),
+              let base = URL(string: audioBase),
+              let url = URL(string: audioBase + encoded),
+              url.scheme == base.scheme, url.host == base.host, url.port == base.port, url.path.hasPrefix(base.path)
+        else { return nil }
+        return url
+    }
+
+    /// Path characters left as they are: letters, digits, "/" and the unreserved marks (as
+    /// `TimingArchive`'s requests).
+    private static let pathAllowed = CharacterSet(charactersIn:
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-._~")
+
     /// A list in order, or keyed entries in number order (any other keys after, by name).
     static func captures(_ value: JSONValue) -> [JSONValue] {
         let items: [JSONValue]

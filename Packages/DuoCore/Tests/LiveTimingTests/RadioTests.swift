@@ -91,4 +91,52 @@ import Testing
         #expect(clips.all[1].path == "TeamRadio/PIA_81_20261107_145500.mp3")
         #expect(clips.all.count == 17)
     }
+
+    // MARK: Audio address
+
+    @Test func audioURLFromTheSessionPath() throws {
+        let info = try #require(TimingSessionInfo.parse(try Fixture.json("sp26-race/SessionInfo.json")))
+        let url = RadioClips.audioURL(sessionPath: info.path, clipPath: "TeamRadio/ANT_12_20261108_141229.mp3")
+        #expect(url?.absoluteString == "https://livetiming.formula1.com/static/2026/2026-11-08_S%C3%A3o_Paulo_Grand_Prix/2026-11-08_Race/TeamRadio/ANT_12_20261108_141229.mp3")
+        #expect(url?.host == "livetiming.formula1.com")
+        // A session path without its closing slash gets one; never two.
+        #expect(RadioClips.audioURL(sessionPath: "2026/x/2026-11-08_Race", clipPath: "TeamRadio/a.mp3")?.absoluteString
+            == "https://livetiming.formula1.com/static/2026/x/2026-11-08_Race/TeamRadio/a.mp3")
+        #expect(RadioClips.audioURL(sessionPath: "2026/x/2026-11-08_Race/", clipPath: "TeamRadio/a.mp3")?.absoluteString
+            == "https://livetiming.formula1.com/static/2026/x/2026-11-08_Race/TeamRadio/a.mp3")
+        // Spaces, "?" and "#" can't change what is asked for.
+        #expect(RadioClips.audioURL(sessionPath: "2026/a b/", clipPath: "TeamRadio/x?y#z.mp3")?.absoluteString
+            == "https://livetiming.formula1.com/static/2026/a%20b/TeamRadio/x%3Fy%23z.mp3")
+    }
+
+    @Test func audioURLStaysUnderTheArchive() {
+        for (session, clip) in [("", "TeamRadio/a.mp3"), ("2026/x/", ""), ("/2026/x/", "TeamRadio/a.mp3"),
+                                ("2026/x/", "/TeamRadio/a.mp3"), ("2026/x/", "../../../a.mp3"), ("2026/../x/", "a.mp3"),
+                                ("2026/x/", "TeamRadio/./a.mp3"), ("2026/x/", "TeamRadio/"), ("2026/x/", "https://evil.example/a.mp3"),
+                                ("2026/x/", "TeamRadio//a.mp3")] {
+            #expect(RadioClips.audioURL(sessionPath: session, clipPath: clip) == nil, "\(session) + \(clip)")
+        }
+    }
+
+    // MARK: At picture time
+
+    @Test func visibleFromItsUtc() throws {
+        let radio = RadioClips(lines: try Fixture.lines("sp26-race/TeamRadio.jsonStream"))
+        let ant = radio.all[3]
+        #expect(radio.visible(at: ant.utc - 1).count == 3)
+        #expect(radio.visible(at: ant.utc).map(\.path) == radio.all.map(\.path))
+        // Two clips published at the same moment appear together.
+        #expect(radio.visible(at: 1_794_156_922_429).isEmpty)
+        #expect(radio.visible(at: 1_794_156_922_430).count == 2)
+        #expect(radio.visible(at: .min).isEmpty)
+        #expect(radio.visible(at: .max).count == 4)
+        // nil is "Show the whole race": everything.
+        #expect(radio.visible(at: nil).count == 4)
+        // One driver.
+        #expect(radio.visible(at: ant.utc - 1, driver: "12").map(\.path) == ["TeamRadio/ANT_12_20261108_132331.mp3"])
+        #expect(radio.visible(at: ant.utc, driver: "12").count == 2)
+        #expect(radio.visible(at: nil, driver: "16").map(\.racingNumber) == ["16"])
+        #expect(radio.visible(at: nil, driver: "44").isEmpty)
+        #expect(RadioClips().visible(at: nil).isEmpty)
+    }
 }
