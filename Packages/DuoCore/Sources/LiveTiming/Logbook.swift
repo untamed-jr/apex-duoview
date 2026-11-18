@@ -119,7 +119,7 @@ public struct LogbookStop: Sendable, Equatable {
 public struct LogbookModel: Sendable, Equatable {
     public var number: String
     public var position: Int?
-    /// The tyre on now and the laps it has done.
+    /// The tyre on now (named as Race Engineer names it: "Medium"; nil when F1 has no compound yet) and the laps it has done.
     public var tyre: (compound: String, laps: Int)?
     /// The last lap time as F1 writes it ("1:29.518").
     public var lastLap: String?
@@ -184,16 +184,16 @@ public enum Logbook {
             let next = max(before.count, 1)
             let lap = session.timing.state(of: car, at: event.t)?.numberOfLaps.map { $0 == .max ? $0 : $0 + 1 }
             stops.append(LogbookStop(
-                lap: lap ?? event.lap,
+                lap: lap,
                 laneMs: event.end.map { Int(clamping: F1Values.sub($0, event.t)) },
-                off: before.last?.compound,
-                on: stints.count > next ? stints[next].compound : nil))
+                off: before.last.flatMap(RaceLines.tyre)?.compound,
+                on: stints.count > next ? RaceLines.tyre(stints[next])?.compound : nil))
         }
 
         return LogbookModel(
             number: car,
             position: state?.position,
-            tyre: stints.last.map { ($0.compound, $0.totalLaps) },
+            tyre: stints.last.flatMap(RaceLines.tyre),
             lastLap: state?.lastLapMs.map(Tower.lapText),
             radio: radio.visible(at: t, driver: car),
             laps: session.timing.completedLaps(of: car, upTo: cut),

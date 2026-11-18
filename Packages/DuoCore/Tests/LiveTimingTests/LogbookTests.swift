@@ -105,10 +105,10 @@ import F1TV
 
     @Test func stopsWithLaneTimeAndTyres() throws {
         let m = try #require(Logbook.at(Self.s + 130_000, car: "44", session: Self.session(), radio: Self.radio(), raceControl: Self.control()))
-        #expect(m.stops == [LogbookStop(lap: 2, laneMs: 25_000, off: "MEDIUM", on: "HARD")])
+        #expect(m.stops == [LogbookStop(lap: 2, laneMs: 25_000, off: "Medium", on: "Hard")])
         #expect(m.number == "44")
         #expect(m.position == 3)
-        #expect(m.tyre?.compound == "HARD")
+        #expect(m.tyre?.compound == "Hard")
         #expect(m.tyre?.laps == 4)
         #expect(m.lastLap == "1:29.518")
         #expect(m.laps.map(\.lap) == [1])
@@ -116,18 +116,49 @@ import F1TV
         #expect(m.behind == nil)
     }
 
+    @Test func stopLapIsNilWhenTheCarsOwnLapIsUnknown() throws {
+        // Car 63 never reports a lap count; the leader (1) is on lap 2. The stop must not borrow it.
+        let session = RaceFixture.synthetic(
+            timing: [
+                timingLine("00:00:00.000", [("1", #""Position":"1""#), ("63", #""Position":"2""#)]),
+                timingLine("00:00:50.000", [("1", #""NumberOfLaps":1"#)]),
+                timingLine("00:01:00.000", [("63", #""InPit":true"#)]),
+                timingLine("00:01:25.000", [("63", #""InPit":false,"PitOut":true"#)]),
+            ],
+            sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#),
+            stints: [])
+        let m = try #require(Logbook.at(Self.s + 130_000, car: "63", session: session, radio: RadioClips(), raceControl: []))
+        #expect(m.stops.count == 1)
+        #expect(m.stops[0].lap == nil)
+        #expect(m.stops[0].laneMs == 25_000)
+    }
+
+    @Test func unknownCompoundIsNotShown() throws {
+        let session = RaceFixture.synthetic(
+            timing: [timingLine("00:00:00.000", [("44", #""Position":"1""#)]),
+                     timingLine("00:01:00.000", [("44", #""InPit":true"#)]),
+                     timingLine("00:01:25.000", [("44", #""InPit":false"#)])],
+            sessionStatus: lines(#"00:00:10.000{"Status":"Started"}"#),
+            stints: [line(#"00:00:00.000{"Lines":{"44":{"Stints":{"0":{"Compound":"UNKNOWN","New":"true","StartLaps":0,"TotalLaps":0}}}}}"#),
+                     line(#"00:01:10.000{"Lines":{"44":{"Stints":{"1":{"Compound":"","New":"true","StartLaps":0,"TotalLaps":0}}}}}"#)])
+        let m = try #require(Logbook.at(Self.s + 130_000, car: "44", session: session, radio: RadioClips(), raceControl: []))
+        #expect(m.tyre == nil)
+        #expect(m.stops.first?.off == nil)
+        #expect(m.stops.first?.on == nil)
+    }
+
     @Test func stopStillInLaneHasNoTime() throws {
         let m = try #require(Logbook.at(Self.s + 65_000, car: "44", session: Self.session(), radio: Self.radio(), raceControl: Self.control()))
         #expect(m.stops.count == 1)
         #expect(m.stops[0].laneMs == nil)
         #expect(m.stops[0].lap == 2)
-        #expect(m.stops[0].off == "MEDIUM")
+        #expect(m.stops[0].off == "Medium")
         #expect(m.stops[0].on == nil)
         #expect(m.position == 2)
         #expect(m.ahead == "1" && m.behind == "63")
         // The new tyres are only named once they are known: at 70 s the HARD set is in.
         let later = try #require(Logbook.at(Self.s + 80_000, car: "44", session: Self.session(), radio: Self.radio(), raceControl: []))
-        #expect(later.stops[0].on == "HARD")
+        #expect(later.stops[0].on == "Hard")
         #expect(later.stops[0].laneMs == nil)
     }
 
