@@ -57,6 +57,21 @@ private func inline(
         }
     }
 
+    /// Older races (F1 TV's pipeline 1, e.g. 2021) answer the multiview PLAY with one plain stream
+    /// and no `tme` block: F1 TV has no multiview for them, which is not a broken answer.
+    @Test func singleStreamAnswerIsMultiviewUnavailable() throws {
+        let json = try fixture("play-1000009999-WEB_HLS.json")
+        #expect(json["resultObj"]["tme"].isNull)
+        #expect(throws: F1TVError.multiviewUnavailable) { try Parsers.multiPlay(json) }
+    }
+
+    @Test func emptyResultIsStillBadResponse() throws {
+        let json = try JSONValue.parse(Data(#"{"resultObj":{}}"#.utf8))
+        do { _ = try Parsers.multiPlay(json); Issue.record("expected a throw") } catch let e as F1TVError {
+            guard case .badResponse = e else { Issue.record("expected badResponse, got \(e)"); return }
+        }
+    }
+
     @Test func feedWithoutChannelIdOrURLIsNotUsable() throws {
         let text = #"""
         {"resultObj":{"tme":{"feeds":[

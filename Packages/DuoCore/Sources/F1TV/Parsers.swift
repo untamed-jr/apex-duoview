@@ -279,6 +279,9 @@ public enum Parsers {
     /// URL, and `.protectedContent` when a license URL is present.
     public static func multiPlay(_ json: JSONValue) throws -> MultiPlayInfo {
         let result = json["resultObj"]
+        // Older races (pipeline 1, e.g. 2021) answer with one plain stream and no `tme` block:
+        // F1 TV has no multiview for them.
+        if result["tme"].isNull, !result["url"].isNull { throw F1TVError.multiviewUnavailable }
         var feeds: [Int: URL] = [:]
         for feed in result["tme"]["feeds"].array {
             guard let channel = feed["metadata"]["channel_id"].int,
