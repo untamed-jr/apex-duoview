@@ -1,0 +1,130 @@
+<title>Beta 4 Decisions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column of decision cards, a sticky tally on top; same family as the beta 3 test checklist. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4; --ok: #138a4b; --ok-bg: #e3f5ea; --alt: #b45309; --alt-bg: #fdf0dc;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { padding-top: 24px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+  border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar b { color: var(--fg); }
+.save { margin-left: auto; font-family: var(--f-mono); font-size: 12px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.q[data-s="agree"] { border-color: var(--ok); }
+.q[data-s="other"] { border-color: var(--alt); }
+.qhead { display: flex; gap: 10px; align-items: baseline; }
+.num { font-family: var(--f-mono); color: var(--accent); font-size: 13px; flex: none; }
+h2 { font-size: 19px; line-height: 1.25; }
+.ask { margin: 0; }
+.rec { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.rec b { font-family: var(--f-display); letter-spacing: .02em; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"][data-v="agree"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="other"] { background: var(--alt-bg); border-color: var(--alt); color: var(--alt); font-weight: 600; }
+.seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { font-size: 13px; color: var(--muted); }
+textarea { font: inherit; width: 100%; box-sizing: border-box; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+.foot { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · v1.0-beta.4 · Radio and the closed phone</div>
+    <h1>Ten decisions before beta 4 is built</h1>
+    <p class="lede">Each one has my recommendation. Tap "Agree" or "Something else" and say what you'd like instead. Your answers save here and Claude reads them. The full draft is docs/superpowers/specs/2026-11-18-beta4-radio-closed-phone-design.md.</p>
+  </header>
+  <div class="bar" role="status"><span><b id="n-done">0</b> of 10 answered</span><span><b id="n-agree">0</b> agree</span><span><b id="n-other">0</b> something else</span><span class="save" id="save">Saved on this device only</span></div>
+  <main id="list" class="wrap" style="gap:14px"></main>
+  <p class="foot">Nothing in beta 4 is built into the app until these are settled. The radio groundwork that doesn't depend on them is already under way.</p>
+</div>
+
+<script>
+const QS = [
+  { id: "q1", t: "Where team radio comes from", a: "F1 publishes about 30 radio clips a race. The onboard feeds may also carry a continuous team-radio sound track (to be checked).", r: "Use F1's clips everywhere in beta 4. If an onboard's own radio track turns out to be continuous, it feeds the hinge mixer when that onboard plays. Ear-Matched Rivals stays on clips, which can be sent to one ear." },
+  { id: "q2", t: "How to check \"haptics fire on flags\"", a: "The simulator can't buzz. Your Duo can now.", r: "Add a \"Show haptics on screen\" switch that fires on the same path as the real buzz, for the simulator; feel the real thing on your Duo. (Now that the Duo has arrived, it doesn't need to wait for beta 7.)" },
+  { id: "q3", t: "Moving around on the closed phone", a: "The outer screen gets three pages: the picture, the Radio Scanner and the Gap Thermometer.", r: "Swipe up or down between the three pages; swipe left or right to change the feed, driver or pair. Closing opens the page you used last (the picture the first time)." },
+  { id: "q4", t: "Radio playing by itself", a: "The Android app only plays radio when you tap it.", r: "Play by itself in the Radio Scanner and Ear-Matched Rivals (those are listening modes); tap to hear everywhere else. One switch, \"Play radio as it happens\", turns playing by itself off." },
+  { id: "q5", t: "Unfold to See: which moments, how far back", a: "When something happens while the phone is closed, a card appears; opening the phone jumps to it.", r: "Cards for the events listed in the draft, position changes only for your driver, and the jump lands 5 s before the moment (like tapping a marker on the Scrub Deck)." },
+  { id: "q6", t: "The hinge as an audio mixer", a: "Opening or closing the hinge would crossfade commentary and driver radio.", r: "Off by default, in book and laptop only, more closed means more radio. Treated as an experiment until it's been tried properly on the Duo." },
+  { id: "q7", t: "Which haptics, and how often", a: "The roadmap lists four: yellow flag, safety car, your driver pits, purple sector.", r: "Those four plus virtual safety car, red flag and the chequered flag. Yellow at most once a minute, purple only for your driver, and never more often than every 2 s. Add or drop any?" },
+  { id: "q8", t: "Transcripts made on the phone only", a: "Android sends audio to a speech server when the phone can't transcribe. A phone without on-device English recognition would then show clips without text.", r: "On the phone only, never a server. It keeps the promise that nothing sits between you and F1." },
+  { id: "q9", t: "When the opening-screen intro is built", a: "The roadmap leaves it to you: inside beta 4, or a small polish build. Mockups are being made tonight.", r: "A small polish build after beta 4, so beta 4 stays about radio and the closed phone. Its artwork needs your credit OK anyway." },
+  { id: "q10", t: "Closed with the screen off", a: "If iOS puts the app in the background when the screen goes off, cards and haptics stop until you look.", r: "Accept that for beta 4 and record what the Duo actually does; lock-screen alerts come with beta 6's Dynamic Island work." },
+];
+const LABEL = { agree: "Agree", other: "Something else" };
+const state = {}; let db = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem("b4q") || "{}")); } catch (e) {} }
+function saveLocal() { try { localStorage.setItem("b4q", JSON.stringify(state)); } catch (e) {} }
+function tally() {
+  const v = Object.values(state);
+  document.getElementById("n-done").textContent = v.filter(x => x.s).length;
+  document.getElementById("n-agree").textContent = v.filter(x => x.s === "agree").length;
+  document.getElementById("n-other").textContent = v.filter(x => x.s === "other").length;
+}
+function render() {
+  document.getElementById("list").innerHTML = QS.map((q, i) => {
+    const v = state[q.id] || {};
+    return `<section class="q" data-s="${v.s || ""}" aria-labelledby="h-${q.id}">
+      <div class="qhead"><span class="num">${String(i + 1).padStart(2, "0")}</span><h2 id="h-${q.id}">${esc(q.t)}</h2></div>
+      <p class="ask">${esc(q.a)}</p>
+      <p class="rec"><b>Recommended:</b> ${esc(q.r)}</p>
+      <div class="seg" role="group" aria-label="Your answer to ${esc(q.t)}">${["agree", "other"].map(s => `<button type="button" data-id="${q.id}" data-v="${s}" aria-pressed="${v.s === s}">${LABEL[s]}</button>`).join("")}</div>
+      <label for="n-${q.id}">${v.s === "other" ? "What you'd like instead" : "Note (optional)"}</label>
+      <textarea id="n-${q.id}" data-id="${q.id}" placeholder="${v.s === "other" ? "Tell Claude what you'd prefer" : "Anything to add"}">${esc(v.n || "")}</textarea>
+    </section>`;
+  }).join("");
+  tally();
+}
+async function put(id) {
+  const v = state[id]; saveLocal(); tally();
+  if (!db) return;
+  try { await db.collection("answers").doc(id).set({ s: v.s || "", n: v.n || "", at: new Date().toISOString() }); document.getElementById("save").textContent = "Saved for Claude"; }
+  catch (e) { document.getElementById("save").textContent = "Couldn't save online; kept on this device"; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  const id = b.dataset.id; const cur = state[id] || {};
+  state[id] = { ...cur, s: cur.s === b.dataset.v ? "" : b.dataset.v };
+  render(); put(id);
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const id = t.dataset.id; state[id] = { ...(state[id] || {}), n: t.value };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => put(id), 600);
+});
+loadLocal(); render();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) return;
+    document.getElementById("save").textContent = "Saved for Claude";
+    const snap = await db.collection("answers").get();
+    (snap.docs || snap).forEach(d => { const data = d.data ? d.data() : d; const id = d.id; if (QS.some(q => q.id === id)) state[id] = { s: data.s || "", n: data.n || "" }; });
+    saveLocal(); render();
+  } catch (e) { db = null; }
+})();
+</script>
