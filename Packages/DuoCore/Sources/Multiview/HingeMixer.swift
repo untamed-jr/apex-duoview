@@ -29,7 +29,9 @@ public struct HingeMixer: Sendable {
     public init() {}
 
     /// Clamped and linear between the two ends.
+    /// A reading that isn't a number gives an even mix; infinity is the end it points to.
     public static func levels(angle: Double) -> MixLevels {
+        if angle.isNaN { return MixLevels(commentary: 0.5, radio: 0.5) }
         let f = (angle - allRadioAngle) / (allCommentaryAngle - allRadioAngle)
         let commentary = Float(min(max(f, 0), 1))
         return MixLevels(commentary: commentary, radio: 1 - commentary)
@@ -39,7 +41,15 @@ public struct HingeMixer: Sendable {
     /// reading always applies. Afterwards: when the smoothed angle is more than `deadZone` from the
     /// last applied one, or has reached an end of the curve that the applied one hadn't.
     public mutating func update(angle: Double) -> MixLevels? {
-        let next = smoothed.map { $0 + Self.smoothing * (angle - $0) } ?? angle
+        guard angle.isFinite else { return nil }
+        var next = smoothed.map { $0 + Self.smoothing * (angle - $0) } ?? angle
+        // A reading held at or past an end reaches it exactly once smoothing has brought it within
+        // the dead zone, rather than stopping just short.
+        if angle <= Self.allRadioAngle, next - Self.allRadioAngle <= Self.deadZone {
+            next = Self.allRadioAngle
+        } else if angle >= Self.allCommentaryAngle, Self.allCommentaryAngle - next <= Self.deadZone {
+            next = Self.allCommentaryAngle
+        }
         smoothed = next
         guard let last = applied else {
             applied = next

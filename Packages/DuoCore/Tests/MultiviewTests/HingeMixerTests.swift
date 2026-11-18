@@ -54,4 +54,35 @@ import Testing
         // Once there, more readings at the end do not re-apply.
         #expect(other.update(angle: 175) == nil)
     }
+
+    @Test func nonFiniteReadingsAreIgnored() {
+        for bad in [Double.nan, .infinity, -.infinity] {
+            var mixer = HingeMixer()
+            #expect(mixer.update(angle: bad) == nil)
+            #expect(mixer.update(angle: 100) == HingeMixer.levels(angle: 100))
+            #expect(mixer.update(angle: bad) == nil)
+            // State was untouched: the next reading smooths from 100, not from the bad value.
+            #expect(mixer.update(angle: 140) == HingeMixer.levels(angle: 112))
+        }
+        let nan = HingeMixer.levels(angle: .nan)
+        #expect(!nan.commentary.isNaN && nan.commentary + nan.radio == 1)
+        #expect(HingeMixer.levels(angle: .infinity) == MixLevels(commentary: 1, radio: 0))
+        #expect(HingeMixer.levels(angle: -.infinity) == MixLevels(commentary: 0, radio: 1))
+    }
+
+    @Test func heldAtCommentaryEndReachesItExactly() {
+        var mixer = HingeMixer()
+        _ = mixer.update(angle: 150)
+        var latest: MixLevels?
+        for _ in 0..<6 { if let l = mixer.update(angle: 160) { latest = l } }
+        #expect(latest == MixLevels(commentary: 1, radio: 0))
+    }
+
+    @Test func heldAtRadioEndReachesItExactly() {
+        var mixer = HingeMixer()
+        _ = mixer.update(angle: 80)
+        var latest: MixLevels?
+        for _ in 0..<6 { if let l = mixer.update(angle: 70) { latest = l } }
+        #expect(latest == MixLevels(commentary: 0, radio: 1))
+    }
 }
