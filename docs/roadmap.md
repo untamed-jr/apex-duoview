@@ -169,6 +169,47 @@ be designed with the owner before it is built:
 - Outer screen measured (owner, 2026-11-18, Settings › Fold "Screen" with the phone closed):
   **466 × 678 pt**, portrait.
 
+## Apple design pass (owner decision, 2026-11-19)
+
+The ten changes on `docs/design/apple-design-pass.html` (Liquid Glass for floating controls,
+monochrome tab bar, text that grows with the text size, 44 × 44 pt touch areas, VoiceOver for the
+map and pit circle) are **approved as recommended**: "it's only right since it's an iPhone Duo
+app that it meets iPhone design rules". How it is built:
+- When: the polish build after beta.4, with the opening screen (q10).
+- **One commit per change** (q1 … q9), so any one can be reverted on its own.
+- **Before and after screenshots of exactly what each change touches**, taken from the same
+  screen, posture and moment (automated UI-test captures on the Duo where possible), collected
+  on one page side by side. The "before" set is captured from the build before the pass starts.
+- The owner picks, per change, **keep or revert**; reverted ones go back with `git revert`.
+
+## Automated device checks (owner request, 2026-11-19)
+
+The owner wants as many phone checks as possible run without him. Shape, built in beta.4 week
+(it changes the app, so not before the Las Vegas race is over):
+- **A Claude session on the owner's Mac** (the Claude desktop app's Remote Control, folder
+  `~/apexview-duo`) runs Xcode's tools against the plugged-in Duo, as `scripts/install-on-duo.sh`
+  does.
+- **UI tests** (an `XCUITest` target) walk through each check: open a session, start multiview,
+  switch layouts, play for N minutes, take screenshots.
+- **A test report written by the app** during test runs, every 30 s: battery %, thermal state
+  (iOS gives apps four levels — nominal, fair, serious, critical — not degrees), stalls and
+  dropped frames, feeds-in-step offsets. Copied off the phone with `devicectl` and read by
+  Claude; summaries go on the checklist.
+- **The owner only does what needs hands or senses**: folding and the laptop pose (the run pauses
+  and says what to do), readability, how warm it feels (runs that need it say so up front: "heat
+  check: feel the back of the phone at the end"), and VoiceOver by ear.
+- Every run, passed or failed, is recorded (see "Test records" below).
+
+## Test records
+
+Where every check that ran is kept (so nothing is tested twice or forgotten):
+- **The checklist page** (`docs/testing/beta3-test-checklist.html`, published as an artifact):
+  one row per check, with ok / problem and a note; Claude marks rows from the owner's messages.
+- **`CHANGELOG.md`**: each build's "Untested — check later" list; checked items are struck through
+  with the date and the build they were checked on.
+- **This roadmap's "Verified so far"**: facts about F1 TV learned from probes (DRM, feeds, URLs).
+- **Probe outputs** stay on the Mac (git-ignored); only their conclusions are written here.
+
 ## Screenshots
 
 README screenshots (and later App Store screenshots) are made with the
