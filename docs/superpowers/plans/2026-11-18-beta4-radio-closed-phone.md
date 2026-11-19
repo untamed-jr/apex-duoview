@@ -51,6 +51,15 @@ These landed during the weekend's device checks. Tasks 8–14 build on them and 
 - **Errors say why** (f273cb5): `F1TVError.detail` carries F1 TV's status and own words.
 - **The live start choice hangs on the button that asked** (3073622): `DetailView.asksStart`.
 - **Settings › About shows the source commit** (25fd63e): `DUO_COMMIT` from the install script.
+- **Polish moved forward (2026-11-19, owner):** the opening screen (`DuoApp/Opening/OpeningView.swift`,
+  shown over `RootView` from `DuoApp.swift`; the launch screen is plain `LaunchBackground`) and the
+  Apple design pass q1, q2, q3, q5, q6, q7, one commit each. Glass over video goes through
+  `View.videoGlass(in:)` (Theme.swift); floating panels use `.glassEffect(.regular, in:)`;
+  prominent buttons are `.glassProminent` with `.tint(Theme.accent)`. New multiview or closed-phone
+  chrome in Tasks 8–14 uses the same styles, not black-opacity boxes. Tower rows and canvas labels
+  scale with `@ScaledMetric` (the draw functions take `textScale`). q8 and q9 (touch areas,
+  VoiceOver for map and pit circle) wait for the laptop-pose tap and drag fix. Simulator build:
+  0 warnings. `scripts/check-build.sh` builds for the simulator without the phone.
 
 **Open (decide after the FP1 multiview probe, owner-run):** asked the app's multiview way
 (Android-style, `WEB_DASH`), F1 TV sends live multiview as Widevine, which iOS cannot play; asked
