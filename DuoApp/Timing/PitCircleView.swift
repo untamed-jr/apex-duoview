@@ -44,12 +44,15 @@ private struct PitCircleBoard: View {
     /// A hold is under way (or just ended): the tap SwiftUI may still deliver when the finger
     /// lifts must not let the held car go again.
     @State private var holding = false
+    /// Design pass q7: the car labels grow with the iPhone's text size (1 at the default size).
+    @ScaledMetric(relativeTo: .caption2) private var textScale: CGFloat = 1
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
+            let scale = textScale
             Canvas { graphics, canvasSize in
-                PitCircleDrawing.draw(in: &graphics, size: canvasSize, state: state, circle: circle)
+                PitCircleDrawing.draw(in: &graphics, size: canvasSize, state: state, circle: circle, textScale: scale)
             }
             .contentShape(Rectangle())
             .onTapGesture(coordinateSpace: .local) { location in
@@ -127,7 +130,8 @@ private struct PitCircleBoard: View {
 enum PitCircleDrawing {
     static let dotRadius: CGFloat = 6
 
-    static func draw(in graphics: inout GraphicsContext, size: CGSize, state: PitCircleViewState, circle: PitCircleState) {
+    static func draw(in graphics: inout GraphicsContext, size: CGSize, state: PitCircleViewState, circle: PitCircleState,
+                     textScale: CGFloat = 1) {
         let width = Double(size.width), height = Double(size.height)
         let r = PitCircleGeometry.radius(width: width, height: height)
         let cx = width / 2, cy = height / 2
@@ -186,7 +190,7 @@ enum PitCircleDrawing {
             let labelAt = point(car.angle, (car.inPit ? lane : r) + (car.inPit ? -18 : 20))
             let gap = state.label(car)
             let label = Text(gap == car.tla || gap.isEmpty ? car.tla : "\(car.tla)\n\(gap)")
-                .font(.system(size: 9, weight: selected ? .heavy : .semibold))
+                .font(.system(size: 9 * textScale, weight: selected ? .heavy : .semibold))
                 .foregroundStyle(car.inPit ? Theme.textTertiary : Theme.textPrimary)
             graphics.draw(label, at: labelAt, anchor: .center)
         }

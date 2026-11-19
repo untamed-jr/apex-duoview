@@ -121,6 +121,8 @@ enum TowerLayout {
 struct TowerRowView: View {
     let row: TowerRow
     var columns: TowerColumns = .all
+    /// Design pass q7: rows get taller as the iPhone's text size grows (22 pt at the default).
+    @ScaledMetric(relativeTo: .caption) private var rowHeight: CGFloat = TowerLayout.rowHeight
 
     var body: some View {
         HStack(spacing: TowerLayout.spacing) {
@@ -153,7 +155,7 @@ struct TowerRowView: View {
                 .frame(width: TowerLayout.tyre, alignment: .leading)
         }
         .padding(.horizontal, TowerLayout.inset)
-        .frame(height: TowerLayout.rowHeight)
+        .frame(height: rowHeight)
         .background(background)
         .overlay {
             if row.battle {
@@ -202,14 +204,17 @@ struct TowerRowView: View {
 /// The compound ring with its letter, then laps on the set.
 private struct TyreCell: View {
     let tyre: (compound: Character, laps: Int)?
+    /// Design pass q7: the compound letter and its ring grow with the text size.
+    @ScaledMetric(relativeTo: .caption2) private var letterSize: CGFloat = 9
+    @ScaledMetric(relativeTo: .caption2) private var ringSize: CGFloat = 15
 
     var body: some View {
         if let tyre {
             HStack(spacing: 3) {
                 Text(String(tyre.compound))
-                    .font(.system(size: 9, weight: .heavy))
+                    .font(.system(size: letterSize, weight: .heavy))
                     .foregroundStyle(TimingColours.tyre(tyre.compound))
-                    .frame(width: 15, height: 15)
+                    .frame(width: ringSize, height: ringSize)
                     .overlay {
                         Circle().strokeBorder(TimingColours.tyre(tyre.compound), lineWidth: 2)
                     }

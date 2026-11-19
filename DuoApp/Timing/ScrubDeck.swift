@@ -41,6 +41,8 @@ private struct ScrubDeckContent: View {
     @State private var dragFraction: Double?
     /// The lap chart line tapped last (a racing number).
     @State private var selected: String?
+    /// Design pass q7: the strip's PIT label grows with the iPhone's text size, up to the strip.
+    @ScaledMetric(relativeTo: .caption2) private var textScale: CGFloat = 1
 
     static let headerHeight: CGFloat = 30
     static let raceStripHeight: CGFloat = 34
@@ -90,9 +92,11 @@ private struct ScrubDeckContent: View {
                 let chart = CGSize(width: size.width, height: max(size.height - strip - Self.lapLabelHeight - 4, 0))
                 let chosen = selected.flatMap { number in deck.rows.contains { $0.number == number } ? number : nil }
                 let drag = dragFraction
+                let scale = textScale
                 Canvas { graphics, canvasSize in
                     DeckDrawing.draw(in: &graphics, size: canvasSize, deck: deck, axis: axis, markers: markers,
-                                     stripHeight: strip, chartHeight: chart.height, selected: chosen, drag: drag)
+                                     stripHeight: strip, chartHeight: chart.height, selected: chosen, drag: drag,
+                                     textScale: scale)
                 }
                 .contentShape(Rectangle())
                 .gesture(
@@ -219,7 +223,7 @@ private struct Legend: View {
 enum DeckDrawing {
     static func draw(in graphics: inout GraphicsContext, size: CGSize, deck: DeckState, axis: DeckAxis,
                      markers: [DeckMarker], stripHeight: CGFloat, chartHeight: CGFloat, selected: String?,
-                     drag: Double?) {
+                     drag: Double?, textScale: CGFloat = 1) {
         let width = size.width
         guard width > 0 else { return }
         func x(_ f: Double) -> CGFloat { CGFloat(f) * width }
@@ -243,7 +247,7 @@ enum DeckDrawing {
             }
         }
 
-        drawMarkers(in: &graphics, markers: markers, deck: deck, stripHeight: stripHeight, x: x)
+        drawMarkers(in: &graphics, markers: markers, deck: deck, stripHeight: stripHeight, x: x, textScale: textScale)
         if deck.race {
             drawChart(in: &graphics, deck: deck, axis: axis, top: stripHeight + 4,
                       size: CGSize(width: width, height: chartHeight), selected: selected)
@@ -282,7 +286,7 @@ enum DeckDrawing {
     }
 
     private static func drawMarkers(in graphics: inout GraphicsContext, markers: [DeckMarker], deck: DeckState,
-                                    stripHeight: CGFloat, x: (Double) -> CGFloat) {
+                                    stripHeight: CGFloat, x: (Double) -> CGFloat, textScale: CGFloat = 1) {
         let mid = stripHeight / 2
         // Bands under the points.
         for marker in markers where marker.isBand {
@@ -317,7 +321,7 @@ enum DeckDrawing {
                 let colour = mine ? Theme.teamColour(deck.drivers[car]?.colour ?? "") : Theme.textSecondary
                 graphics.stroke(tick, with: .color(colour), lineWidth: mine ? 3 : 1)
                 if mine {
-                    graphics.draw(Text("PIT").font(.system(size: 8, weight: .heavy)).foregroundStyle(colour),
+                    graphics.draw(Text("PIT").font(.system(size: min(8 * textScale, 12), weight: .heavy)).foregroundStyle(colour),
                                   at: CGPoint(x: p.x + 3, y: 6), anchor: .leading)
                 }
             case .fastestLap:
