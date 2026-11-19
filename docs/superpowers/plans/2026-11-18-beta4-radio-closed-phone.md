@@ -30,6 +30,38 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-18-beta4-radio-closed-phone-design.md` (owner-approved 2026-11-18; all ten questions answered "agree", so each recommendation is the decision). Read it with this plan; it is the authority. The beta.3 rulings in `docs/superpowers/notes/2026-11-17-beta3-rulings.md` still apply.
 
+## Changes on `main` since this plan was written (2026-11-19, build 16 fixes from the Duo)
+
+These landed during the weekend's device checks. Tasks 8–14 build on them and must keep them:
+
+- **Live plays through FairPlay** (6564599). `PlayerController.begin(url:license:startAt:date:)`
+  takes the PLAY reply's licence URL when `PlayInfo.isFairPlay`; a `FairPlayKeys`
+  (`DuoApp/Player/FairPlayKeys.swift`, an `AVContentKeySession`) takes the asset before the item
+  exists and lives as long as the playback; `teardownPlayback()` stops it. DuoCore: `FairPlay`,
+  `FairPlayError`, `F1TVSession.fairPlayCertificate()` and `fairPlayLicense(spc:keyURI:licenseURL:)`,
+  `HTTPRequest.body`, `PlayInfo.drmType`. Task 10's `PlaybackHost` conformance and anything that
+  rebuilds the player item must go through `begin`, never `AVPlayerItem(url:)` directly.
+- **Each feed plays as F1 TV's own link says** (785255d): PLAY takes `Channel.playChannelId`
+  (nil for the main INTERNATIONAL feed of older races), while `Channel.id` stays the feed's
+  identity. Anything that sends PLAY for a channel uses `playChannelId`.
+- **Multiview's "Watch the main feed"** (d898169, 6564599): `MultiviewController.mainFeedFallback`
+  is set when F1 TV has no multiview (`.multiviewUnavailable`) or sends it protected
+  (`.protectedContent`); `AppModel.watchMainFeed()` closes the multiview, waits for its stop and
+  starts the single-feed player. `MultiviewController.waitForStop()` exists for that.
+- **Errors say why** (f273cb5): `F1TVError.detail` carries F1 TV's status and own words.
+- **The live start choice hangs on the button that asked** (3073622): `DetailView.asksStart`.
+- **Settings › About shows the source commit** (25fd63e): `DUO_COMMIT` from the install script.
+
+**Open (decide after the FP1 multiview probe, owner-run):** asked the app's multiview way
+(Android-style, `WEB_DASH`), F1 TV sends live multiview as Widevine, which iOS cannot play; asked
+Safari-style it sends FairPlay, but for replays only one feed. Until the probe shows the
+Safari-style request returns all live feeds, **live sessions play in the single-feed player
+only**. That affects the beta.4 surfaces drawn in `MultiviewView` (Task 12's closed pager and
+Unfold to See, Task 14's book layouts): during a live session they are not reachable. Ruling:
+no task changes now; if the probe shows all feeds (FairPlay), add a task before Task 12 for
+FairPlay multiview (one key session for all the feeds' assets); if not, ask the owner whether the
+closed pages should also come to the single-feed player.
+
 ## Global Constraints
 
 **Weekend freeze (Las Vegas, build 16 under live test)**

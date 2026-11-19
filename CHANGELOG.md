@@ -105,8 +105,8 @@ Builds 11 to 16. In short:
 - ~~The same-height tiles~~ checked on the Duo 2026-11-19: the Race Weekend rows show every tile's text in full.
 - Closed: the feed reaches both side edges of the outer screen. ("Safe edges" read 0, 0, 0, 0 closed on the Duo, 2026-11-19: the strip was not a safe-area inset.)
 - ~~Live FairPlay~~ checked on the Duo 2026-11-19 (build 16 · 6564599): the Las Vegas warm-up played.
-- A live session's Play, Watch multiview and feed rows: "From the start" / "Watch live" points at
-  the button tapped.
+- ~~The live start choice~~ checked on the Duo 2026-11-19 (build 16 · 3073622): it points at the
+  button tapped.
 - A live session (FP1) › Watch: plays. If not, send the words after "This feed
   stopped:" (no build before this one can play live). The last build without FairPlay is d898169.
 - A live session › Watch multiview: "Multiview can't play this live session yet" › "Watch the main
