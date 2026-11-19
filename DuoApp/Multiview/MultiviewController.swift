@@ -115,6 +115,9 @@ final class MultiviewController {
     /// Picture in picture is showing the feed with the sound; the other feeds are paused, and the
     /// sound can't move (the tiles aren't on screen).
     private(set) var isInPictureInPicture = false
+    /// Set when F1 TV has no multiview for the opened session ("Not available for this race"):
+    /// the session's main feed and start, for "Watch the main feed" in the single-feed player.
+    private(set) var mainFeedFallback: MainFeedFallback?
 
     @ObservationIgnored private let coordinator: PlayCoordinator
     @ObservationIgnored private let store: MultiviewStore
@@ -313,6 +316,7 @@ final class MultiviewController {
         if isPresented, errorText == nil, currentItem?.contentId == item.contentId { return }
         generation += 1
         let mine = generation
+        mainFeedFallback = nil
         // Keep the place in the session being left, then drop it.
         save()
         teardownAll()
@@ -352,6 +356,10 @@ final class MultiviewController {
             guard generation == mine else { return }
             isLoading = false
             errorText = Self.message(for: error)
+            if let error = error as? F1TVError, error == .multiviewUnavailable,
+                let main = detail.channels.first(where: \.isDefault) ?? detail.channels.first {
+                mainFeedFallback = MainFeedFallback(item: showing, channel: main, start: startAt)
+            }
             return
         }
         guard generation == mine else { return }
@@ -404,6 +412,7 @@ final class MultiviewController {
         feedURLs = [:]
         resetSlots()
         errorText = nil
+        mainFeedFallback = nil
         isLoading = false
         isPaused = false
         isPresented = false
@@ -2280,6 +2289,12 @@ final class MultiviewController {
         resumeOnActive = false
     }
 
+    /// Returns once the play session's stop() from the last close() has landed, so a PLAY sent
+    /// after it (the single-feed player's) isn't ended by it.
+    func waitForStop() async {
+        if let stopTask { await stopTask.value }
+    }
+
     // MARK: Messages
 
     /// Beta.1's messages, plus the multiview's own when F1 TV has no multiview for the race.
@@ -2289,6 +2304,13 @@ final class MultiviewController {
         }
         return PlayerController.message(for: error)
     }
+}
+
+/// What "Watch the main feed" plays when F1 TV has no multiview for a session.
+struct MainFeedFallback: Equatable {
+    let item: CatalogItem
+    let channel: Channel
+    let start: Start
 }
 
 /// One audio choice of the feed with the sound, as the controls' menu lists it: plain values.

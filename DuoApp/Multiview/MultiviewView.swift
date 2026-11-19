@@ -621,9 +621,22 @@ struct MultiviewView: View {
                         .font(.body)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white)
-                    Button("Close") { controller.close() }
+                    if controller.mainFeedFallback != nil {
+                        // F1 TV has no multiview here: the main feed in the normal player instead.
+                        Button("Watch the main feed") {
+                            let model = model
+                            Task { await model.watchMainFeed() }
+                        }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
+                        Button("Close") { controller.close() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                    } else {
+                        Button("Close") { controller.close() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Theme.accent)
+                    }
                 }
                 .padding(24)
             }

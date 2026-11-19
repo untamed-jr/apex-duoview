@@ -224,6 +224,16 @@ final class AppModel {
         await multiview.open(item: item, detail: detail, startAt: start)
     }
 
+    /// "Watch the main feed" on the multiview's "Not available for this race": closes the
+    /// multiview and plays the session's main feed in the single-feed player, from where the
+    /// multiview was asked to start. The multiview's stop() lands first, or it would end the PLAY.
+    func watchMainFeed() async {
+        guard let fallback = multiview.mainFeedFallback else { return }
+        multiview.close()
+        await multiview.waitForStop()
+        await playback.start(item: fallback.item, channel: fallback.channel, startAt: fallback.start)
+    }
+
     /// The resume banner. A bookmark saved in multiview opens multiview again (one fresh PLAY,
     /// the last-used feeds, at the saved place; live at the live edge) when the account has it;
     /// anything else resumes the single-feed player, as in beta.1.
