@@ -254,8 +254,9 @@ struct RootView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
-        // Red selection in the tab bar and sidebar; each room sets its content back to silver.
-        .tint(Theme.accent)
+        // Design pass q6: the selected tab is white, as Apple's glass tab bar has it over
+        // colourful pictures; red is kept for the one main action on a screen and for LIVE.
+        .tint(Theme.textPrimary)
     }
 }
 
