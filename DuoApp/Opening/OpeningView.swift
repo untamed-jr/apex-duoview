@@ -102,12 +102,15 @@ struct OpeningView: View {
         .shadow(color: Self.trailRed.opacity(0.6), radius: 3)
         .mask {
             // In the wide layout the trails stay on the track side, clear of the text.
+            // In the tall one they fade out above the small print at the bottom.
             if wide {
                 LinearGradient(
                     stops: [.init(color: .clear, location: 0.3), .init(color: .black, location: 0.56)],
                     startPoint: .leading, endPoint: .trailing)
             } else {
-                Color.black
+                LinearGradient(
+                    stops: [.init(color: .black, location: 0.7), .init(color: .clear, location: 0.82)],
+                    startPoint: .top, endPoint: .bottom)
             }
         }
         .accessibilityHidden(true)
@@ -150,8 +153,9 @@ struct OpeningView: View {
             .foregroundStyle(Theme.textSecondary)
     }
 
-    private var finePrint: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    /// Version, the unofficial-app notice and the subscription line, all lined up the same way.
+    private func finePrint(_ alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 6) {
             Text(Self.versionLine)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Theme.textSecondary)
@@ -184,7 +188,8 @@ struct OpeningView: View {
                 .opacity(nameShown ? 1 : 0)
                 .offset(y: nameShown ? 0 : 8)
             Spacer(minLength: 0)
-            finePrint
+            finePrint(.leading)
+                .multilineTextAlignment(.leading)
                 .padding(.bottom, 24)
         }
         .padding(.leading, max(24, size.width * 0.04))
@@ -199,7 +204,7 @@ struct OpeningView: View {
             Spacer(minLength: 0)
             wordmark(width: min(size.width * 0.72, 420))
             name(.largeTitle)
-                .padding(.top, 4)
+                .padding(.top, 2)
                 .opacity(nameShown ? 1 : 0)
                 .offset(y: nameShown ? 0 : 8)
             tagline
@@ -208,7 +213,7 @@ struct OpeningView: View {
                 .offset(y: nameShown ? 0 : 8)
             Spacer(minLength: 0)
             Spacer(minLength: 0)
-            finePrint
+            finePrint(.center)
                 .padding(.bottom, 28)
         }
         .multilineTextAlignment(.center)
