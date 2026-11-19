@@ -585,6 +585,9 @@ The owner runs `pbpaste | python3 spike/timing_recorder.py --radio` on the Mac (
 
 Task 10 works either way (no token first, then once with it). The answer goes into the build 17 CHANGELOG.
 
+**Done 2026-11-19:** clips need no token (HTTP 200 without it); MP3, 48 kHz, 128 kbps, 3–11 s,
+47–174 KB each. See spec O5. Build 17's CHANGELOG repeats this.
+
 ### Task 10: App, build 17 — radio on replays
 
 **Files:**

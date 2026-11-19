@@ -411,7 +411,10 @@ Each build is pushed as it lands, tested or not (owner's standing instruction).
   not; panning is limited to clips).
 - **O4.** Whether transcription runs in the simulator (build 17's probe). If not, the exit test's
   transcripts are checked on a real iPhone (Q2's phone, or the Duo in beta.7).
-- **O5.** Whether radio files need the token (T-A4).
+- **O5.** Whether radio files need the token (T-A4). **Answered 2026-11-19 (owner probe, São Paulo
+  2026 race, 3 clips): no.** Every clip came back HTTP 200 without the token, and identical with it.
+  Format: MP3 (MPEG audio), 48 kHz, 128 kbps; the three clips ran 2.9 s, 9.3 s and 10.8 s
+  (47–174 KB). The once-more-with-the-token fallback stays as written, for safety.
 - **O6.** What the phone does closed with the screen off: the app in front on the outer screen, or
   in the background. Beta.2's probe O-B asked; its answer wasn't written down.
 - **O7.** Whether `DictationTranscriber` (and any fallback) runs only on the phone, and whether
