@@ -108,6 +108,7 @@ mkdir -p "$OUT"
 if ! xcodebuild -project DuoApp.xcodeproj -scheme DuoApp -configuration Debug \
       -destination "id=$UDID" -derivedDataPath "$OUT" \
       -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
+      DUO_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || true)" \
       build > "$OUT/build.log" 2>&1; then
   echo
   grep -E "error:|failed|Provisioning|signing|Signing" "$OUT/build.log" | grep -v "^note:" | sort -u | head -25 \

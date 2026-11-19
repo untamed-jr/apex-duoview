@@ -75,6 +75,8 @@ Builds 11 to 16. In short:
   2021 showed "Couldn't load F1 TV: error 404" in every view). F1 TV's own play link for that
   feed names no channel, and asking for its channel number gets a 404. Each feed now plays exactly
   as F1 TV's link says. Checked against F1 TV's public feed list for that race; not yet on the phone.
+- **Settings › About shows which code a build came from** (e.g. "build 16 · 785255d"), when
+  installed with `scripts/install-on-duo.sh`, so builds with the same number can be told apart.
 - **Older races without multiview say "Not available for this race"** instead of failing: F1 TV
   answers the multiview request for races on its older video system with one plain stream.
 - **"Couldn't load F1 TV" now says why** (found on the Duo, 2026-11-18: Abu Dhabi 2021 wouldn't

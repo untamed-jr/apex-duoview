@@ -99,7 +99,9 @@ struct SettingsView: View {
         let label = info["DuoBetaLabel"] as? String ?? ""
         let build = info["CFBundleVersion"] as? String ?? "?"
         let full = label.isEmpty ? version : "\(version)-\(label)"
-        return "Apex DuoView v\(full) (build \(build))"
+        // The code the install script built from, so two builds with the same number can be told apart.
+        let code = (info["DuoSourceCode"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        return "Apex DuoView v\(full) (build \(build)\(code.isEmpty ? "" : " · \(code)"))"
     }
 
     // MARK: Credits
