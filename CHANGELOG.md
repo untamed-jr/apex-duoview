@@ -86,10 +86,10 @@ Builds 11 to 16. In short:
 ### Untested — check later (build 16)
 
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
-- The same-height tiles: the Replays row on the Race Weekend tab shows every tile's text in full.
-- Closed: the feed reaches both side edges of the outer screen; note what Settings › Fold › "Safe edges" says with the phone closed.
-- Abu Dhabi 2021 › Watch plays the INTERNATIONAL feed; Watch multiview plays, or says "Not
-  available for this race". Any other failure now shows its reason: send it.
+- ~~The same-height tiles~~ checked on the Duo 2026-11-19: the Race Weekend rows show every tile's text in full.
+- Closed: the feed reaches both side edges of the outer screen. ("Safe edges" read 0, 0, 0, 0 closed on the Duo, 2026-11-19: the strip was not a safe-area inset.)
+- ~~Abu Dhabi 2021 › Watch plays the INTERNATIONAL feed~~ checked on the Duo 2026-11-19 (build 16 ·
+  58a89f4); its multiview says "Not available for this race", as F1 TV sends one feed.
 - São Paulo 2026: switching to the INTERNATIONAL feed plays (it had the same 404 problem).
 - Live, joined part-way (Las Vegas): "From the start" or a rewind more than 90 s before the join
   shows empty panels with "Timing catching up"; within 90 s the state on joining with the label;
