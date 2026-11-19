@@ -108,12 +108,12 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
                 .clipped()
         }
         .frame(width: frame.width, height: frame.height)
-        .background(Theme.surface, in: shape)
         .clipShape(shape)
+        // Design pass q3: a floating panel is Apple's regular glass (the more solid kind, for
+        // text-heavy panels) instead of a 90 % dark box. Docked panels stay solid.
+        .glassEffect(.regular, in: shape)
         .overlay(alignment: .bottomTrailing) { resizeHandle }
-        .overlay { shape.strokeBorder(Theme.hairline, lineWidth: 1).allowsHitTesting(false) }
         .contentShape(shape)
-        .opacity(Theme.panelOpacity)
         .gesture(
             MagnifyGesture()
                 .onChanged { value in pinch = value.magnification }
@@ -142,7 +142,7 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
         .padding(.leading, 10)
         .padding(.trailing, 2)
         .frame(height: 34)
-        .background(Theme.raised)
+        .background(Color.black.opacity(0.25))
         .contentShape(Rectangle())
         // Global space: the panel moves under the finger, so local translations would feed back.
         .gesture(
