@@ -29,7 +29,7 @@ change is its own commit so it can be kept or reverted on its own.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 
-Built in the simulator with 0 warnings up to q1 (2026-11-19); q3 and q7 not built yet.
+Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
 ### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
