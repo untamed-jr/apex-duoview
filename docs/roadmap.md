@@ -169,6 +169,25 @@ be designed with the owner before it is built:
 - Outer screen measured (owner, 2026-11-18, Settings › Fold "Screen" with the phone closed):
   **466 × 678 pt**, portrait.
 
+## Welcome tour and tips (owner request, 2026-11-19)
+
+Someone new should learn the app's views and options without being told. Proposed shape (to be
+designed with the owner before it is built; nothing decided yet beyond "there should be one"):
+- **A short welcome tour** on first launch, after the opening screen: 4–5 swipeable cards, each one
+  picture and one line, skippable at any time. Proposed cards: what the app is (and that it needs F1
+  TV); **fold it, the view changes** (flat, book, laptop, closed, each with its layout); multiview
+  and choosing feeds; the map, tower and tapping a car; live versus replays.
+- **Tips at first use** (Apple's TipKit): a small bubble the first time someone reaches a feature,
+  e.g. "Fold into laptop pose for Race Engineer" on the first multiview, "Tap a car to see its
+  onboard" on the first map. Each shows once and can be turned off.
+- **"How to use" in Settings** replays the tour; a "Reset tips" button brings the bubbles back.
+- Apple's guidance: keep onboarding brief, let people skip it, and teach in context where possible,
+  so the tour stays short and the tips do most of the teaching.
+- Pictures for the cards: real screenshots of the app in each posture (the same captures as the
+  design pass's "after" set), never F1's images.
+- When: proposed for the polish build after beta.4, with the opening screen and the design pass,
+  so the tour shows the final look. Later betas add tips for their own new features.
+
 ## Apple design pass (owner decision, 2026-11-19)
 
 The ten changes on `docs/design/apple-design-pass.html` (Liquid Glass for floating controls,
