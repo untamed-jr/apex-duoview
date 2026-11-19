@@ -15,10 +15,22 @@ change is its own commit so it can be kept or reverted on its own.
   angle.", the version and the small print. About 1.6 s plus a short hold, once per launch; a
   tap skips it; Reduce Motion makes it a plain fade. The launch screen is now plain near-black
   (the old square logo is gone from it), so it hands over to the opening's first frame.
+- **Apple design pass**, one commit each so any can be undone alone:
+  - q6: the selected tab is white, not red.
+  - q5: Apple's glass buttons (main actions stay red); the floating Live-now and sign-in
+    banners are glass.
+  - q2: feed name pills, speaker buttons and driver cards are clear glass; only SOUND is red.
+  - q1: multiview's top bar and playback bar are clear glass, grouped; same touch areas.
+  - q3: the floating map and tower are regular glass; docked they stay solid.
+  - q7: tower rows, tyre letters, pit-circle labels and the Scrub Deck PIT grow with the text
+    size (unchanged at the default size).
+  - Waiting: q8 (44 pt touch areas) and q9 (VoiceOver for the map and pit circle, Move and Resize
+    actions for panels), until the laptop-pose tap and drag problems are found. q4 is no change.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 
-Untested — check later: everything above (not built yet; written on a computer without Xcode).
+Built in the simulator with 0 warnings up to q1 (2026-11-19); q3 and q7 not built yet.
+Untested — check later: everything above on the phone (after the race).
 
 ### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
 
