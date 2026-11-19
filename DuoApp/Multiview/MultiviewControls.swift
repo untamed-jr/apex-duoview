@@ -97,14 +97,23 @@ struct MultiviewTopBar: View {
     let onFeeds: @MainActor () -> Void
 
     var body: some View {
+        // Design pass q1: the bar's pieces are clear glass in one container, so they blend as
+        // one group over the video.
+        GlassEffectContainer(spacing: 8) {
+            bar
+        }
+    }
+
+    private var bar: some View {
         HStack(spacing: 8) {
             Button {
                 controller.close()
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.5))
+                Image(systemName: "xmark")
+                    .font(.footnote.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .videoGlass(in: Circle())
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -116,7 +125,7 @@ struct MultiviewTopBar: View {
                     .lineLimit(1)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 32)
-                    .background(Color.black.opacity(0.5), in: Capsule())
+                    .videoGlass(in: Capsule())
                     // Not a control: touches pass to the tile underneath.
                     .allowsHitTesting(false)
                     .accessibilityAddTraits(.isHeader)
@@ -153,7 +162,7 @@ struct MultiviewTopBar: View {
     static let speakerClearance: CGFloat = 56
 }
 
-/// A control's look: white condensed text on a dark capsule, in a 44 pt high hit area.
+/// A control's look: white condensed text on a clear-glass capsule, in a 44 pt high hit area.
 struct MultiviewChromeLabel: View {
     let title: String
     let systemImage: String
@@ -166,7 +175,7 @@ struct MultiviewChromeLabel: View {
             .lineLimit(1)
             .padding(.horizontal, 12)
             .frame(minHeight: 32)
-            .background(Color.black.opacity(0.5), in: Capsule())
+            .videoGlass(in: Capsule())
             .frame(minHeight: 44)
             .contentShape(Rectangle())
     }
@@ -184,7 +193,7 @@ struct MultiviewControlsHandle: View {
                 .font(.footnote.bold())
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 22)
-                .background(Color.black.opacity(0.5), in: Capsule())
+                .videoGlass(in: Capsule())
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -233,7 +242,8 @@ struct MultiviewPlaybackBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // Design pass q1: clear glass, as Apple's own player controls.
+        .videoGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var playButton: some View {
