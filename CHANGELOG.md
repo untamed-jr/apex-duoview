@@ -71,9 +71,12 @@ Builds 11 to 16. In short:
   Every tile now keeps room for two title lines and the line below.
 - **Closed, the feed uses the outer screen's full width** (found on the Duo, 2026-11-18): it lost a
   strip on the right. Settings › Fold now also shows the screen's safe edges.
-- **Older races say "Not available for this race" in multiview** (found on the Duo, 2026-11-18,
-  Abu Dhabi 2021): F1 TV answers the multiview request for races on its older video system with
-  one plain stream, which showed "Couldn't load F1 TV."
+- **Races whose main feed is INTERNATIONAL play again** (found on the Duo, 2026-11-18: Abu Dhabi
+  2021 showed "Couldn't load F1 TV: error 404" in every view). F1 TV's own play link for that
+  feed names no channel, and asking for its channel number gets a 404. Each feed now plays exactly
+  as F1 TV's link says. Checked against F1 TV's public feed list for that race; not yet on the phone.
+- **Older races without multiview say "Not available for this race"** instead of failing: F1 TV
+  answers the multiview request for races on its older video system with one plain stream.
 - **"Couldn't load F1 TV" now says why** (found on the Duo, 2026-11-18: Abu Dhabi 2021 wouldn't
   play in any view): when F1 TV answers with an error, the message ends with its error number and
   its own words (links are never shown), so a failing race can be diagnosed from the screen.
@@ -83,8 +86,9 @@ Builds 11 to 16. In short:
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
 - The same-height tiles: the Replays row on the Race Weekend tab shows every tile's text in full.
 - Closed: the feed reaches both side edges of the outer screen; note what Settings › Fold › "Safe edges" says with the phone closed.
-- Abu Dhabi 2021: Watch and Watch multiview now say why they fail (send the words after
-  "Couldn't load F1 TV:"); if F1 TV only lacks multiview there, multiview says "Not available for this race".
+- Abu Dhabi 2021 › Watch plays the INTERNATIONAL feed; Watch multiview plays, or says "Not
+  available for this race". Any other failure now shows its reason: send it.
+- São Paulo 2026: switching to the INTERNATIONAL feed plays (it had the same 404 problem).
 - Live, joined part-way (Las Vegas): "From the start" or a rewind more than 90 s before the join
   shows empty panels with "Timing catching up"; within 90 s the state on joining with the label;
   the Scrub Deck's lap axis stays empty until F1's archive arrives.

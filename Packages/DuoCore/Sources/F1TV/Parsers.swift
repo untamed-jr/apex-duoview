@@ -248,7 +248,8 @@ public enum Parsers {
                 racingNumber: stream["racingNumber"].int.flatMap { onboard && $0 > 0 ? $0 : nil },
                 driverLastName: stream["driverLastName"].string,
                 teamName: stream["teamName"].string,
-                teamColorHex: stream["hex"].string
+                teamColorHex: stream["hex"].string,
+                playsWithoutChannel: playsWithoutChannel(stream["playbackUrl"].string)
             )
         }
         var title = meta["title"].string
@@ -303,6 +304,13 @@ public enum Parsers {
     }
 
     // MARK: Helpers
+
+    /// True when F1 TV's play link for a feed ("CONTENT/PLAY?contentId=…") has no `channelId`.
+    /// No link at all keeps the feed's own channel, as before.
+    static func playsWithoutChannel(_ link: String) -> Bool {
+        guard !link.isEmpty, let query = URLComponents(string: link)?.queryItems else { return false }
+        return !query.contains { $0.name.caseInsensitiveCompare("channelId") == .orderedSame }
+    }
 
     /// F1 TV's own reason when a reply is an error (`resultCode` present and not "OK"): its
     /// `message`, then `errorDescription` in brackets, at most 120 characters. Nil otherwise.

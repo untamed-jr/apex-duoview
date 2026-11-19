@@ -160,7 +160,8 @@ final class PlayerController {
 
         let info: PlayInfo
         do {
-            info = try await coordinator.play(contentId: item.contentId, channelId: channel.id)
+            // F1 TV's own link decides the channelId: none for the main INTERNATIONAL feed (else 404).
+            info = try await coordinator.play(contentId: item.contentId, channelId: channel.playChannelId)
         } catch is CancellationError {
             // Superseded (silent), or cancelled from outside with nothing newer: leave the player.
             if generation == mine { dismiss() }

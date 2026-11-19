@@ -323,7 +323,8 @@ final class MultiviewController {
         if showing.timingRef == nil { showing.timingRef = detail.timingRef }
         currentItem = showing
         title = showing.title
-        defaultChannelId = (detail.channels.first(where: \.isDefault) ?? detail.channels.first)?.id
+        // The channelId PLAY takes for the default feed: none when F1 TV's link has none (else 404).
+        defaultChannelId = (detail.channels.first(where: \.isDefault) ?? detail.channels.first)?.playChannelId
         resetSlots()
         feedURLs = [:]
         errorText = nil

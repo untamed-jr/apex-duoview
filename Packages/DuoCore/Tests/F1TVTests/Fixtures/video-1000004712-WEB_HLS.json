@@ -1,0 +1,931 @@
+{
+ "resultCode": "OK",
+ "message": "",
+ "errorDescription": "200",
+ "resultObj": {
+  "total": 1,
+  "containers": [
+   {
+    "id": 1000004712,
+    "layout": "CONTENT_ITEM",
+    "contentId": 1000004712,
+    "properties": [
+     {
+      "meeting_Number": 22,
+      "sessionEndTime": 1639321200000,
+      "series": "FORMULA 1",
+      "lastUpdatedDate": 1773658795949,
+      "lastIndexedDate": 1773658795949,
+      "season_Meeting_Ordinal": 0,
+      "meeting_Start_Date": 0,
+      "meeting_End_Date": 0,
+      "season": 2021,
+      "session_index": 110,
+      "meetingSessionKey": 6601,
+      "sessionStartDate": 1639314000000,
+      "sessionEndDate": 1639321200000
+     }
+    ],
+    "metadata": {
+     "contentId": 1000004712,
+     "advTags": "0",
+     "availableLanguages": [
+      {
+       "languageCode": "NLD",
+       "languageName": "Dutch"
+      },
+      {
+       "languageCode": "DEU",
+       "languageName": "German"
+      },
+      {
+       "languageCode": "FRA",
+       "languageName": "French"
+      },
+      {
+       "languageCode": "POR",
+       "languageName": "Portuguese"
+      },
+      {
+       "languageCode": "SPA",
+       "languageName": "Spanish"
+      },
+      {
+       "languageCode": "JPN",
+       "languageName": "Japanese"
+      }
+     ],
+     "contentType": "VIDEO",
+     "contentProvider": "F1",
+     "longDescription": "Race",
+     "country": "UAE",
+     "year": "2021",
+     "contractStartDate": 1634130000000,
+     "contractEndDate": 4102444799000,
+     "externalId": "FOM_SESSION_6601",
+     "title": "2021 Abu Dhabi Grand Prix",
+     "duration": 8307,
+     "objectSubtype": "REPLAY",
+     "contentSubtype": "REPLAY",
+     "starRating": 0,
+     "pictureUrl": "1000004712-e7214ba2-4b76-4be7-bdad-7a053518d993/landscape_web",
+     "language": "ENG",
+     "metadataLanguage": "ENG",
+     "season": 2021,
+     "isADVAllowed": false,
+     "isEncrypted": false,
+     "isLatest": false,
+     "isOnAir": true,
+     "isParent": true,
+     "isPopularEpisode": false,
+     "episodeNumber": 1,
+     "filter": "0",
+     "isGeoBlocked": false,
+     "pcLevelVod": "2",
+     "pcLevel": 2,
+     "pcVodLabel": "G",
+     "pcExtendedRatings": [],
+     "isCopyProtected": true,
+     "copyProtections": [
+      {
+       "securityCode": "01",
+       "securityOption": "00000010"
+      },
+      {
+       "securityCode": "03",
+       "securityOption": "00000001"
+      },
+      {
+       "securityCode": "05",
+       "securityOption": "00000001"
+      }
+     ],
+     "actors": [],
+     "authors": [],
+     "directors": [],
+     "genres": [
+      "Race"
+     ],
+     "anchors": [],
+     "availableAlso": [
+      "MOBILE_HLS",
+      "BIG_SCREEN_HLS",
+      "WEB_DASH",
+      "BIG_SCREEN_DASH",
+      "TABLET_DASH",
+      "TABLET_HLS",
+      "MOBILE_DASH"
+     ],
+     "contentOptions": [],
+     "recentlyAdded": false,
+     "emfAttributes": {
+      "sessionEndTime": "2021-12-12T19:00:00+04:00",
+      "session_index": "110",
+      "MeetingSessionKey": "6601",
+      "multipartEvent": "false",
+      "sessionStartDate": "1639314000000",
+      "VideoType": "meetingSession",
+      "OBC": true,
+      "MeetingCountryKey": "21",
+      "Meeting_Country_Name": "United Arab Emirates",
+      "Global_Title": "2021 Abu Dhabi Grand Prix Formula 1 Race",
+      "state": "Pre-live",
+      "Circuit_Short_Name": "Yas Marina Circuit",
+      "Meeting_Name": "Abu Dhabi Grand Prix",
+      "Meeting_Number": "22",
+      "Global_Meeting_Name": "Abu Dhabi Grand Prix",
+      "CircuitKey": "70",
+      "Global_Meeting_Country_Name": "United Arab Emirates",
+      "MeetingKey": "1107",
+      "Series": "FORMULA 1",
+      "Year": "2021",
+      "Meeting_Location": "Yas Marina Circuit",
+      "bug": "true",
+      "ContentCategory": "RACE",
+      "sessionEndDate": "1639321200000",
+      "Meeting_Code": "UAE0102"
+     },
+     "comingSoon": false,
+     "leavingSoon": false,
+     "objectType": "VIDEO",
+     "shortDescription": "Race",
+     "titleBrief": "Race",
+     "uiDuration": "02:18:27",
+     "meetingKey": "1107",
+     "entitlement": "Access",
+     "locked": false,
+     "videoType": "FER",
+     "parentalAdvisory": "S,L,PPS",
+     "additionalStreams": [
+      {
+       "racingNumber": 0,
+       "teamName": "",
+       "type": "additional",
+       "playbackUrl": "CONTENT/PLAY?contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "channelId": 1025,
+       "title": "INTERNATIONAL",
+       "reportingName": "WIF",
+       "default": true,
+       "identifier": "WIF",
+       "audioDefault": "1025.eng",
+       "audioTrackNames": {
+        "eng": "English Int.",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues",
+        "jpn": "日本語",
+        "fx": "Track FX"
+       },
+       "subtitleTrackNames": {
+        "eng_subtitle": "English Int.",
+        "fra_subtitle": "Francais",
+        "spa_subtitle": "Espanol"
+       }
+      },
+      {
+       "racingNumber": 0,
+       "teamName": "",
+       "type": "additional",
+       "playbackUrl": "CONTENT/PLAY?channelId=1002&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "channelId": 1002,
+       "title": "PIT LANE",
+       "reportingName": "PIT",
+       "identifier": "PIT",
+       "default": false
+      },
+      {
+       "racingNumber": 0,
+       "teamName": "",
+       "type": "additional",
+       "playbackUrl": "CONTENT/PLAY?channelId=1003&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "channelId": 1003,
+       "title": "TRACKER",
+       "reportingName": "TRACKER",
+       "identifier": "TRACKER",
+       "audioDefault": "1033.eng",
+       "default": false
+      },
+      {
+       "racingNumber": 0,
+       "teamName": "",
+       "type": "additional",
+       "playbackUrl": "CONTENT/PLAY?channelId=1004&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "channelId": 1004,
+       "title": "DATA",
+       "reportingName": "DATA",
+       "identifier": "DATA",
+       "audioDefault": "1033.eng",
+       "default": false
+      },
+      {
+       "racingNumber": 3,
+       "title": "RIC",
+       "reportingName": "RIC|3",
+       "driverFirstName": "Daniel",
+       "driverLastName": "Ricciardo",
+       "teamName": "McLaren",
+       "constructorName": "McLaren",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1015&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#FF8700",
+       "channelId": 1015,
+       "identifier": "OBC",
+       "audioDefault": "1015",
+       "audioTrackNames": {
+        "tea": "RIC",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 4,
+       "title": "NOR",
+       "reportingName": "NOR|4",
+       "driverFirstName": "Lando",
+       "driverLastName": "Norris",
+       "teamName": "McLaren",
+       "constructorName": "McLaren",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1016&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#FF8700",
+       "channelId": 1016,
+       "identifier": "OBC",
+       "audioDefault": "1016",
+       "audioTrackNames": {
+        "tea": "NOR",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 5,
+       "title": "VET",
+       "reportingName": "VET|5",
+       "driverFirstName": "Sebastian",
+       "driverLastName": "Vettel",
+       "teamName": "Aston Martin",
+       "constructorName": "Aston Martin",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1018&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#006F62",
+       "channelId": 1018,
+       "identifier": "OBC",
+       "audioDefault": "1018",
+       "audioTrackNames": {
+        "tea": "VET",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 6,
+       "title": "LAT",
+       "reportingName": "LAT|6",
+       "driverFirstName": "Nicholas",
+       "driverLastName": "Latifi",
+       "teamName": "Williams",
+       "constructorName": "Williams",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1024&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#005AFF",
+       "channelId": 1024,
+       "identifier": "OBC",
+       "audioDefault": "1024",
+       "audioTrackNames": {
+        "tea": "LAT",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 7,
+       "title": "RAI",
+       "reportingName": "RAI|7",
+       "driverFirstName": "Kimi",
+       "driverLastName": "Räikkönen",
+       "teamName": "Alfa Romeo Racing",
+       "constructorName": "Alfa Romeo Racing",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1019&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#900000",
+       "channelId": 1019,
+       "identifier": "OBC",
+       "audioDefault": "1019",
+       "audioTrackNames": {
+        "tea": "RAI",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 10,
+       "title": "GAS",
+       "reportingName": "GAS|10",
+       "driverFirstName": "Pierre",
+       "driverLastName": "Gasly",
+       "teamName": "AlphaTauri",
+       "constructorName": "AlphaTauri",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1022&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#2B4562",
+       "channelId": 1022,
+       "identifier": "OBC",
+       "audioDefault": "1022",
+       "audioTrackNames": {
+        "tea": "GAS",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 11,
+       "title": "PER",
+       "reportingName": "PER|11",
+       "driverFirstName": "Sergio",
+       "driverLastName": "Perez",
+       "teamName": "Red Bull Racing",
+       "constructorName": "Red Bull Racing",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1011&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#0600EF",
+       "channelId": 1011,
+       "identifier": "OBC",
+       "audioDefault": "1011",
+       "audioTrackNames": {
+        "tea": "PER",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 14,
+       "title": "ALO",
+       "reportingName": "ALO|14",
+       "driverFirstName": "Fernando",
+       "driverLastName": "Alonso",
+       "teamName": "Alpine",
+       "constructorName": "Alpine",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1005&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#0090FF",
+       "channelId": 1005,
+       "identifier": "OBC",
+       "audioDefault": "1005",
+       "audioTrackNames": {
+        "tea": "ALO",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 16,
+       "title": "LEC",
+       "reportingName": "LEC|16",
+       "driverFirstName": "Charles",
+       "driverLastName": "Leclerc",
+       "teamName": "Ferrari",
+       "constructorName": "Ferrari",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1008&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#DC0000",
+       "channelId": 1008,
+       "identifier": "OBC",
+       "audioDefault": "1008",
+       "audioTrackNames": {
+        "tea": "LEC",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 18,
+       "title": "STR",
+       "reportingName": "STR|18",
+       "driverFirstName": "Lance",
+       "driverLastName": "Stroll",
+       "teamName": "Aston Martin",
+       "constructorName": "Aston Martin",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1017&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#006F62",
+       "channelId": 1017,
+       "identifier": "OBC",
+       "audioDefault": "1017",
+       "audioTrackNames": {
+        "tea": "STR",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 22,
+       "title": "TSU",
+       "reportingName": "TSU|22",
+       "driverFirstName": "Yuki",
+       "driverLastName": "Tsunoda",
+       "teamName": "AlphaTauri",
+       "constructorName": "AlphaTauri",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1021&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#2B4562",
+       "channelId": 1021,
+       "identifier": "OBC",
+       "audioDefault": "1021",
+       "audioTrackNames": {
+        "tea": "TSU",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 31,
+       "title": "OCO",
+       "reportingName": "OCO|31",
+       "driverFirstName": "Esteban",
+       "driverLastName": "Ocon",
+       "teamName": "Alpine",
+       "constructorName": "Alpine",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1012&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#0090FF",
+       "channelId": 1012,
+       "identifier": "OBC",
+       "audioDefault": "1012",
+       "audioTrackNames": {
+        "tea": "OCO",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 33,
+       "title": "VER",
+       "reportingName": "VER|33",
+       "driverFirstName": "Max",
+       "driverLastName": "Verstappen",
+       "teamName": "Red Bull Racing",
+       "constructorName": "Red Bull Racing",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1009&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#0600EF",
+       "channelId": 1009,
+       "identifier": "OBC",
+       "audioDefault": "1009",
+       "audioTrackNames": {
+        "tea": "VER",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 44,
+       "title": "HAM",
+       "reportingName": "HAM|44",
+       "driverFirstName": "Lewis",
+       "driverLastName": "Hamilton",
+       "teamName": "Mercedes",
+       "constructorName": "Mercedes",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1006&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#00D2BE",
+       "channelId": 1006,
+       "identifier": "OBC",
+       "audioDefault": "1006",
+       "audioTrackNames": {
+        "tea": "HAM",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 47,
+       "title": "MSC",
+       "reportingName": "MSC|47",
+       "driverFirstName": "Mick",
+       "driverLastName": "Schumacher",
+       "teamName": "Haas F1 Team",
+       "constructorName": "Haas",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1014&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#FFFFFF",
+       "channelId": 1014,
+       "identifier": "OBC",
+       "audioDefault": "1014",
+       "audioTrackNames": {
+        "tea": "MSC",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 55,
+       "title": "SAI",
+       "reportingName": "SAI|55",
+       "driverFirstName": "Carlos",
+       "driverLastName": "Sainz",
+       "teamName": "Ferrari",
+       "constructorName": "Ferrari",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1007&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#DC0000",
+       "channelId": 1007,
+       "identifier": "OBC",
+       "audioDefault": "1007",
+       "audioTrackNames": {
+        "tea": "SAI",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 63,
+       "title": "RUS",
+       "reportingName": "RUS|63",
+       "driverFirstName": "George",
+       "driverLastName": "Russell",
+       "teamName": "Williams",
+       "constructorName": "Williams",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1023&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#005AFF",
+       "channelId": 1023,
+       "identifier": "OBC",
+       "audioDefault": "1023",
+       "audioTrackNames": {
+        "tea": "RUS",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 77,
+       "title": "BOT",
+       "reportingName": "BOT|77",
+       "driverFirstName": "Valtteri",
+       "driverLastName": "Bottas",
+       "teamName": "Mercedes",
+       "constructorName": "Mercedes",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1010&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#00D2BE",
+       "channelId": 1010,
+       "identifier": "OBC",
+       "audioDefault": "1010",
+       "audioTrackNames": {
+        "tea": "BOT",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      },
+      {
+       "racingNumber": 99,
+       "title": "GIO",
+       "reportingName": "GIO|99",
+       "driverFirstName": "Antonio",
+       "driverLastName": "Giovinazzi",
+       "teamName": "Alfa Romeo Racing",
+       "constructorName": "Alfa Romeo Racing",
+       "type": "obc",
+       "playbackUrl": "CONTENT/PLAY?channelId=1020&contentId=1000004712",
+       "driverImg": "",
+       "teamImg": "",
+       "hex": "#900000",
+       "channelId": 1020,
+       "identifier": "OBC",
+       "audioDefault": "1020",
+       "audioTrackNames": {
+        "tea": "GIO",
+        "eng": "English",
+        "deu": "Deutsch",
+        "fra": "Francais",
+        "spa": "Espanol",
+        "nld": "Nederlands",
+        "por": "Portugues"
+       },
+       "default": false
+      }
+     ]
+    },
+    "assets": [
+     {
+      "assetId": 39199,
+      "assetType": "MASTER",
+      "assetName": "VOD_HD",
+      "videoType": "HD",
+      "audioLanguages": [
+       {
+        "audioId": 1,
+        "audioLanguageName": "ENG",
+        "isPreferred": false
+       }
+      ]
+     }
+    ],
+    "parents": [
+     {
+      "parentId": 1500000133,
+      "parentType": "BUNDLE",
+      "parentSubType": "MEETING"
+     },
+     {
+      "parentId": 1700000041,
+      "parentType": "GROUP_OF_BUNDLES",
+      "parentSubType": "YEAR"
+     }
+    ],
+    "platformVariants": [
+     {
+      "cpId": 39199,
+      "subtitlesLanguages": [],
+      "pictureUrl": "1000004712-e7214ba2-4b76-4be7-bdad-7a053518d993",
+      "audioLanguages": [
+       {
+        "isPreferred": false,
+        "audioLanguageName": "ENG",
+        "audioId": 1
+       }
+      ],
+      "hasTrailer": false,
+      "videoType": "HD",
+      "technicalPackages": [
+       {
+        "packageId": 1000,
+        "packageName": "F1_Live",
+        "packageType": "SVOD"
+       }
+      ]
+     }
+    ],
+    "containers": {
+     "bundles": [
+      {
+       "bundleId": 1500000133,
+       "bundleType": "BUNDLE",
+       "bundleSubtype": "MEETING",
+       "isParent": true,
+       "orderId": 5
+      },
+      {
+       "bundleId": 1700000041,
+       "bundleType": "GROUP_OF_BUNDLES",
+       "bundleSubtype": "YEAR",
+       "isParent": false,
+       "orderId": 139
+      }
+     ]
+    },
+    "platformName": "web_hls",
+    "popularity": {
+     "shortPeriod": 7422,
+     "longPeriod": 32974,
+     "allTime": 2766303
+    },
+    "actions": [
+     {
+      "key": "onClick",
+      "uri": "/Subscription",
+      "targetType": "Subscription"
+     }
+    ],
+    "playbackOffsetsVersion": "2021.1",
+    "playbackOffsets": [
+     {
+      "channels": [
+       "TRACKER",
+       "PIT"
+      ],
+      "channelToAdjust": "PIT",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "TRACKER",
+       "WIF"
+      ],
+      "channelToAdjust": "WIF",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "TRACKER",
+       "DATA"
+      ],
+      "channelToAdjust": "DATA",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "TRACKER",
+       "OBC"
+      ],
+      "channelToAdjust": "OBC",
+      "delaySeconds": 1
+     },
+     {
+      "channels": [
+       "PIT",
+       "WIF"
+      ],
+      "channelToAdjust": "WIF",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "PIT",
+       "DATA"
+      ],
+      "channelToAdjust": "DATA",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "PIT",
+       "OBC"
+      ],
+      "channelToAdjust": "OBC",
+      "delaySeconds": 1
+     },
+     {
+      "channels": [
+       "WIF",
+       "DATA"
+      ],
+      "channelToAdjust": "DATA",
+      "delaySeconds": 0
+     },
+     {
+      "channels": [
+       "WIF",
+       "OBC"
+      ],
+      "channelToAdjust": "OBC",
+      "delaySeconds": 1
+     },
+     {
+      "channels": [
+       "DATA",
+       "OBC"
+      ],
+      "channelToAdjust": "OBC",
+      "delaySeconds": 1
+     }
+    ],
+    "liveNow": {
+     "enabled": {
+      "AMAZONFIRE": false,
+      "AMAZONFIRETV": false,
+      "ANDROID": false,
+      "ANDROIDTV": false,
+      "IOS": false,
+      "ROKU": false,
+      "SAMSUNG": false,
+      "TVOS": false,
+      "WEB": false
+     },
+     "url": "https://f1tv.formula1.com/1.0/A/ENG/WEB_HLS/ALL/EVENTS/LIVENOW/ANONYMOUS/5"
+    },
+    "uiMetadata": {
+     "contentSubtype": "Replay"
+    }
+   }
+  ]
+ },
+ "source": "server",
+ "systemTime": 1795049649388
+}

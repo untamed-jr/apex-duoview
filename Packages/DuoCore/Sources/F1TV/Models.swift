@@ -198,11 +198,19 @@ public struct Channel: Sendable, Equatable {
     public var driverLastName: String
     public var teamName: String
     public var teamColorHex: String
+    /// F1 TV's own play link for this feed names no channel (the main INTERNATIONAL feed): PLAY
+    /// must then be asked without a `channelId`, or F1 TV answers 404.
+    public var playsWithoutChannel: Bool
+
+    /// The `channelId` to send with PLAY: none when F1 TV's link has none, else the feed's id.
+    public var playChannelId: Int? { playsWithoutChannel ? nil : id }
 
     public init(
         id: Int?, isDefault: Bool = false, isOnboard: Bool = false, title: String = "",
-        racingNumber: Int? = nil, driverLastName: String = "", teamName: String = "", teamColorHex: String = ""
+        racingNumber: Int? = nil, driverLastName: String = "", teamName: String = "", teamColorHex: String = "",
+        playsWithoutChannel: Bool = false
     ) {
+        self.playsWithoutChannel = playsWithoutChannel
         self.id = id
         self.isDefault = isDefault
         self.isOnboard = isOnboard
