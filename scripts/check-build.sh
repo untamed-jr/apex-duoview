@@ -43,14 +43,14 @@ BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plis
 UDID="$(xcrun simctl list devices available | grep -F "$SIM (" | head -1 | grep -oE '[0-9A-F-]{36}')" \
   || fail "No simulator called \"$SIM\". Set DUO_SIM to one from: xcrun simctl list devices"
 xcrun simctl boot "$UDID" 2>/dev/null || true
-open -a Simulator
+open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl install "$UDID" "$APP"
 mkdir -p build/shots
-for t in 0.3 0.9 1.6 2.4; do
+for t in 0.8 1.4 2.0 2.8; do
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
   xcrun simctl launch "$UDID" "$BUNDLE" >/dev/null
   sleep "$t"
   xcrun simctl io "$UDID" screenshot --type=png "build/shots/opening-${t}s.png" >/dev/null 2>&1
 done
-say "Screenshots saved in build/shots/ (opening at 0.3, 0.9, 1.6 and 2.4 s)."
+say "Screenshots saved in build/shots/ (opening at 0.8, 1.4, 2.0 and 2.8 s after launch)."
