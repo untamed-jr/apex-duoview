@@ -129,7 +129,7 @@ can apply its own mask. It is kept at `Design/AppIcon-1024.png` (1024 × 1024, o
 both the app icon and the sign-in logo. Brother ADLL helped pick it.
 
 Where it appears: the home screen icon (iOS rounds the corners), the launch screen
-(`LaunchLogo`, 120 pt), the sign-in screen (120 pt) and Settings › About (44 pt), the last two
+(`LaunchLogo`, 120 pt, until the opening screen replaced it on 2026-11-19), the sign-in screen (120 pt) and Settings › About (44 pt), the last two
 through `LogoTile`, which adds a hairline edge and a faint red glow so the black tile sits
 cleanly on the app's near-black background. `Design/SocialPreview.png` (1280 × 640) is the README banner and the GitHub social preview,
 uploaded by hand in the repository's settings when the repository goes public.
@@ -150,7 +150,9 @@ be designed with the owner before it is built:
   related marks are trade marks of Formula One Licensing B.V." (the usual wording in unofficial
   F1 apps), plus "Requires an F1 TV subscription".
 - Images come from Higgsfield only after a credit quote the owner approves.
-- When: a small polish build after beta.4 (owner, 2026-11-18).
+- When: a small polish build after beta.4 (owner, 2026-11-18). **Moved forward (owner,
+  2026-11-19):** built now, during the wait for the Las Vegas weekend; pushed to `main`, but the
+  phone keeps the race build (tag `race-build-vegas`) until after the race.
 - Direction chosen (owner, 2026-11-18): **A, "Night circuit"**: a dark, floodlit wet corner of an
   invented circuit, the logo scaling in with light trails drawn by the app, tagline "Every lap,
   every angle." Mockups: `docs/design/opening-screen-mockups.html`; wide wordmark drafts:
@@ -194,7 +196,11 @@ The ten changes on `docs/design/apple-design-pass.html` (Liquid Glass for floati
 monochrome tab bar, text that grows with the text size, 44 × 44 pt touch areas, VoiceOver for the
 map and pit circle) are **approved as recommended**: "it's only right since it's an iPhone Duo
 app that it meets iPhone design rules". How it is built:
-- When: the polish build after beta.4, with the opening screen (q10).
+- When: the polish build after beta.4, with the opening screen (q10). **Moved forward (owner,
+  2026-11-19):** built now with the opening screen, phone install after the race. The parts of
+  q8 and q9 that change touch areas or gestures in the tower, map, floating panels, Scrub Deck and
+  Race Engineer console wait until the laptop-pose tap and drag problems are found, so the
+  change can't hide their cause. The "before" screenshots come from the race build on the phone.
 - **One commit per change** (q1 … q9), so any one can be reverted on its own.
 - **Before and after screenshots of exactly what each change touches**, taken from the same
   screen, posture and moment (automated UI-test captures on the Duo where possible), collected
