@@ -4,6 +4,22 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### Polish — the opening screen and the Apple design pass (in progress, not on the phone yet)
+
+Moved forward from after beta.4 (owner, 2026-11-19), built while waiting for the race weekend.
+The phone keeps the race build (tag `race-build-vegas`) until after the Las Vegas race. Each
+change is its own commit so it can be kept or reverted on its own.
+
+- **Opening screen** (direction A, "Night circuit"): the floodlit wet corner, red light trails
+  drawn along the racing line, the neon APEX logo lighting up, "DuoView", "Every lap, every
+  angle.", the version and the small print. About 1.6 s plus a short hold, once per launch; a
+  tap skips it; Reduce Motion makes it a plain fade. The launch screen is now plain near-black
+  (the old square logo is gone from it), so it hands over to the opening's first frame.
+- **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
+  touching the phone; `--shots` also saves screenshots of the opening.
+
+Untested — check later: everything above (not built yet; written on a computer without Xcode).
+
 ### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
 
 The shared logic for beta.4 is in, ahead of the app builds (17 to 21, after the Las Vegas

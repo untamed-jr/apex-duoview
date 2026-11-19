@@ -4,6 +4,8 @@ import SwiftUI
 @main
 struct DuoApp: App {
     @State private var model = AppModel()
+    /// The opening plays once per launch, over the app (which starts loading underneath).
+    @State private var openingDone = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -16,6 +18,12 @@ struct DuoApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
                     Task { await model.revalidate() }
+                }
+                .overlay {
+                    if !openingDone {
+                        OpeningView { openingDone = true }
+                            .preferredColorScheme(.dark)
+                    }
                 }
         }
     }
