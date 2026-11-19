@@ -91,6 +91,14 @@ Release titles: "v1.0-beta.1 — Foundation", "v1.0-rc.1 — Release candidate",
   playlists checked only). Not yet verified: live sessions.
 - 2026-11-12: the São Paulo race stream (world feed, signed link from the play API) played in
   Safari on the owner's Mac, which uses the same Apple video engine as the app.
+- 2026-11-19 (owner probe, `--probe-multiview --probe-step matrix`, 2022 Australian GP,
+  contentId 1000005122): every `player_tm` shape (Safari and Android headers, `WEB_DASH` and
+  `WEB_HLS`, with and without `channelId`, `p=false`) returned one `SWITCHER` feed (HLS, no DRM),
+  never the full set. F1 TV has no all-feeds multiview for that race, so "Not available for this
+  race" is right. Without `channelId` the one feed is 1025 (INTERNATIONAL): the main feed whose
+  play link has no channel is asked for without one (fix 785255d).
+- 2026-11-19: the main INTERNATIONAL feed of older races (Abu Dhabi 2021) failed with a 404 when
+  asked for with `channelId=1025`; Pit Lane, Tracker and Data played. The official F1 app plays all.
   Seeking to a later point also worked.
 - The race's streams (pipeline 6, 6-second segments) carry #EXT-X-PROGRAM-DATE-TIME on every
   feed checked (world feed, F1 Live, an onboard, the last onboard), all starting at the same
