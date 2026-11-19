@@ -75,6 +75,8 @@ Builds 11 to 16. In short:
   2021 showed "Couldn't load F1 TV: error 404" in every view). F1 TV's own play link for that
   feed names no channel, and asking for its channel number gets a 404. Each feed now plays exactly
   as F1 TV's link says. Checked against F1 TV's public feed list for that race; not yet on the phone.
+- **"From the start" / "Watch live" points at the button you tapped** (found on the Duo,
+  2026-11-19): on iOS 26 it is a bubble, and hung on the whole page it pointed at the picture.
 - **Live sessions play (FairPlay)** (found on the Duo, 2026-11-19: the Las Vegas warm-up said
   "This session is protected"). F1 TV sends live video protected with Apple's FairPlay when asked
   Safari-style, as the app does. The single-feed player now gets each key from F1 TV's licence
@@ -102,7 +104,10 @@ Builds 11 to 16. In short:
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
 - ~~The same-height tiles~~ checked on the Duo 2026-11-19: the Race Weekend rows show every tile's text in full.
 - Closed: the feed reaches both side edges of the outer screen. ("Safe edges" read 0, 0, 0, 0 closed on the Duo, 2026-11-19: the strip was not a safe-area inset.)
-- A live session (warm-up show, FP1) › Watch: plays. If not, send the words after "This feed
+- ~~Live FairPlay~~ checked on the Duo 2026-11-19 (build 16 · 6564599): the Las Vegas warm-up played.
+- A live session's Play, Watch multiview and feed rows: "From the start" / "Watch live" points at
+  the button tapped.
+- A live session (FP1) › Watch: plays. If not, send the words after "This feed
   stopped:" (no build before this one can play live). The last build without FairPlay is d898169.
 - A live session › Watch multiview: "Multiview can't play this live session yet" › "Watch the main
   feed" plays it live.

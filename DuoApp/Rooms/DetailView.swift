@@ -68,9 +68,16 @@ struct DetailView: View {
         .navigationTitle(item.title)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: attempt) { if !state.isLoaded { await load() } }
-        .confirmationDialog(
+    }
+
+    /// "From the start" or "Watch live", attached to the button that asked: on iOS 26 the choice
+    /// is a bubble pointing at the view it hangs on (on the whole page it pointed at the picture).
+    private func asksStart<Content: View>(_ content: Content, when matches: @escaping (LiveChoice) -> Bool) -> some View {
+        content.confirmationDialog(
             Text(item.title),
-            isPresented: Binding(get: { liveChoice != nil }, set: { if !$0 { liveChoice = nil } }),
+            isPresented: Binding(
+                get: { liveChoice.map(matches) ?? false },
+                set: { if !$0 { liveChoice = nil } }),
             titleVisibility: .hidden,
             presenting: liveChoice
         ) { choice in
@@ -141,14 +148,16 @@ struct DetailView: View {
     private func multiviewEntry(_ detail: VideoDetail) -> some View {
         if detail.channels.count >= 2, case .signedIn(let account) = context.model.auth {
             if account.hasMultiview {
-                Button {
-                    watchMultiview(detail)
-                } label: {
-                    Label("Watch multiview", systemImage: "rectangle.split.2x2").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
-                .controlSize(.large)
+                asksStart(
+                    Button {
+                        watchMultiview(detail)
+                    } label: {
+                        Label("Watch multiview", systemImage: "rectangle.split.2x2").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .controlSize(.large),
+                    when: \.isMultiview)
             } else {
                 Text("Multiview needs F1 TV Premium")
                     .font(.subheadline)
@@ -179,18 +188,21 @@ struct DetailView: View {
         // Default feed first, then the rest in F1 TV's order.
         let ordered = detail.channels.filter(\.isDefault) + detail.channels.filter { !$0.isDefault }
         if ordered.count == 1 {
-            Button {
-                play(detail, ordered[0])
-            } label: {
-                Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .controlSize(.large)
+            let only = ordered[0]
+            asksStart(
+                Button {
+                    play(detail, only)
+                } label: {
+                    Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .controlSize(.large),
+                when: { $0.isFeed(only) })
         } else {
             VStack(spacing: 8) {
                 ForEach(Array(ordered.enumerated()), id: \.offset) { _, channel in
-                    ChannelRow(channel: channel) { play(detail, channel) }
+                    asksStart(ChannelRow(channel: channel) { play(detail, channel) }, when: { $0.isFeed(channel) })
                 }
             }
         }
@@ -201,6 +213,17 @@ struct DetailView: View {
 private enum LiveChoice {
     case feed(VideoDetail, Channel)
     case multiview(VideoDetail)
+
+    var isMultiview: Bool {
+        if case .multiview = self { return true }
+        return false
+    }
+
+    /// Waits for this feed (the button the choice points at).
+    func isFeed(_ channel: Channel) -> Bool {
+        if case .feed(_, let waiting) = self { return waiting.id == channel.id && waiting.title == channel.title }
+        return false
+    }
 }
 
 private struct ChannelRow: View {
