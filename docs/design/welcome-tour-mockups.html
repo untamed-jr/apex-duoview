@@ -1,0 +1,266 @@
+<title>Welcome Tour Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Titillium+Web:wght@600;700&display=swap">
+<style>
+/* Layout: one reading column; each tour card is a drawing of the Duo's open inner screen (951 × 669 pt,
+   fold down the middle: picture on the left half, words on the right), with keep / change / drop under it. */
+:root {
+  --bg: #f5f5f7; --surface: #ffffff; --fg: #16171b; --muted: #5e616b; --line: #dcdde2;
+  --red: #d40012; --ok: #127a43; --ok-bg: #e2f4e9; --alt: #a65a00; --alt-bg: #fcefdc; --no: #8a1c24; --no-bg: #f9e3e5;
+  /* The app's own colours, the same in both themes (the phone is always dark). */
+  --a-bg: #0a0a0b; --a-surface: #151517; --a-raised: #1e1e21; --a-line: #2a2a2e;
+  --a-ink: #e9e9ec; --a-ink2: #9a9aa2; --a-ink3: #66666d; --a-red: #ec0014; --a-purple: #b14aed; --a-green: #30d158; --a-yellow: #ffd60a;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-app: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101114; --surface: #18191d; --fg: #e8e9ec; --muted: #9ea1ab; --line: #2b2d33;
+  --red: #ff4655; --ok: #4ade80; --ok-bg: #11301e; --alt: #fbbf24; --alt-bg: #33270d; --no: #ff8a93; --no-bg: #3a1519; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #101114; --surface: #18191d; --fg: #e8e9ec; --muted: #9ea1ab; --line: #2b2d33;
+  --red: #ff4655; --ok: #4ade80; --ok-bg: #11301e; --alt: #fbbf24; --alt-bg: #33270d; --no: #ff8a93; --no-bg: #3a1519; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--f-display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 5vw, 40px); }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+p { margin: 0; }
+.eyebrow { font: 600 12px/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 65ch; }
+.intro { display: grid; gap: 12px; }
+.status { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.status b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.part { display: grid; gap: 16px; }
+.part > header { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+.card[data-s="keep"] { border-color: var(--ok); }
+.card[data-s="change"] { border-color: var(--alt); }
+.card[data-s="drop"] { border-color: var(--no); }
+.cardhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cardhead .n { font: 600 13px var(--f-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+.why { color: var(--muted); font-size: 14px; max-width: 65ch; }
+
+/* The Duo's open inner screen. */
+.duo { position: relative; aspect-ratio: 951 / 669; max-width: 100%; background: var(--a-bg); border-radius: 18px; overflow: hidden;
+  box-shadow: 0 0 0 6px #050506, 0 0 0 7px #2c2c30; margin: 7px; container-type: inline-size; color: var(--a-ink); font-family: var(--f-app); }
+.duo::after { content: ""; position: absolute; top: 0; bottom: 0; left: calc(50% - 1px); width: 2px; background: linear-gradient(transparent, rgba(255,255,255,.06) 20%, rgba(255,255,255,.06) 80%, transparent); pointer-events: none; }
+.duo .pic { position: absolute; inset: 0 50% 0 0; display: grid; place-items: center; padding: 5cqw 4cqw; }
+.duo .pic svg { width: 100%; height: 100%; }
+.duo .words { position: absolute; inset: 0 0 0 50%; padding: 9cqw 5.5cqw 5cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
+.duo .skip { position: absolute; top: 2.6cqw; right: 3cqw; font-size: 1.9cqw; color: var(--a-ink2); font-weight: 600; }
+.duo .t { font: 700 4.1cqw/1.1 var(--f-app); letter-spacing: -.01em; font-stretch: condensed; }
+.duo .l { font-size: 2.15cqw; line-height: 1.4; color: var(--a-ink2); }
+.duo .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+.duo .dots { display: flex; gap: .9cqw; }
+.duo .dots i { width: .9cqw; height: .9cqw; border-radius: 50%; background: var(--a-ink3); }
+.duo .dots i.on { background: var(--a-ink); width: 2.4cqw; border-radius: .5cqw; }
+.duo .next { font: 600 2cqw var(--f-app); padding: 1.1cqw 2.8cqw; border-radius: 99px; color: #fff;
+  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04)), var(--a-red);
+  box-shadow: inset 0 0 0 .12cqw rgba(255,255,255,.25); }
+.duo .next.glass { background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.05)); color: var(--a-ink); }
+.duo .badge { display: inline-block; font: 700 1.5cqw var(--f-app); color: #fff; background: var(--a-red); padding: .3cqw 1cqw; border-radius: 99px; }
+
+/* Tip bubbles (TipKit look). */
+.tips { display: grid; gap: 12px; }
+.tip { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.bubble { background: #1f1f23; color: #ececf0; border-radius: 14px; padding: 12px 14px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; max-width: 460px; font-family: var(--f-app); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.bubble svg { width: 22px; height: 22px; }
+.bubble b { display: block; font-size: 15px; }
+.bubble span { font-size: 13px; color: #a3a3ab; }
+.bubble .x { color: #8b8b93; font-size: 14px; line-height: 1; }
+.where { font-size: 13px; color: var(--muted); }
+
+/* Answers. */
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button { font: 600 14px var(--f-body); padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; min-height: 40px; }
+.seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.seg button[aria-pressed="true"][data-v="keep"], .seg button[aria-pressed="true"][data-v="a"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.seg button[aria-pressed="true"][data-v="change"], .seg button[aria-pressed="true"][data-v="b"] { background: var(--alt-bg); border-color: var(--alt); color: var(--alt); }
+.seg button[aria-pressed="true"][data-v="drop"] { background: var(--no-bg); border-color: var(--no); color: var(--no); }
+label { font-size: 13px; color: var(--muted); }
+textarea { width: 100%; box-sizing: border-box; min-height: 56px; resize: vertical; font: 14px/1.45 var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.note-field { display: grid; gap: 4px; }
+.rec { font-size: 14px; }
+.rec b { color: var(--fg); }
+.small { font-size: 13px; color: var(--muted); max-width: 65ch; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <p class="eyebrow">Apex DuoView · polish build · for your OK</p>
+    <h1>Welcome tour and first-time tips</h1>
+    <p class="lede">What someone new sees after the opening screen: five swipeable cards, each one picture and one line, with Skip on every card. After that, small tips appear the first time someone reaches a feature. Mark each card and tip Keep, Change or Drop, and edit any words in the note. Nothing is built until you've answered.</p>
+    <p class="small">The pictures here are simple drawings standing in for real screenshots of the app, which the built tour will use (never F1's photos). The cards are drawn on the open inner screen; in laptop pose and on the closed screen the picture sits above the words.</p>
+    <div class="status" aria-live="polite"><span><b id="n-done">0</b> of <b id="n-all">0</b> answered</span><span id="save">Saved on this device only</span></div>
+  </div>
+
+  <section class="part" aria-labelledby="h-cards">
+    <header><p class="eyebrow">Part 1</p><h2 id="h-cards">The five cards</h2><p class="why">Shown once, on the first launch. "How to use" in Settings plays them again.</p></header>
+    <div id="cards" class="part"></div>
+  </section>
+
+  <section class="part" aria-labelledby="h-tips">
+    <header><p class="eyebrow">Part 2</p><h2 id="h-tips">Tips the first time</h2><p class="why">Each bubble shows once, where the feature is, and closes with ✕. Settings gets "Show tips" (on/off) and "Reset tips".</p></header>
+    <div id="tips" class="tips"></div>
+  </section>
+
+  <section class="part" aria-labelledby="h-qs">
+    <header><p class="eyebrow">Part 3</p><h2 id="h-qs">Three choices</h2></header>
+    <div id="qs" class="part"></div>
+  </section>
+</div>
+
+<script>
+const CARDS = [
+  { id: "c1", t: "Every lap, every angle.", l: "Apex DuoView plays F1 TV on your iPhone Duo, several feeds at once. Sign in with your F1 TV account. Live races and onboards need a video plan; multiview needs F1 TV Premium.", why: "What the app is, and what it needs, before anything else.", pic: "logo", btn: "Next" },
+  { id: "c2", t: "Fold it, the view changes", l: "Flat shows up to four feeds. Half-open like a book or a laptop, video sits on one half and timing on the other. Closed, the outer screen keeps playing.", why: "The app's main idea, so it comes first after the welcome.", pic: "fold", btn: "Next" },
+  { id: "c3", t: "Pick your feeds", l: "Tap Feeds to choose the world feed, onboards, pit lane, tracker or data. The speaker on a feed moves the sound to it; SOUND marks the one you hear.", why: "Multiview is the first thing most people open.", pic: "feeds", btn: "Next" },
+  { id: "c4", t: "Tap a car", l: "Open the map or the tower and tap a car to put its onboard on screen. Hold a car on the map to see its pit window.", why: "The fastest way to follow a driver, and easy to miss.", pic: "map", btn: "Next" },
+  { id: "c5", t: "Live, or from the start", l: "Live sessions show in Race Weekend: watch live, or from the start. Every past race is in Archive, and Continue watching picks up where you stopped.", why: "Where to find things, ending on the button that starts the app.", pic: "live", btn: "Start watching" },
+];
+const TIPS = [
+  { id: "t1", t: "Try laptop pose", l: "Fold the phone like a laptop for Race Engineer: video on top, the console below.", where: "The first multiview, with the phone open flat.", icon: "laptop" },
+  { id: "t2", t: "Tap a car", l: "Tap a car to put its onboard on screen.", where: "The first time the map or tower shows.", icon: "car" },
+  { id: "t3", t: "Controls are hiding", l: "Tap the picture to bring them back.", where: "The first time the multiview controls fade out.", icon: "tap" },
+  { id: "t4", t: "Drag to any lap", l: "Drag along the Scrub Deck to jump the video to that moment.", where: "The first Scrub Deck (after the drag fix on Sunday).", icon: "drag" },
+  { id: "t5", t: "Closed, it keeps playing", l: "The outer screen keeps the video; open the phone to get the full view back.", where: "The first time the phone is closed during a video.", icon: "fold" },
+];
+const QS = [
+  { id: "q-when", t: "When does the tour show?", a: "First launch only, then from Settings › How to use (recommended)", b: "Every launch until someone taps \"Don't show again\"" },
+  { id: "q-len", t: "How many cards?", a: "All five (recommended; about 20 seconds)", b: "Three: drop the ones you mark Drop above and keep it short" },
+  { id: "q-pics", t: "Pictures on the cards", a: "Real screenshots of the app, taken from the design pass \"after\" pictures (recommended)", b: "Clean drawings like these, in the app's colours" },
+];
+
+const PICS = {
+  logo: `<svg viewBox="0 0 200 180" role="img" aria-label="The APEX logo over a night track">
+    <path d="M10 160 C 60 130, 120 120, 200 118" stroke="#ec0014" stroke-width="2" fill="none"/><path d="M10 166 C 60 136, 120 126, 200 124" stroke="#ffe6dc" stroke-width="1" fill="none"/>
+    <text x="100" y="78" text-anchor="middle" font-family="-apple-system,Arial" font-weight="800" font-style="italic" font-size="44" fill="none" stroke="#ec0014" stroke-width="2.4">APEX</text>
+    <text x="100" y="104" text-anchor="middle" font-family="-apple-system,Arial" font-weight="700" font-size="16" fill="#e9e9ec">Duo<tspan fill="#ec0014">View</tspan></text></svg>`,
+  fold: `<svg viewBox="0 0 200 180" role="img" aria-label="Four postures: flat, book, laptop, closed">
+    <g fill="none" stroke="#9a9aa2" stroke-width="1.5">
+      <rect x="8" y="20" width="84" height="58" rx="5"/><line x1="50" y1="20" x2="50" y2="78" stroke-dasharray="2 2"/>
+      <rect x="108" y="20" width="84" height="58" rx="5"/><line x1="150" y1="20" x2="150" y2="78" stroke-dasharray="2 2"/>
+      <rect x="22" y="98" width="56" height="70" rx="5"/><line x1="22" y1="133" x2="78" y2="133" stroke-dasharray="2 2"/>
+      <rect x="128" y="102" width="44" height="64" rx="6"/></g>
+    <g fill="#1e1e21"><rect x="12" y="24" width="36" height="24" rx="2"/><rect x="52" y="24" width="36" height="24" rx="2"/><rect x="12" y="51" width="36" height="24" rx="2"/><rect x="52" y="51" width="36" height="24" rx="2"/>
+      <rect x="112" y="24" width="34" height="50" rx="2"/><rect x="26" y="102" width="48" height="28" rx="2"/><rect x="132" y="106" width="36" height="56" rx="3"/></g>
+    <g fill="#ec0014"><circle cx="170" cy="49" r="2"/><circle cx="160" cy="40" r="2"/></g>
+    <g stroke="#30d158" stroke-width="1.2" fill="none"><path d="M156 62 l8 -6 8 3 10 -9"/></g>
+    <g fill="#e9e9ec" opacity=".7"><rect x="28" y="138" width="44" height="3" rx="1"/><rect x="28" y="145" width="30" height="3" rx="1"/><rect x="28" y="152" width="38" height="3" rx="1"/></g>
+    <g font-family="-apple-system,Arial" font-size="9" fill="#9a9aa2" text-anchor="middle"><text x="50" y="92">Flat</text><text x="150" y="92">Book</text><text x="50" y="178">Laptop</text><text x="150" y="178">Closed</text></g></svg>`,
+  feeds: `<svg viewBox="0 0 200 180" role="img" aria-label="Four feeds, one marked SOUND">
+    <g fill="#1e1e21"><rect x="6" y="20" width="92" height="66" rx="4"/><rect x="102" y="20" width="92" height="66" rx="4"/><rect x="6" y="90" width="92" height="66" rx="4"/><rect x="102" y="90" width="92" height="66" rx="4"/></g>
+    <g fill="rgba(255,255,255,.14)"><rect x="12" y="72" width="62" height="10" rx="5"/><rect x="108" y="72" width="40" height="10" rx="5"/><rect x="12" y="142" width="44" height="10" rx="5"/><rect x="108" y="142" width="48" height="10" rx="5"/></g>
+    <g font-family="-apple-system,Arial" font-size="6.5" font-weight="700" fill="#e9e9ec"><text x="16" y="79.5">World feed</text><text x="112" y="79.5">16 LEC</text><text x="16" y="149.5">Pit lane</text><text x="112" y="149.5">Tracker</text></g>
+    <rect x="52" y="73" width="20" height="8" rx="4" fill="#ec0014"/><text x="62" y="79" text-anchor="middle" font-family="-apple-system,Arial" font-size="5" font-weight="800" fill="#fff">SOUND</text>
+    <g fill="rgba(255,255,255,.14)"><circle cx="88" cy="30" r="6"/><circle cx="184" cy="30" r="6"/><circle cx="88" cy="100" r="6"/><circle cx="184" cy="100" r="6"/></g>
+    <g fill="#e9e9ec"><path d="M85 28h2l2-2v8l-2-2h-2z"/><path d="M181 28h2l2-2v8l-2-2h-2z"/><path d="M85 98h2l2-2v8l-2-2h-2z"/><path d="M181 98h2l2-2v8l-2-2h-2z"/></g></svg>`,
+  map: `<svg viewBox="0 0 200 180" role="img" aria-label="A track map with cars; one is tapped">
+    <path d="M30 120 C 20 80, 50 40, 90 46 S 150 30, 170 60 S 160 130, 120 136 S 60 150, 30 120 Z" fill="none" stroke="#000" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M30 120 C 20 80, 50 40, 90 46 S 150 30, 170 60 S 160 130, 120 136 S 60 150, 30 120 Z" fill="none" stroke="#e9e9ec" stroke-width="4" stroke-linejoin="round"/>
+    <g stroke="#0a0a0b" stroke-width="1.2"><circle cx="90" cy="46" r="5" fill="#ec0014"/><circle cx="168" cy="72" r="5" fill="#3671c6"/><circle cx="120" cy="136" r="5" fill="#ff8000"/><circle cx="26" cy="96" r="5" fill="#27f4d2"/></g>
+    <circle cx="90" cy="46" r="8.5" fill="none" stroke="#fff" stroke-width="1.6"/>
+    <g font-family="-apple-system,Arial" font-size="8" font-weight="700" fill="#e9e9ec"><text x="97" y="40">LEC</text><text x="175" y="75">VER</text><text x="127" y="146">NOR</text><text x="33" y="99">RUS</text></g>
+    <circle cx="96" cy="58" r="9" fill="rgba(255,255,255,.18)"/><circle cx="96" cy="58" r="4" fill="#fff"/></svg>`,
+  live: `<svg viewBox="0 0 200 180" role="img" aria-label="Race Weekend list with a live session">
+    <text x="8" y="22" font-family="-apple-system,Arial" font-size="13" font-weight="800" fill="#e9e9ec">Race Weekend</text>
+    <g fill="#151517"><rect x="6" y="34" width="188" height="34" rx="6"/><rect x="6" y="74" width="188" height="30" rx="6"/><rect x="6" y="110" width="188" height="30" rx="6"/></g>
+    <rect x="14" y="44" width="26" height="12" rx="6" fill="#ec0014"/><text x="27" y="53" text-anchor="middle" font-family="-apple-system,Arial" font-size="7" font-weight="800" fill="#fff">LIVE</text>
+    <g font-family="-apple-system,Arial" font-weight="700" fill="#e9e9ec"><text x="48" y="54" font-size="10">Practice 1</text><text x="48" y="92" font-size="9" fill="#9a9aa2">Practice 2 · 8:00 PM</text><text x="48" y="128" font-size="9" fill="#9a9aa2">Qualifying · Fri</text></g>
+    <g font-family="-apple-system,Arial" font-size="8" font-weight="600"><rect x="44" y="150" width="68" height="18" rx="9" fill="rgba(255,255,255,.12)"/><text x="78" y="162" text-anchor="middle" fill="#e9e9ec">From the start</text><rect x="118" y="150" width="58" height="18" rx="9" fill="#ec0014"/><text x="147" y="162" text-anchor="middle" fill="#fff">Watch live</text></g></svg>`,
+};
+const ICONS = {
+  laptop: `<svg viewBox="0 0 24 24" fill="none" stroke="#ff4655" stroke-width="1.8"><rect x="5" y="4" width="14" height="9" rx="1.5"/><path d="M3 18h18l-2-4H5z"/></svg>`,
+  car: `<svg viewBox="0 0 24 24" fill="none" stroke="#ff4655" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="8"/></svg>`,
+  tap: `<svg viewBox="0 0 24 24" fill="none" stroke="#ff4655" stroke-width="1.8"><circle cx="12" cy="10" r="3"/><path d="M12 13v7M7 5a7 7 0 0 1 10 0"/></svg>`,
+  drag: `<svg viewBox="0 0 24 24" fill="none" stroke="#ff4655" stroke-width="1.8"><path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/></svg>`,
+  fold: `<svg viewBox="0 0 24 24" fill="none" stroke="#ff4655" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M10 18h4"/></svg>`,
+};
+const LABEL = { keep: "Keep", change: "Change", drop: "Drop" };
+const state = {}; let db = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const ALL = [...CARDS.map(c => c.id), ...TIPS.map(t => t.id), ...QS.map(q => q.id)];
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem("wtm") || "{}")); } catch (e) {} }
+function saveLocal() { try { localStorage.setItem("wtm", JSON.stringify(state)); } catch (e) {} }
+function seg(id, values, labels, name) {
+  const v = state[id] || {};
+  return `<div class="seg" role="group" aria-label="Your answer for ${esc(name)}">${values.map((s, i) => `<button type="button" data-id="${id}" data-v="${s}" aria-pressed="${v.s === s}">${esc(labels[i])}</button>`).join("")}</div>`;
+}
+function note(id, prompt) {
+  const v = state[id] || {};
+  return `<div class="note-field"><label for="n-${id}">${esc(prompt)}</label><textarea id="n-${id}" data-id="${id}" placeholder="Optional">${esc(v.n || "")}</textarea></div>`;
+}
+function render() {
+  document.getElementById("cards").innerHTML = CARDS.map((c, i) => {
+    const v = state[c.id] || {};
+    return `<article class="card" data-s="${v.s || ""}" aria-labelledby="h-${c.id}">
+      <div class="cardhead"><span class="n">Card ${i + 1} of ${CARDS.length}</span><h3 id="h-${c.id}">${esc(c.t)}</h3></div>
+      <div class="duo" role="img" aria-label="Card ${i + 1} on the open inner screen: ${esc(c.t)}. ${esc(c.l)}">
+        <div class="pic">${PICS[c.pic]}</div>
+        <div class="words"><span class="skip">${i < CARDS.length - 1 ? "Skip" : ""}</span>
+          <div class="t">${esc(c.t)}</div><div class="l">${esc(c.l)}</div>
+          <div class="foot"><div class="dots">${CARDS.map((_, j) => `<i class="${j === i ? "on" : ""}"></i>`).join("")}</div><span class="next">${esc(c.btn)}</span></div></div>
+      </div>
+      <p class="why">${esc(c.why)}</p>
+      ${seg(c.id, ["keep", "change", "drop"], ["Keep", "Change", "Drop"], "card " + (i + 1))}
+      ${note(c.id, v.s === "change" ? "What to change (new words, or a different picture)" : "Note")}
+    </article>`;
+  }).join("");
+  document.getElementById("tips").innerHTML = TIPS.map(t => {
+    const v = state[t.id] || {};
+    return `<article class="card tip" data-s="${v.s || ""}" aria-labelledby="h-${t.id}">
+      <div class="bubble"><span aria-hidden="true">${ICONS[t.icon]}</span><div><b id="h-${t.id}">${esc(t.t)}</b><span>${esc(t.l)}</span></div><span class="x" aria-hidden="true">✕</span></div>
+      <p class="where">Shows: ${esc(t.where)}</p>
+      ${seg(t.id, ["keep", "change", "drop"], ["Keep", "Change", "Drop"], "tip " + t.t)}
+      ${note(t.id, v.s === "change" ? "What to change" : "Note")}
+    </article>`;
+  }).join("");
+  document.getElementById("qs").innerHTML = QS.map(q => {
+    const v = state[q.id] || {};
+    return `<article class="card" data-s="${v.s === "a" ? "keep" : v.s === "b" ? "change" : ""}" aria-labelledby="h-${q.id}">
+      <h3 id="h-${q.id}">${esc(q.t)}</h3>
+      <p class="rec"><b>A:</b> ${esc(q.a)}</p><p class="rec"><b>B:</b> ${esc(q.b)}</p>
+      ${seg(q.id, ["a", "b"], ["A", "B"], q.t)}
+      ${note(q.id, "Note")}
+    </article>`;
+  }).join("");
+  tally();
+}
+function tally() {
+  document.getElementById("n-all").textContent = ALL.length;
+  document.getElementById("n-done").textContent = ALL.filter(id => state[id] && state[id].s).length;
+}
+async function put(id) {
+  const v = state[id]; saveLocal(); tally();
+  if (!db) return;
+  try { await db.collection("tour").doc(id).set({ s: v.s || "", n: v.n || "", at: new Date().toISOString() }); document.getElementById("save").textContent = "Saved for Claude"; }
+  catch (e) { document.getElementById("save").textContent = "Couldn't save online; kept on this device"; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  const id = b.dataset.id; const cur = state[id] || {};
+  state[id] = { ...cur, s: cur.s === b.dataset.v ? "" : b.dataset.v };
+  const y = window.scrollY; render(); window.scrollTo(0, y); put(id);
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const id = t.dataset.id; state[id] = { ...(state[id] || {}), n: t.value };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => put(id), 600);
+});
+loadLocal(); render();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) return;
+    document.getElementById("save").textContent = "Saved for Claude";
+    const snap = await db.collection("tour").get();
+    (snap.docs || snap).forEach(d => { const data = d.data ? d.data() : d; if (ALL.includes(d.id)) state[d.id] = { s: data.s || "", n: data.n || "" }; });
+    saveLocal(); render();
+  } catch (e) { db = null; }
+})();
+</script>
