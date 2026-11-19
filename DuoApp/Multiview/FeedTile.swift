@@ -54,7 +54,8 @@ struct FeedTile: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.black.opacity(0.55), in: Capsule())
+            // Design pass q2: a clear-glass pill; only SOUND keeps the red.
+            .videoGlass(in: Capsule())
             .padding(6)
         }
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -152,7 +153,7 @@ struct FeedSpeakerButton: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(Color.black.opacity(0.55), in: Circle())
+                .videoGlass(in: Circle())
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }

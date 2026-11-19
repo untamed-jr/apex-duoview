@@ -27,7 +27,7 @@ struct DriverCardSlot: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(Color.black.opacity(0.55), in: Circle())
+                    .videoGlass(in: Circle())
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -103,7 +103,8 @@ struct DriverCardView: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
         .frame(maxWidth: 240, alignment: .leading)
-        .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        // Design pass q2: the driver card over an onboard is clear glass too.
+        .videoGlass(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(alignment: .leading) {
             Rectangle().fill(team).frame(width: 2).padding(.vertical, 4).accessibilityHidden(true)
         }
