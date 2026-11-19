@@ -152,7 +152,7 @@ be designed with the owner before it is built:
 - Images come from Higgsfield only after a credit quote the owner approves.
 - When: a small polish build after beta.4 (owner, 2026-11-18). **Moved forward (owner,
   2026-11-19):** built now, during the wait for the Las Vegas weekend; pushed to `main`, but the
-  phone keeps the race build (tag `race-build-vegas`) until after the race.
+  phone keeps the race build (commit `cc569d2`, the same app as `3073622`) until after the race.
 - Direction chosen (owner, 2026-11-18): **A, "Night circuit"**: a dark, floodlit wet corner of an
   invented circuit, the logo scaling in with light trails drawn by the app, tagline "Every lap,
   every angle." Mockups: `docs/design/opening-screen-mockups.html`; wide wordmark drafts:

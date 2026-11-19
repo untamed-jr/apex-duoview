@@ -7,7 +7,7 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 ### Polish — the opening screen and the Apple design pass (in progress, not on the phone yet)
 
 Moved forward from after beta.4 (owner, 2026-11-19), built while waiting for the race weekend.
-The phone keeps the race build (tag `race-build-vegas`) until after the Las Vegas race. Each
+The phone keeps the race build (commit `cc569d2`, the same app as `3073622`) until after the Las Vegas race. Each
 change is its own commit so it can be kept or reverted on its own.
 
 - **Opening screen** (direction A, "Night circuit"): the floodlit wet corner, red light trails
