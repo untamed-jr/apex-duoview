@@ -42,6 +42,10 @@ final class PlayerController {
     @ObservationIgnored private let recents: RecentsStore
     @ObservationIgnored private let history: WatchHistory
     @ObservationIgnored private let catalogue: Catalogue
+    /// F1 TV's session, for FairPlay keys (live streams).
+    @ObservationIgnored private let f1: F1TVSession
+    /// The key handler of the FairPlay stream playing now, kept for the whole playback.
+    @ObservationIgnored private var fairPlayKeys: FairPlayKeys?
     /// The session's timing, shared with the multiview; the cover's map panel reads it.
     @ObservationIgnored let timing: TimingController
 
@@ -91,8 +95,9 @@ final class PlayerController {
     static let beginningAttempts = 40
 
     init(coordinator: PlayCoordinator, recents: RecentsStore, history: WatchHistory, catalogue: Catalogue,
-         timing: TimingController) {
+         timing: TimingController, f1: F1TVSession) {
         self.coordinator = coordinator
+        self.f1 = f1
         self.recents = recents
         self.history = history
         self.catalogue = catalogue
@@ -179,7 +184,9 @@ final class PlayerController {
         })
         // An onboard gets its driver card (unless hidden).
         timing.setCardFeeds(card.map { [$0.channelId: $0.number] } ?? [:], owner: self)
-        begin(url: info.url, startAt: startAt, date: date)
+        // Live sessions come as FairPlay: their keys come from F1 TV's licence service. Replays
+        // are clear and take the plain path, as before.
+        begin(url: info.url, license: info.isFairPlay ? info.licenseURL : nil, startAt: startAt, date: date)
     }
 
     // MARK: Tap a car
@@ -399,12 +406,23 @@ final class PlayerController {
 
     // MARK: Playback
 
-    private func begin(url: URL, startAt: Start, date: Date? = nil) {
+    private func begin(url: URL, license: URL? = nil, startAt: Start, date: Date? = nil) {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .moviePlayback)
         try? session.setActive(true)
 
-        let item = AVPlayerItem(url: url)
+        let item: AVPlayerItem
+        if let license {
+            // The key session takes the asset before the item exists, so the first key request
+            // goes to it.
+            let asset = AVURLAsset(url: url)
+            let keys = FairPlayKeys(f1: f1, licenseURL: license)
+            keys.attach(asset)
+            fairPlayKeys = keys
+            item = AVPlayerItem(asset: asset)
+        } else {
+            item = AVPlayerItem(url: url)
+        }
         let player = AVPlayer(playerItem: item)
         pendingStart = startAt
         pendingDate = date
@@ -516,7 +534,9 @@ final class PlayerController {
                 player.play()
             }
         case .failed:
-            feedStopped(reason: item.error?.localizedDescription ?? "")
+            // A FairPlay key that couldn't be had says why, rather than AVFoundation's generic text.
+            let reason = fairPlayKeys?.lastFailure.map { "couldn't unlock this live stream: \($0)" }
+            feedStopped(reason: reason ?? item.error?.localizedDescription ?? "")
         default:
             break
         }
@@ -628,6 +648,8 @@ final class PlayerController {
     private func teardownPlayback() {
         beginningTask?.cancel()
         beginningTask = nil
+        fairPlayKeys?.stop()
+        fairPlayKeys = nil
         removeObservers()
         player?.pause()
         player?.replaceCurrentItem(with: nil)

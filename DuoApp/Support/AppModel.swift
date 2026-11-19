@@ -77,7 +77,8 @@ final class AppModel {
             live: liveTiming)
         self.timing = timing
         self.playback = PlayerController(
-            coordinator: player, recents: recents, history: history, catalogue: catalogue, timing: timing)
+            coordinator: player, recents: recents, history: history, catalogue: catalogue, timing: timing,
+            f1: session)
         let multiviewStore = MultiviewStore(store: store)
         self.multiviewStore = multiviewStore
         self.multiview = MultiviewController(

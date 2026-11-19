@@ -4,11 +4,14 @@ public struct HTTPRequest: Sendable, Equatable {
     public var method: String
     public var url: URL
     public var headers: [String: String]
+    /// Sent as the request body (a POST's); nil for a GET.
+    public var body: Data?
 
-    public init(method: String, url: URL, headers: [String: String] = [:]) {
+    public init(method: String, url: URL, headers: [String: String] = [:], body: Data? = nil) {
         self.method = method
         self.url = url
         self.headers = headers
+        self.body = body
     }
 }
 

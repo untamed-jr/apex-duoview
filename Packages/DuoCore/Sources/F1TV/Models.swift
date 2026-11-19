@@ -263,12 +263,20 @@ public struct MultiPlayInfo: Sendable, Equatable {
 /// What PLAY returns: the stream, and the license URL when the stream is protected.
 public struct PlayInfo: Sendable, Equatable {
     public var url: URL
+    /// F1 TV's licence service for a DRM stream (signed: never log it or show it).
     public var licenseURL: URL?
     public var streamType: String
+    /// "fairplay", "widevine", or empty for a clear stream.
+    public var drmType: String
 
-    public init(url: URL, licenseURL: URL? = nil, streamType: String) {
+    public init(url: URL, licenseURL: URL? = nil, streamType: String, drmType: String = "") {
         self.url = url
         self.licenseURL = licenseURL
         self.streamType = streamType
+        self.drmType = drmType
     }
+
+    /// A FairPlay stream (live sessions, asked Safari-style) that the app can unlock with F1 TV's
+    /// licence service, as Safari does.
+    public var isFairPlay: Bool { licenseURL != nil && drmType.lowercased() == "fairplay" }
 }

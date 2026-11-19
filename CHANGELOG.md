@@ -75,6 +75,17 @@ Builds 11 to 16. In short:
   2021 showed "Couldn't load F1 TV: error 404" in every view). F1 TV's own play link for that
   feed names no channel, and asking for its channel number gets a 404. Each feed now plays exactly
   as F1 TV's link says. Checked against F1 TV's public feed list for that race; not yet on the phone.
+- **Live sessions play (FairPlay)** (found on the Duo, 2026-11-19: the Las Vegas warm-up said
+  "This session is protected"). F1 TV sends live video protected with Apple's FairPlay when asked
+  Safari-style, as the app does. The single-feed player now gets each key from F1 TV's licence
+  service the way F1 TV's own web player does (its certificate, then the phone's key request),
+  and Apple's video engine plays it; nothing is decrypted or stored by the app. Replays are clear
+  and take the same path as before. If a key can't be had, "This feed stopped: couldn't unlock
+  this live stream: …" says which step failed. Built from F1 TV's web player settings; not yet
+  tested on the phone.
+- **Live multiview says "Multiview can't play this live session yet"** and offers "Watch the main
+  feed": asked the app's multiview way, F1 TV sends live multiview as Widevine, which iPhones
+  can't play. Whether the Safari-style request gives all live feeds is checked at FP1.
 - **"Watch the main feed"** on multiview's "Not available for this race" (owner request,
   2026-11-19): closes the multiview and plays the race's main feed in the normal player, from
   where the multiview would have started. Close stays as the second button.
@@ -91,6 +102,10 @@ Builds 11 to 16. In short:
 - The zero-warnings build (no new files; regenerate with XcodeGen anyway after pulling).
 - ~~The same-height tiles~~ checked on the Duo 2026-11-19: the Race Weekend rows show every tile's text in full.
 - Closed: the feed reaches both side edges of the outer screen. ("Safe edges" read 0, 0, 0, 0 closed on the Duo, 2026-11-19: the strip was not a safe-area inset.)
+- A live session (warm-up show, FP1) › Watch: plays. If not, send the words after "This feed
+  stopped:" (no build before this one can play live). The last build without FairPlay is d898169.
+- A live session › Watch multiview: "Multiview can't play this live session yet" › "Watch the main
+  feed" plays it live.
 - Abu Dhabi 2021 › Watch multiview › "Watch the main feed": the INTERNATIONAL feed plays in the
   normal player, from the start (or the saved place).
 - ~~Abu Dhabi 2021 › Watch plays the INTERNATIONAL feed~~ checked on the Duo 2026-11-19 (build 16 ·

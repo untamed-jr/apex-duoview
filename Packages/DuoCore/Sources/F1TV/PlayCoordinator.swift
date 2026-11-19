@@ -108,10 +108,11 @@ public actor PlayCoordinator {
         let json = try await session.getJSON(
             path: "CONTENT/PLAY", version: .play, platform: key.multiview ? .webDASH : .webHLS,
             query: query, authorized: true, multiview: key.multiview)
-        // A DRM-protected stream can't play in this app yet; it never becomes the active one.
+        // A DRM stream other than FairPlay can't play in this app; it never becomes the active one.
+        // FairPlay (live, asked Safari-style) plays with a key from F1 TV's licence service.
         if key.multiview { return .multi(try Parsers.multiPlay(json)) }
         let info = try Parsers.play(json)
-        if info.licenseURL != nil { throw F1TVError.protectedContent }
+        if info.licenseURL != nil, !info.isFairPlay { throw F1TVError.protectedContent }
         return .single(info)
     }
 }

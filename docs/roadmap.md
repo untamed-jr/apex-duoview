@@ -97,6 +97,14 @@ Release titles: "v1.0-beta.1 — Foundation", "v1.0-rc.1 — Release candidate",
   never the full set. F1 TV has no all-feeds multiview for that race, so "Not available for this
   race" is right. Without `channelId` the one feed is 1025 (INTERNATIONAL): the main feed whose
   play link has no channel is asked for without one (fix 785255d).
+- 2026-11-19 (owner stream check, Las Vegas warm-up show, live): live video is DRM-protected.
+  `WEB_HLS` with the Safari device info returns FairPlay HLS (`drmType` fairplay, `skd://` keys,
+  a licence URL); with the Android device info, and on `WEB_DASH`, Widevine; the native
+  platforms (`MOBILE_HLS`, `TABLET_HLS`, `BIG_SCREEN_HLS`) answer 500. Multiview asked
+  Android-style returns Widevine HLS, asked Safari-style FairPlay HLS (one feed for the warm-up).
+  Live playlists carry `EXT-X-PROGRAM-DATE-TIME`. The show played in Safari on f1tv.formula1.com.
+  F1 TV's web player asks its FairPlay licence as `spc=<base64>&assetId=<key ID>` with the
+  ascendon and entitlement tokens; its certificate is the config's `bitmovin.drm.certUrl`.
 - 2026-11-19: the main INTERNATIONAL feed of older races (Abu Dhabi 2021) failed with a 404 when
   asked for with `channelId=1025`; Pit Lane, Tracker and Data played. The official F1 app plays all.
   Seeking to a later point also worked.

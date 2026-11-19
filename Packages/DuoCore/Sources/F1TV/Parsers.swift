@@ -271,7 +271,8 @@ public enum Parsers {
         return PlayInfo(
             url: url,
             licenseURL: URL(string: result["laURL"].string).flatMap { result["laURL"].string.isEmpty ? nil : $0 },
-            streamType: result["streamType"].string
+            streamType: result["streamType"].string,
+            drmType: result["drmType"].string
         )
     }
 

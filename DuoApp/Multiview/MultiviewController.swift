@@ -23,6 +23,8 @@ import UIKit
 final class MultiviewController {
     static let slotCount = 4
     static let unavailableMessage = "Not available for this race"
+    /// Live multiview: F1 TV sends it protected in a way iPhones can't play (yet).
+    static let protectedMessage = "Multiview can't play this live session yet"
     /// Saves every 10 ticks of 0.5 s: every 5 s, as the single-feed player does.
     static let saveEveryTicks = 10
     /// The access log is read every 2 ticks (1 s) for the dropped-frame count.
@@ -356,7 +358,9 @@ final class MultiviewController {
             guard generation == mine else { return }
             isLoading = false
             errorText = Self.message(for: error)
-            if let error = error as? F1TVError, error == .multiviewUnavailable,
+            // No multiview, or a protected one (live multiview comes as Widevine, which iOS can't
+            // play): the main feed can still play in the single-feed player (live as FairPlay).
+            if let error = error as? F1TVError, error == .multiviewUnavailable || error == .protectedContent,
                 let main = detail.channels.first(where: \.isDefault) ?? detail.channels.first {
                 mainFeedFallback = MainFeedFallback(item: showing, channel: main, start: startAt)
             }
@@ -2301,6 +2305,9 @@ final class MultiviewController {
     static func message(for error: Error) -> String {
         if let error = error as? F1TVError, error == .multiviewUnavailable {
             return unavailableMessage
+        }
+        if let error = error as? F1TVError, error == .protectedContent {
+            return protectedMessage
         }
         return PlayerController.message(for: error)
     }

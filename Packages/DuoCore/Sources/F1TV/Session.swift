@@ -40,6 +40,8 @@ public actor F1TVSession {
     private var ascendon: String?
     private var entitlements: [Platform: String] = [:]
     private var entitlementTasks: [Platform: Task<String, Error>] = [:]
+    private var fairPlayCertificateURL = FairPlay.defaultCertificateURL
+    private var fairPlayCertificateData: Data?
 
     public private(set) var account: Account?
     public private(set) var location: Location?
@@ -137,6 +139,55 @@ public actor F1TVSession {
         return try await getJSON(url: url, headers: headers)
     }
 
+    // MARK: - FairPlay (live)
+
+    /// F1 TV's FairPlay application certificate, from the config's `bitmovin.drm.certUrl` (else
+    /// `fairplay01.der`), fetched once.
+    public func fairPlayCertificate() async throws -> Data {
+        if let fairPlayCertificateData { return fairPlayCertificateData }
+        try await loadConfig()
+        let response = try await send(fairPlayCertificateURL, headers: [:])
+        guard (200..<300).contains(response.status) else { throw FairPlayError.certificate(status: response.status) }
+        guard !response.body.isEmpty else { throw FairPlayError.certificate(status: 0) }
+        fairPlayCertificateData = response.body
+        return response.body
+    }
+
+    /// One FairPlay key: POSTs the SPC to the PLAY reply's licence URL as F1 TV's web player
+    /// does, with the subscription and WEB_HLS entitlement tokens, and returns the CKC. A refusal
+    /// is a `FairPlayError`, never `.refused`: it doesn't end the sign-in.
+    public func fairPlayLicense(spc: Data, keyURI: String, licenseURL: URL) async throws -> Data {
+        guard let assetId = FairPlay.assetId(fromKeyURI: keyURI) else {
+            throw FairPlayError.keyID(length: FairPlay.keyIDLength(fromKeyURI: keyURI))
+        }
+        guard let token = ascendon else { throw F1TVError.notSignedIn }
+        let ent = try await entitlement(for: .webHLS)
+        let headers = [
+            "ascendontoken": token,
+            "entitlementtoken": ent,
+            "Content-Type": "application/octet-stream",
+            "User-Agent": Endpoints.userAgent,
+        ]
+        let response: HTTPResponse
+        do {
+            response = try await http.send(HTTPRequest(
+                method: "POST", url: licenseURL, headers: headers,
+                body: FairPlay.licenseBody(spc: spc, assetId: assetId)))
+        } catch let e as F1TVError {
+            throw e
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw F1TVError.network(error.localizedDescription)
+        }
+        guard (200..<300).contains(response.status) else {
+            let reason = (try? JSONValue.parse(response.body)).flatMap(Parsers.f1Reason) ?? ""
+            throw FairPlayError.license(status: response.status, reason: reason)
+        }
+        guard let ckc = FairPlay.ckc(fromResponse: response.body) else { throw FairPlayError.emptyLicense }
+        return ckc
+    }
+
     // MARK: - Internals
 
     private func loadConfig() async throws {
@@ -148,6 +199,8 @@ public actor F1TVSession {
             let config = json["apiConfig"]
             if let v = Self.version(config["playAPIVersion"]) { playVersion = v }
             if let v = Self.version(config["videoAPIVersion"]) { videoVersion = v }
+            let cert = json["bitmovin"]["drm"]["certUrl"].string
+            if let url = URL(string: cert), url.scheme?.lowercased() == "https" { fairPlayCertificateURL = url }
         }
         configLoaded = true
     }
