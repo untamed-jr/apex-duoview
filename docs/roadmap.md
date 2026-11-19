@@ -214,6 +214,10 @@ The owner wants as many phone checks as possible run without him. Shape, built i
   (iOS gives apps four levels — nominal, fair, serious, critical — not degrees), stalls and
   dropped frames, feeds-in-step offsets. Copied off the phone with `devicectl` and read by
   Claude; summaries go on the checklist.
+- **Learned 2026-11-19 (first semi-automated run, d-four):** over USB the Mac can read the battery %
+  (libimobiledevice `ideviceinfo`), but not the battery temperature on iOS 27.2.1, and a plugged-in
+  phone charges. So heat comes from the app's own thermal-state log, and battery runs start below
+  about 90 % with the phone unplugged, the report read after the run.
 - **The owner only does what needs hands or senses**: folding and the laptop pose (the run pauses
   and says what to do), readability, how warm it feels (runs that need it say so up front: "heat
   check: feel the back of the phone at the end"), and VoiceOver by ear.
