@@ -97,3 +97,13 @@ extension View {
         background(Theme.background)
     }
 }
+
+// MARK: - Glass (Apple design pass)
+
+extension View {
+    /// Clear glass with a light dark layer under it, for small labels and controls over the video:
+    /// Apple puts clear glass over media and dims it so text stays readable on a bright picture.
+    func videoGlass<S: Shape>(in shape: S) -> some View {
+        glassEffect(.clear.tint(Color.black.opacity(0.35)), in: shape)
+    }
+}
