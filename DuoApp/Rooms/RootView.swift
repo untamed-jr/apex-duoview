@@ -364,19 +364,16 @@ private struct MessageBanner: View {
             HStack(spacing: 8) {
                 if canRetry {
                     Button("Try again", action: onRetry)
-                        .buttonStyle(.bordered)
-                        .tint(Theme.textPrimary)
+                        .buttonStyle(.glass)
                 }
                 Button("Sign in", action: onSignIn)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .tint(Theme.accent)
             }
         }
         .padding(12)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.hairline, lineWidth: 1)
-        )
+        // Design pass q5: the banner floats over the rooms, so it is Apple's glass.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }

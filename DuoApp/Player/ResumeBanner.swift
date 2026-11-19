@@ -40,7 +40,7 @@ struct ResumeBanner: View {
             }
             Spacer(minLength: 8)
             Button("Resume", action: onResume)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(Theme.accent)
             Button(action: onDismiss) {
                 Image(systemName: "xmark").font(.footnote.weight(.semibold))

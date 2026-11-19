@@ -31,24 +31,19 @@ struct NextLivePrompt: View {
                 Button("Not now") {
                     model.declineNextLive()
                 }
-                .buttonStyle(.bordered)
-                .tint(Theme.textPrimary)
+                .buttonStyle(.glass)
                 Button("Switch") {
                     Task { await model.switchToNextLive() }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(Theme.accent)
             }
             .controlSize(.small)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: 520)
-            .background(Theme.surface.opacity(0.95), in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                    .strokeBorder(Theme.hairline, lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
+            // Design pass q5: it floats over the video, so it is Apple's glass, not a dark box.
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
             .padding(.top, topInset)
             .padding(.horizontal, 16)
             .transition(.move(edge: .top).combined(with: .opacity))

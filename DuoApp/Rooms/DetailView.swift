@@ -49,7 +49,7 @@ struct DetailView: View {
                     } label: {
                         Text(AppModel.signInPrompt).frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .tint(Theme.accent)
                     .controlSize(.large)
                 }
@@ -154,7 +154,7 @@ struct DetailView: View {
                     } label: {
                         Label("Watch multiview", systemImage: "rectangle.split.2x2").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .tint(Theme.accent)
                     .controlSize(.large),
                     when: \.isMultiview)
@@ -195,7 +195,7 @@ struct DetailView: View {
                 } label: {
                     Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(Theme.accent)
                 .controlSize(.large),
                 when: { $0.isFeed(only) })
