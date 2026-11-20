@@ -847,29 +847,36 @@ final class PlayerController {
         transport.setMuted(wantsMuted)
     }
 
-    /// Lock screen and Control Centre: play, pause and the position, for this player.
+    /// Lock screen and Control Centre: play, pause and the position, for this player. The
+    /// handlers may be called off the main thread, so they only hand the work to the main actor
+    /// (and go through the controls' own play and seek, the same clamping and held position).
     private func startNowPlaying(_ player: AVPlayer) {
         let session = MPNowPlayingSession(players: [player])
         session.automaticallyPublishesNowPlayingInfo = true
         let commands = session.remoteCommandCenter
-        commands.playCommand.addTarget { [weak player] _ in
-            player?.play()
+        commands.playCommand.addTarget { @Sendable [weak self] _ in
+            onMainActor { [weak self] in
+                guard let self, self.player?.timeControlStatus == .paused else { return }
+                self.togglePlay()
+            }
             return .success
         }
-        commands.pauseCommand.addTarget { [weak player] _ in
-            player?.pause()
+        commands.pauseCommand.addTarget { @Sendable [weak self] _ in
+            onMainActor { [weak self] in
+                guard let self, let player = self.player, player.timeControlStatus != .paused else { return }
+                self.togglePlay()
+            }
             return .success
         }
-        commands.togglePlayPauseCommand.addTarget { [weak player] _ in
-            guard let player else { return .noActionableNowPlayingItem }
-            if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+        commands.togglePlayPauseCommand.addTarget { @Sendable [weak self] _ in
+            onMainActor { [weak self] in self?.togglePlay() }
             return .success
         }
-        commands.changePlaybackPositionCommand.addTarget { [weak player] event in
-            guard let player, let event = event as? MPChangePlaybackPositionCommandEvent else {
+        commands.changePlaybackPositionCommand.addTarget { @Sendable [weak self] event in
+            guard let position = (event as? MPChangePlaybackPositionCommandEvent)?.positionTime else {
                 return .commandFailed
             }
-            player.seek(to: CMTime(seconds: event.positionTime, preferredTimescale: 600))
+            onMainActor { [weak self] in self?.seek(toSeconds: position) }
             return .success
         }
         session.becomeActiveIfPossible { _ in }
