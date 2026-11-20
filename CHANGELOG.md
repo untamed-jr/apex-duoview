@@ -55,6 +55,66 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 17 — team radio on replays
+
+Not on the phone yet: the phone keeps the race build until after the Las Vegas race. Checked on a
+computer only (syntax of every changed file, and the radio's logic and controller against the São
+Paulo race data); the first real compile is the owner's Mac build.
+
+- **Team radio panel.** A "Radio" button beside Map (multiview's top bar and the single-feed
+  player's) opens "Team radio", a floating panel like the map and the tower: moved, resized and
+  remembered per fold posture, closed with its ✕ ("Hide team radio"). Oldest clip at the top,
+  newest at the bottom, a small lap header ("Lap 23", "Before the start", "After the flag",
+  "Q2 · 8:12 left", or the practice time) whenever the lap changes, and the list follows new clips.
+  Chips: All · My driver (when you have one) · a driver. Before any clip: "Radio shows up here as
+  it happens."; for one driver: "No radio from {CODE} yet."
+- **Only what the picture has reached.** A clip appears once the picture reaches the moment F1
+  published it; rewinding takes later clips out again, and stops a clip playing past it. "Show the
+  whole race" shows every clip.
+- **Playing a clip.** Tap a row to play it; the feeds go silent until it ends (or tap again to
+  stop), and it plays at the feeds' speed. A clip crossed while the video plays flashes once,
+  softly; one reached by a seek or a scrub never does.
+- **Downloads.** A clip downloads the first time it is played, from F1's archive without the
+  F1 TV sign-in; only if F1 refuses is it asked once more with it, to that address only. A
+  refusal never signs you out: "Couldn't load this clip". Clips are kept on the phone for 7 days
+  (Caches), then deleted at launch. A clip that won't play: "Couldn't play that radio clip".
+- **Race Engineer's spot** (laptop pose): the top onboard's last three clips, each with ▶,
+  instead of "Saved for beta.4: team radio".
+- **Scrub Deck:** a small blue tick per clip along the top of the strip, a taller one for your
+  driver, only up to the picture (under the fog); tap one to jump 5 s before it. "Radio" in the
+  legend.
+- **Settings › Team radio:** "Transcripts" and "Play radio as it happens" (both on). They are
+  stored now; transcripts arrive with build 18, and "Play radio as it happens" is for the Radio
+  Scanner and Rivals (builds 19 and 21).
+- **Settings › Debug › "Transcribe a test clip"** (owner check O4; removed before release): turns
+  the first clip you played into text on the phone and shows whether iOS's transcriber is
+  available, the locale, whether the speech model was installed or had to download, the seconds
+  it took, and the text.
+- Version: 1.0-beta.4 (build 17).
+
+### Untested — check later (build 17)
+
+- The zero-warnings build: run `xcodegen generate` first (new folder `DuoApp/Radio`). Nothing here
+  has been compiled for iOS yet; Swift 6 isolation in `RadioAudio`, `TranscribeProbe` and the two
+  players' radio hooks is checked by eye only.
+- São Paulo race replay, laps 17–23: clips appear only as reached, under their lap; ANT has 8 over
+  the race (Show the whole race on, My driver or ANT's chip).
+- A clip plays while the feeds go quiet, at the feeds' speed (try 2×); the sound comes back at the
+  clip's end, on a second tap, on a rewind past it, and on closing the player.
+- In multiview, moving the sound to another tile while a clip plays: that tile stays quiet until
+  the clip ends.
+- The soft flash: once for a clip crossed in normal play; never after a seek, a scrub, ±10 s or a
+  Scrub Deck tap. If clips never flash, the video's own time-jump notice may be firing in normal
+  play (it suppresses the flash, and later the auto-play).
+- The radio ticks on the Scrub Deck (taller for your driver; none past the picture) and a tap on
+  one; Race Engineer's spot for the top onboard.
+- A clip download that F1 refuses: "Couldn't load this clip", the video plays on, nobody is
+  signed out.
+- Headphones plugged in or out while a clip plays: the clip ends and the next one plays.
+- The probe in the simulator **and on the Duo** (O4): available, locale, model, seconds, text.
+- Pan for later builds (Rivals' one ear each): set on the clip's player, ahead of the speed
+  control; whether it still applies there is not yet heard.
+
 ### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
 
 The shared logic for beta.4 is in, ahead of the app builds (17 to 21, after the Las Vegas

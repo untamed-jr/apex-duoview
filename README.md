@@ -14,6 +14,12 @@ at once, a live track map, timing and team radio, all kept in sync with the pict
 
 ## Status
 
+**v1.0-beta.4 — Radio and the closed phone** is being built (from build 17; see the
+[changelog](CHANGELOG.md)). Build 17 brings team radio to replays: a Radio panel beside the map
+that lists each clip under its lap only once the picture has reached it, plays it while the
+feeds go quiet, and marks it on the Scrub Deck and in Race Engineer's console. Not on the phone
+yet; transcripts and the closed phone's pages come in the next builds.
+
 **v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
 [changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race
 marks on the timeline follow the picture, never running ahead of it; tapping a car brings up its
