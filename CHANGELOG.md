@@ -47,7 +47,8 @@ change is its own commit so it can be kept or reverted on its own.
   says "Playing on AirPlay". Fixes the doubled ✕ and Map, the LIVE that didn't go live, and
   Apple's controls that stayed stuck on screen. Not brought back: Apple's volume slider (the
   side buttons set the volume; mute is the app's) and its zoom-to-fill.
-  Untested: everything (not built yet); live checks need the phone after the race.
+  Built in the simulator with 0 warnings (342b966, 2026-11-20). Untested: using it (simulator
+  replay check next); live checks need the phone after the race.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 
