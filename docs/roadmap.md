@@ -21,6 +21,14 @@ the launch. Adding a beta needs the owner's written yes.
 | v1.0-rc.1 | Release candidate | Fixes only; launch check is a full live race weekend with no blocking bug |
 | v1.0 | Public launch | |
 
+**Owner decision (2026-11-20): build everything first, then test.** Every planned beta (4, 5, 6
+and 7's experiments) is built before the testing round; each is still released as its numbered
+pre-release when its features are in, with its "Untested — check later" lists, as beta.3 was. Then
+one testing and fixing round, v1.0-rc.1 (fixes only), and the launch v1.0. Checks that need a live
+session or the real Duo wait for the phone, without holding up the next beta. Beta.4 starts on
+2026-11-20; the phone stays on the race build (beta.3, `cc569d2`) until after the Las Vegas race.
+Beta.5 and beta.6 designs are prepared for the owner's choices while beta.4 is built.
+
 ## Duo ideas and where they land
 
 All of 1 to 23 are in. 24 to 28 are experiments for beta.7, tried on the real device.

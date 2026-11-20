@@ -75,7 +75,10 @@ weekend). None of it is wired into the app, so build 16 is unchanged. Tested on 
 - **Radio check for your Mac** (`--radio`, owner check T-A4): untested against F1's servers; its
   first run is the real test (checklist row b4-radio).
 
-## v1.0-beta.3 — Live data (2026-11-17)
+## v1.0-beta.3 — Live data (2026-11-20)
+
+Released as commit `cc569d2`, the app on the phone for the Las Vegas weekend (built 2026-11-17, with
+the fixes found on the Duo on Nov 18–19 in build 16).
 
 Builds 11 to 16. In short:
 
