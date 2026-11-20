@@ -59,10 +59,15 @@ public struct LoadedSession: Sendable {
     /// shown as absent, not retried one by one. The core topics (`TimingArchive.core`) never
     /// land here: one of them failing fails the whole load, which is tried again.
     public var failed: [String]
+    /// The team radio clips of the whole session; empty when the archive has no TeamRadio.
+    public var radio: RadioClips
+    /// Race control's messages of the whole session, oldest first; empty without any.
+    public var raceControl: [RaceControlEntry]
 
     public init(info: TimingSessionInfo, drivers: [String: DriverInfo], streamStart: UTCms, positions: PositionSeries,
                 timing: TimingTimeline, stints: StintTimeline, header: HeaderTimeline, flags: TrackFlags,
-                sessionStatus: SessionStatusTimeline = SessionStatusTimeline(), missing: [String], failed: [String] = []) {
+                sessionStatus: SessionStatusTimeline = SessionStatusTimeline(), missing: [String], failed: [String] = [],
+                radio: RadioClips = RadioClips(), raceControl: [RaceControlEntry] = []) {
         self.info = info
         self.drivers = drivers
         self.streamStart = streamStart
@@ -74,6 +79,8 @@ public struct LoadedSession: Sendable {
         self.sessionStatus = sessionStatus
         self.missing = missing
         self.failed = failed
+        self.radio = radio
+        self.raceControl = raceControl
     }
 }
 
@@ -204,7 +211,7 @@ public actor TimingArchive {
     static func topics(for session: ArchiveSession) -> [String] {
         ["Heartbeat", "TimingData", "TimingAppData", "RaceControlMessages", "TrackStatus", "SessionStatus"]
             + (TimingSessionInfo.isRace(type: session.type) ? ["LapCount"] : [])
-            + ["ExtrapolatedClock", "WeatherData"]
+            + ["ExtrapolatedClock", "WeatherData", "TeamRadio"]
     }
 
     private enum Fetched: Sendable {
@@ -308,7 +315,9 @@ public actor TimingArchive {
             flags: await flags,
             sessionStatus: SessionStatusTimeline.build(lines: lines("SessionStatus") ?? [], streamStart: streamStart),
             missing: topics.filter(isMissing),
-            failed: topics.filter(isFailed)
+            failed: topics.filter(isFailed),
+            radio: RadioClips(lines: lines("TeamRadio") ?? []),
+            raceControl: RaceControlLog.parse(lines: lines("RaceControlMessages") ?? [], streamStart: streamStart)
         ))
     }
 

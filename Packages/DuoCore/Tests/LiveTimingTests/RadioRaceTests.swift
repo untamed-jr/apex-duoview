@@ -22,7 +22,9 @@ import Testing
             flags: TrackFlags.build(trackStatus: try stream("TrackStatus"), raceControl: try stream("RaceControlMessages"),
                                     streamStart: start, gmtOffsetSeconds: info.gmtOffsetSeconds),
             sessionStatus: SessionStatusTimeline.build(lines: try stream("SessionStatus"), streamStart: start),
-            missing: []
+            missing: [],
+            radio: RadioClips(lines: try stream("TeamRadio")),
+            raceControl: RaceControlLog.parse(lines: try stream("RaceControlMessages"), streamStart: start)
         )
     }
 

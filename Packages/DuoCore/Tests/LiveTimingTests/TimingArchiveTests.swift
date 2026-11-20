@@ -228,7 +228,55 @@ struct LeakyError: Error, CustomStringConvertible {
         #expect(asked == ["DriverList.json", "SessionInfo.json", "Position.z.jsonStream", "Heartbeat.jsonStream",
                           "TimingData.jsonStream", "TimingAppData.jsonStream", "RaceControlMessages.jsonStream",
                           "TrackStatus.jsonStream", "SessionStatus.jsonStream", "LapCount.jsonStream",
-                          "ExtrapolatedClock.jsonStream", "WeatherData.jsonStream"])
+                          "ExtrapolatedClock.jsonStream", "WeatherData.jsonStream", "TeamRadio.jsonStream"])
+    }
+
+    @Test func archiveLoadsRadio() async throws {
+        let http = try await Self.raceHTTP()
+        let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
+        let clips = try RadioClips(lines: Fixture.lines("sp26-race/TeamRadio.jsonStream"))
+        #expect(!clips.all.isEmpty)
+        #expect(loaded.radio == clips)
+        let entries = try RaceControlLog.parse(lines: Fixture.lines("sp26-race/RaceControlMessages.jsonStream"),
+                                               streamStart: Fixture.raceStart)
+        #expect(!entries.isEmpty)
+        #expect(loaded.raceControl == entries)
+        #expect(loaded.missing == [])
+    }
+
+    @Test func missingTeamRadioIsOptional() async throws {
+        let http = try await Self.raceHTTP()
+        await http.serve(Self.racePath + "TeamRadio.jsonStream", status: 403)
+        let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
+        #expect(loaded.missing == ["TeamRadio"])
+        #expect(loaded.failed == [])
+        #expect(loaded.radio.all.isEmpty)
+        // Everything else still loads.
+        #expect(!loaded.raceControl.isEmpty)
+        #expect(loaded.positions.cars.count >= 20)
+    }
+
+    /// The archive loader's session is the one built by hand from the same long slice
+    /// (`RadioRaceTests.longRace()`), radio and race control included. The slice has no
+    /// Position, so the loader is given the short race's.
+    @Test func archiveLoadMatchesLongRace() async throws {
+        let http = FakeArchiveHTTP()
+        try await http.serveSession(fixture: "sp26-race-long", at: Self.racePath)
+        await http.serve(Self.racePath + "Position.z.jsonStream",
+                         body: try Data(contentsOf: Fixture.url("sp26-race/Position.z.jsonStream")))
+        let loaded = try #require(await TimingArchive.load(Self.race, using: Self.archive(http)))
+        let hand = try RadioRaceTests.longRace()
+        #expect(loaded.info == hand.info)
+        #expect(loaded.drivers == hand.drivers)
+        #expect(loaded.streamStart == hand.streamStart)
+        #expect(loaded.radio == hand.radio)
+        #expect(loaded.radio.all.count == 30)
+        #expect(loaded.raceControl == hand.raceControl)
+        #expect(!loaded.raceControl.isEmpty)
+        #expect(loaded.flags.spans == hand.flags.spans)
+        #expect(loaded.sessionStatus == hand.sessionStatus)
+        #expect(loaded.timing.updateTimes == hand.timing.updateTimes)
+        #expect(loaded.header.laps == hand.header.laps)
     }
 
     @Test func qualifyingAsksForNoLapCount() async throws {

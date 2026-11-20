@@ -36,6 +36,8 @@ struct LiveFeedFoldTests {
         #expect(a.drivers == b.drivers, "\(label) drivers", sourceLocation: sourceLocation)
         #expect(a.missing == b.missing, "\(label) missing", sourceLocation: sourceLocation)
         #expect(a.sessionStatus == b.sessionStatus, "\(label) status", sourceLocation: sourceLocation)
+        #expect(a.radio == b.radio, "\(label) radio", sourceLocation: sourceLocation)
+        #expect(a.raceControl == b.raceControl, "\(label) race control", sourceLocation: sourceLocation)
         // Positions: every sample of every car.
         #expect(Set(a.positions.cars.keys) == Set(b.positions.cars.keys), "\(label) cars", sourceLocation: sourceLocation)
         for (number, car) in b.positions.cars {
@@ -135,6 +137,29 @@ struct LiveFeedFoldTests {
         let renewed = feed.session()
         expectIdentical(renewed, fresh(steps), "new session")
         #expect(renewed?.info.path == "2026/next/")
+    }
+
+    /// Radio and race control grow with each call and end the same as a fresh feed's.
+    @Test func incrementalRebuildMatchesFull() throws {
+        let replay = try ArchiveReplay()
+        let changes = replay.changes
+        var feed = LiveFeed()
+        var steps: [Step] = []
+        for m in replay.opening { feed.apply(m); steps.append(.message(m)) }
+        var sizes: [(radio: Int, control: Int)] = []
+        for chunk in stride(from: 0, to: changes.count, by: max(changes.count / 12, 1)) {
+            for m in changes[chunk..<min(chunk + max(changes.count / 12, 1), changes.count)] {
+                feed.apply(m)
+                steps.append(.message(m))
+            }
+            let built = feed.session()
+            let live = try #require(built)
+            expectIdentical(live, fresh(steps), "chunk \(chunk)")
+            sizes.append((live.radio.all.count, live.raceControl.count))
+        }
+        #expect(zip(sizes, sizes.dropFirst()).allSatisfy { $0.radio <= $1.radio && $0.control <= $1.control })
+        #expect(try #require(sizes.last).radio > 0 && sizes.last!.control > 0)
+        #expect(sizes.first!.radio < sizes.last!.radio || sizes.first!.control < sizes.last!.control)
     }
 
     @Test func eachLineIsFoldedOnce() throws {

@@ -179,10 +179,11 @@ public struct LiveFeed: Sendable {
 
     /// The topics `session()` reads.
     static let sessionTopics = ["Position.z", "TimingData", "TimingAppData", "LapCount", "ExtrapolatedClock",
-                                "WeatherData", "TrackStatus", "RaceControlMessages", "SessionStatus"]
+                                "WeatherData", "TrackStatus", "RaceControlMessages", "SessionStatus", "TeamRadio"]
     /// The topics whose timelines `session()` keeps between calls (the costly ones: the rest are
-    /// a few hundred lines a race and are built afresh).
-    static let foldedTopics = ["Position.z", "TimingData", "TimingAppData"]
+    /// a few hundred lines a race and are built afresh). Radio clips and race control's log are
+    /// kept too: each only grows, so each call adds just the new lines.
+    static let foldedTopics = ["Position.z", "TimingData", "TimingAppData", "TeamRadio", "RaceControlMessages"]
 
     /// The session so far, built by the archive's parsers. `drivers` and `info`, when given,
     /// stand in for the feed's own DriverList and SessionInfo. Nil before the first snapshot
@@ -207,6 +208,8 @@ public struct LiveFeed: Sendable {
         kept.positions.take(of("Position.z"))
         kept.timing.take(of("TimingData"))
         kept.stints.take(of("TimingAppData"))
+        kept.radio.take(of("TeamRadio"))
+        kept.raceControl.take(of("RaceControlMessages"))
         folds = kept
         let optional = Self.optionalTopics(type: info.type)
         return LoadedSession(
@@ -222,7 +225,9 @@ public struct LiveFeed: Sendable {
                                     streamStart: start, gmtOffsetSeconds: info.gmtOffsetSeconds),
             sessionStatus: SessionStatusTimeline.build(lines: of("SessionStatus"), streamStart: start,
                                                        snapshotLines: snapshotLines("SessionStatus")),
-            missing: optional.filter { of($0).isEmpty }
+            missing: optional.filter { of($0).isEmpty },
+            radio: kept.radio.builder,
+            raceControl: kept.raceControl.builder.all
         )
     }
 
@@ -242,6 +247,8 @@ public struct LiveFeed: Sendable {
         case "Position.z": return folds?.positions.added ?? 0
         case "TimingData": return folds?.timing.added ?? 0
         case "TimingAppData": return folds?.stints.added ?? 0
+        case "TeamRadio": return folds?.radio.added ?? 0
+        case "RaceControlMessages": return folds?.raceControl.added ?? 0
         default: return 0
         }
     }
@@ -251,11 +258,15 @@ public struct LiveFeed: Sendable {
         var positions: LineFold<PositionSeries.Builder>
         var timing: LineFold<TimingTimeline.Builder>
         var stints: LineFold<StintTimeline.Builder>
+        var radio: LineFold<RadioClips>
+        var raceControl: LineFold<RaceControlLog>
 
         init(streamStart: UTCms) {
             positions = LineFold(streamStart: streamStart)
             timing = LineFold(streamStart: streamStart)
             stints = LineFold(streamStart: streamStart)
+            radio = LineFold(streamStart: streamStart)
+            raceControl = LineFold(streamStart: streamStart)
         }
     }
 
@@ -429,6 +440,12 @@ protocol LineFolder: Sendable {
     init(streamStart: UTCms)
     mutating func add(_ line: StreamLine)
 }
+
+extension RadioClips: LineFolder {
+    init(streamStart: UTCms) { self.init() }
+}
+
+extension RaceControlLog: LineFolder {}
 
 /// A `LineFolder` and how far into a topic's lines it has read. Given the lines again, it reads
 /// only those past the ones it has; if those aren't the lines it read (fewer, or the last one

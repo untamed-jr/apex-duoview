@@ -119,6 +119,79 @@ struct LiveFeedTests {
         #expect(archive.timing.at(live.streamStart).isEmpty)
     }
 
+    @Test func liveFeedHasRadio() async throws {
+        let replay = try ArchiveReplay()
+        let archive = try await ArchiveReplay.archiveSession()
+        var feed = LiveFeed()
+        for m in replay.opening + replay.changes { feed.apply(m) }
+        let live = try #require(feed.built())
+        let clips = RadioClips(lines: try #require(replay.streams["TeamRadio"]))
+        #expect(clips.all.count > 1)
+        #expect(live.radio == clips)
+        #expect(live.radio == archive.radio)
+        #expect(live.raceControl == archive.raceControl)
+        #expect(!live.raceControl.isEmpty)
+        // Before any radio arrives the clips are simply empty.
+        var early = LiveFeed()
+        for m in replay.opening.filter({ $0.topic != "TeamRadio" }) { early.apply(m) }
+        #expect(early.built()?.radio.all.isEmpty == true)
+    }
+
+    @Test func liveReconnectAndTopUpKeepClipsOnce() async throws {
+        let replay = try ArchiveReplay()
+        let archive = try await ArchiveReplay.archiveSession()
+        let changes = replay.changes
+        let reconnect = Self.lightsOut + 180_000
+        let k = try #require(changes.firstIndex { $0.utc > reconnect })
+        var feed = LiveFeed()
+        for m in replay.opening + changes[..<k] { feed.apply(m) }
+        _ = feed.session()
+        // The snapshot after a drop names every clip so far again.
+        for m in replay.snapshot(at: reconnect, through: reconnect) + changes[k...] { feed.apply(m) }
+        let reconnected = try #require(feed.built())
+        #expect(reconnected.radio == archive.radio)
+        // The same snapshot taken as changes (Android after a drop) lists them again as lines;
+        // the clips still count once.
+        var android = LiveFeed()
+        for m in replay.opening + changes[..<k] { android.apply(m) }
+        for var m in replay.snapshot(at: reconnect, through: reconnect) {
+            m.opening = false
+            android.apply(m)
+        }
+        for m in changes[k...] { android.apply(m) }
+        let doubled = try #require(android.built())
+        #expect(doubled.radio == archive.radio)
+        // The archive's top-up puts the same clips again.
+        feed.topUp(archive: replay.streams, archiveStart: replay.start)
+        let topped = try #require(feed.built())
+        #expect(topped.radio == archive.radio)
+        #expect(Set(topped.radio.all.map(\.path)).count == topped.radio.all.count)
+    }
+
+    @Test func raceControlResentIsKeptOnce() async throws {
+        let replay = try ArchiveReplay()
+        let archive = try await ArchiveReplay.archiveSession()
+        let changes = replay.changes
+        let reconnect = Self.lightsOut + 180_000
+        let k = try #require(changes.firstIndex { $0.utc > reconnect })
+        var feed = LiveFeed()
+        for m in replay.opening + changes[..<k] { feed.apply(m) }
+        _ = feed.session()
+        // Resent by a reconnect snapshot taken as changes, then by the archive's top-up.
+        for var m in replay.snapshot(at: reconnect, through: reconnect) {
+            m.opening = false
+            feed.apply(m)
+        }
+        for m in changes[k...] { feed.apply(m) }
+        let resent = try #require(feed.built())
+        #expect(resent.raceControl == archive.raceControl)
+        feed.topUp(archive: replay.streams, archiveStart: replay.start)
+        let topped = try #require(feed.built())
+        #expect(topped.raceControl == archive.raceControl)
+        let keys = topped.raceControl.map { "\($0.t)|\($0.text)" }
+        #expect(Set(keys).count == keys.count)
+    }
+
     @Test func reconnectSnapshotNoDuplicates() async throws {
         let replay = try ArchiveReplay()
         let archive = try await ArchiveReplay.archiveSession()
