@@ -16,7 +16,7 @@ struct WelcomeTourView: View {
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > geometry.size.height
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .bottom) {
                 Theme.background.ignoresSafeArea()
                 TabView(selection: $page) {
                     ForEach(WelcomeCard.all) { card in
@@ -24,19 +24,44 @@ struct WelcomeTourView: View {
                             .tag(card.id)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                if page < WelcomeCard.all.count - 1 {
-                    Button("Skip", action: onDone)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                        .accessibilityHint("Closes the tour")
-                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                bottomBar
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    /// Skip on the left, the page dots in the middle, Next on the right: one row at the bottom,
+    /// clear of the closed screen's camera and status bar at the top right.
+    private var bottomBar: some View {
+        let last = page == WelcomeCard.all.count - 1
+        return HStack(spacing: 12) {
+            Button("Skip", action: onDone)
+                .font(.subheadline.bold())
+                .foregroundStyle(Theme.textSecondary)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityHint("Closes the tour")
+                .opacity(last ? 0 : 1)
+                .disabled(last)
+            Spacer(minLength: 8)
+            PageDots(count: WelcomeCard.all.count, current: page)
+            Spacer(minLength: 8)
+            Button {
+                if last {
+                    onDone()
+                } else {
+                    withAnimation(.snappy) { page += 1 }
+                }
+            } label: {
+                Text(WelcomeCard.all[page].button).padding(.horizontal, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Theme.accent)
+            .controlSize(.large)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder
@@ -48,7 +73,8 @@ struct WelcomeTourView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 words(card)
                     .padding(.horizontal, 40)
-                    .padding(.vertical, 48)
+                    .padding(.top, 48)
+                    .padding(.bottom, 96)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
         } else {
@@ -59,7 +85,7 @@ struct WelcomeTourView: View {
                     .frame(maxHeight: .infinity)
                 words(card)
                     .padding(.horizontal, 28)
-                    .padding(.bottom, 56)
+                    .padding(.bottom, 100)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -74,20 +100,26 @@ struct WelcomeTourView: View {
                 .font(.body)
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button {
-                if card.id < WelcomeCard.all.count - 1 {
-                    withAnimation(.snappy) { page = card.id + 1 }
-                } else {
-                    onDone()
-                }
-            } label: {
-                Text(card.button).padding(.horizontal, 8)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(Theme.accent)
-            .controlSize(.large)
-            .padding(.top, 8)
         }
+    }
+}
+
+/// The tour's page dots: the current one is a short bar.
+private struct PageDots: View {
+    let count: Int
+    let current: Int
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<count, id: \.self) { index in
+                Capsule()
+                    .fill(index == current ? Theme.textPrimary : Theme.textTertiary)
+                    .frame(width: index == current ? 18 : 7, height: 7)
+            }
+        }
+        .animation(.snappy, value: current)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Card \(current + 1) of \(count)")
     }
 }
 

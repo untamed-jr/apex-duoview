@@ -47,7 +47,7 @@ open "$(xcode-select -p)/Applications/Simulator.app" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl install "$UDID" "$APP"
 mkdir -p build/shots
-for t in 0.8 1.4 2.0 2.8; do
+for t in 1.4 2.0 2.8 3.6; do
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
   xcrun simctl launch "$UDID" "$BUNDLE" >/dev/null
   sleep "$t"
@@ -55,4 +55,4 @@ for t in 0.8 1.4 2.0 2.8; do
   xcrun simctl io "$UDID" screenshot --display="${DUO_DISPLAY:-1}" --type=png "build/shots/opening-${t}s.png" >/dev/null \
     || printf 'Screenshot at %ss failed (try DUO_DISPLAY=internal).\n' "$t"
 done
-say "Screenshots saved in build/shots/ (opening at 0.8, 1.4, 2.0 and 2.8 s after launch)."
+say "Screenshots saved in build/shots/ (at 1.4, 2.0, 2.8 and 3.6 s after launch: the opening, then the tour on a first launch)."
