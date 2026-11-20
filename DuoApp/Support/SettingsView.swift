@@ -1,8 +1,8 @@
 import F1TV
 import SwiftUI
 
-/// Settings: account, multiview, the track map, a live fold readout, About, credits and the debug
-/// fold simulator.
+/// Settings: account, multiview, the track map, team radio, a live fold readout, About, credits,
+/// and Debug (the fold simulator and build 17's "Transcribe a test clip").
 /// Shown in the system sheet on a narrow screen, and in the app's own `SettingsPanel` on a wide
 /// one, so it closes through `onDone` rather than the environment's dismiss action.
 struct SettingsView: View {
@@ -27,6 +27,7 @@ struct SettingsView: View {
                 accountSection.listRowBackground(Theme.surface)
                 MultiviewSettingsSection(model: model).listRowBackground(Theme.surface)
                 TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
+                RadioSettingsSection(settings: model.companion).listRowBackground(Theme.surface)
                 foldSection.listRowBackground(Theme.surface)
                 watchingSection.listRowBackground(Theme.surface)
                 helpSection.listRowBackground(Theme.surface)
@@ -255,10 +256,13 @@ struct SettingsView: View {
                 .tint(Theme.accent)
             }
             .disabled(!fake.isActive)
+            // Build 17's probe (owner check O4); removed before release.
+            TranscribeProbeRows()
         } header: {
             Text("Debug").sectionLabel()
         } footer: {
-            Text("Simulating replaces the device's fold readings until you turn it off.")
+            Text("Simulating replaces the device's fold readings until you turn it off. Transcribe a test "
+                + "clip turns the first team radio clip you played into text on this iPhone.")
         }
     }
 
