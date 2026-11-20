@@ -114,6 +114,14 @@ Paulo race data); the first real compile is the owner's Mac build.
   signed out.
 - Headphones plugged in or out while a clip plays: the clip ends and the next one plays.
 - The probe in the simulator **and on the Duo** (O4): available, locale, model, seconds, text.
+  The speech-recognition reason in Info.plist only arrives with build 18: if iOS wants it for
+  this kind of transcription, tapping the probe closes the app (that is the O1 answer, not a bug
+  to chase here).
+- Live (next live weekend): with only the Radio panel open in the single-feed player, the live
+  timing isn't rebuilt (it rebuilds only while the map, tower, cards, console or deck show), so
+  new live clips may not appear until one of those is opened. Replays are not affected.
+- Tapping a car in the single-feed player while a clip plays: picture time is missing while the
+  new feed loads, so the clip stops and the list empties for a moment.
 - Pan for later builds (Rivals' one ear each): set on the clip's player, ahead of the speed
   control; whether it still applies there is not yet heard.
 
