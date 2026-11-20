@@ -189,6 +189,12 @@ designed with the owner before it is built; nothing decided yet beyond "there sh
   design pass's "after" set), never F1's images.
 - When: proposed for the polish build after beta.4, with the opening screen and the design pass,
   so the tour shows the final look. Later betas add tips for their own new features.
+- **Decided (owner, 2026-11-20, on `docs/design/welcome-tour-mockups.html`):** all five cards and
+  all five tips kept as drawn; the tour shows on the **first launch only** (Settings › Help › "How
+  to use" replays it); all five cards; the cards use **real screenshots** from the design pass
+  "after" set. Built the same day: `DuoApp/Welcome/` (`WelcomeTourView`, `AppTips`), with
+  labelled placeholder panels until the screenshots exist (assets `Tour1` … `Tour5`). The Scrub
+  Deck tip is defined but attached only with the Scrub Deck drag fix.
 
 ## Apple design pass (owner decision, 2026-11-19)
 
