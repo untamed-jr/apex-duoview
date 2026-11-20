@@ -305,10 +305,11 @@ import Foundation
 
     // MARK: Data layouts (beta.3)
 
-    static let dataIDs = ["flat.director", "book.dataScreen", "laptop.raceEngineer", "laptop.scrubDeck"]
+    static let dataIDs = ["flat.director", "book.dataScreen", "book.logbook", "book.rivals",
+                         "laptop.raceEngineer", "laptop.scrubDeck"]
 
     static func regionRects(_ r: DataRegions) -> [CGRect] {
-        [r.map, r.tower, r.console, r.deck].compactMap { $0 }
+        [r.map, r.tower, r.console, r.deck, r.logbook, r.leftStrip, r.rightStrip].compactMap { $0 }
     }
 
     static func near(_ a: CGRect?, _ b: CGRect, _ tol: CGFloat = 0.01) -> Bool {
@@ -470,7 +471,8 @@ import Foundation
                     switch posture {
                     case .closed: #expect(extra.isEmpty)
                     case .flat, .unknown: #expect(extra == ["flat.director"])
-                    case .book: #expect(extra == ["book.dataScreen"])
+                    case .book:
+                        #expect(extra == ["book.dataScreen", "book.logbook"] + (min(max(n, 1), 4) >= 2 ? ["book.rivals"] : []))
                     case .laptop: #expect(extra == ["laptop.raceEngineer", "laptop.scrubDeck"])
                     }
                 }
@@ -489,7 +491,7 @@ import Foundation
                 == ["flat.mainBelow", "flat.mainBesideBelow", "flat.grid", "flat.director"])
         let (bs, bf) = Self.referenceGeometry(.book)
         #expect(LayoutEngine.usableOptionIDs(screen: bs, foldFrame: bf, posture: .book, feedCount: 4, hasTiming: true)
-                == ["book.twoPerScreen", "book.perScreen", "book.across", "book.dataScreen"])
+                == ["book.twoPerScreen", "book.perScreen", "book.across", "book.dataScreen", "book.logbook", "book.rivals"])
         let (ls, lf) = Self.referenceGeometry(.laptop)
         #expect(LayoutEngine.usableOptionIDs(screen: ls, foldFrame: lf, posture: .laptop, feedCount: 3, hasTiming: true)
                 == ["laptop.twoStacked", "laptop.twoSideBySide", "laptop.raceEngineer", "laptop.scrubDeck"])
@@ -561,7 +563,7 @@ import Foundation
             }
         }
         // Every data option fits the reference screens with every feed count.
-        for (posture, ids) in [(Posture.flat, ["flat.director"]), (.book, ["book.dataScreen"]),
+        for (posture, ids) in [(Posture.flat, ["flat.director"]), (.book, ["book.dataScreen", "book.logbook"]),
                                (.laptop, ["laptop.raceEngineer", "laptop.scrubDeck"])] {
             let (screen, fold) = Self.referenceGeometry(posture)
             for n in 1...4 {
@@ -593,5 +595,135 @@ import Foundation
         // Five feeds lay out as four.
         #expect(LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 5, optionID: "flat.director")
                 == LayoutEngine.dataRegions(screen: s, foldFrame: f, posture: .flat, feedCount: 4, optionID: "flat.director"))
+    }
+
+    // MARK: Onboard and Logbook, and Rivals
+
+    static func bookFrames(_ n: Int, _ id: String, screen: CGSize? = nil)
+        -> (frames: [TileFrame], regions: DataRegions, screen: CGSize, fold: CGRect) {
+        let (refScreen, refFold) = Self.referenceGeometry(.book)
+        let screen = screen ?? refScreen
+        let fold = screen == refScreen ? refFold : Self.fold(for: .book, screen: screen)
+        return (LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book, feedCount: n, optionID: id),
+                LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .book, feedCount: n, optionID: id),
+                screen, fold)
+    }
+
+    @Test func logbookRightScreen() {
+        for n in 1...5 {
+            let (frames, regions, _, fold) = Self.bookFrames(n, "book.logbook")
+            #expect(frames.count == n)
+            #expect(frames[0].visible)
+            #expect(frames.dropFirst().allSatisfy { !$0.visible && $0.rect == frames[0].rect }, "n=\(n)")
+            // Left screen (x 6...450): the largest 16:9, vertically centred.
+            let t = frames[0].rect
+            let height: CGFloat = 444.0 * 9.0 / 16.0
+            #expect(Self.near(t, CGRect(x: 6.0, y: 6.0 + (657.0 - height) / 2.0, width: 444.0, height: height)), "\(t)")
+            // The logbook is the whole right screen inside the margins.
+            #expect(Self.near(regions.logbook, CGRect(x: fold.maxX + 6, y: 6, width: 951 - 6 - (fold.maxX + 6), height: 657)),
+                    "\(String(describing: regions.logbook))")
+            #expect(regions.map == nil && regions.tower == nil && regions.leftStrip == nil && regions.rightStrip == nil)
+        }
+    }
+
+    @Test func rivalsTwoTilesTwoStrips() {
+        for n in 2...5 {
+            let (frames, regions, _, fold) = Self.bookFrames(n, "book.rivals")
+            #expect(frames.count == n)
+            #expect(frames[0].visible && frames[1].visible)
+            #expect(frames.dropFirst(2).allSatisfy { !$0.visible && $0.rect == frames[0].rect }, "n=\(n)")
+            let (a, b) = (frames[0].rect, frames[1].rect)
+            #expect(a.maxX <= fold.minX - 6 + 0.01 && b.minX >= fold.maxX + 6 - 0.01)
+            // Reference screen: 444 and 443 wide, 657 tall; width-limited tile 444 x 249.75, strip takes the rest.
+            #expect(abs(a.width - 444) < 0.01 && abs(b.width - 443) < 0.01, "\(a) \(b)")
+            guard let ls = regions.leftStrip, let rs = regions.rightStrip else { Issue.record("strips missing"); return }
+            for (tile, strip) in [(a, ls), (b, rs)] {
+                #expect(abs(tile.height - tile.width * 9 / 16) < 0.01)
+                #expect(abs(strip.minY - (tile.maxY + 6)) < 0.01, "gap")
+                #expect(abs(strip.maxY - (657 + 6)) < 0.01, "strip fills the rest")
+                #expect(strip.height >= 64 - 0.01)
+                #expect(strip.width >= 200 && abs(strip.minX - tile.minX) < 0.01)
+            }
+            #expect(regions.logbook == nil && regions.map == nil)
+        }
+        // A short screen: the strip is 64 pt and the tile is height-limited.
+        let short = CGSize(width: 951, height: 300)
+        let (frames, regions, _, _) = Self.bookFrames(2, "book.rivals", screen: short)
+        #expect(abs(frames[0].rect.height - (300 - 12 - 6 - 64)) < 0.01, "\(frames[0].rect)")
+        #expect(abs((regions.leftStrip?.height ?? 0) - 64) < 0.01)
+    }
+
+    @Test func rivalsNeedsTwoFeeds() {
+        #expect(!LayoutEngine.optionIDs(posture: .book, feedCount: 1, hasTiming: true).contains("book.rivals"))
+        #expect(LayoutEngine.optionIDs(posture: .book, feedCount: 1, hasTiming: true).contains("book.logbook"))
+        for n in 2...4 {
+            let ids = LayoutEngine.optionIDs(posture: .book, feedCount: n, hasTiming: true)
+            #expect(Array(ids.suffix(2)) == ["book.logbook", "book.rivals"], "n=\(n)")
+        }
+        // Asked for with one feed it is not built: no strips.
+        let (_, regions, _, _) = Self.bookFrames(1, "book.rivals")
+        #expect(regions == DataRegions())
+    }
+
+    @Test func nothingInFold() {
+        for screen in Self.screens + Self.oddScreens {
+            let fold = Self.fold(for: .book, screen: screen)
+            guard let usable = Self.usableFold(fold, posture: .book, screen: screen) else { continue }
+            for id in ["book.logbook", "book.rivals"] {
+                for n in 1...4 {
+                    // Only where the layout fits; otherwise another option stands in for it.
+                    guard LayoutEngine.usableOptionIDs(screen: screen, foldFrame: fold, posture: .book,
+                                                       feedCount: n, hasTiming: true).contains(id) else { continue }
+                    let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book, feedCount: n, optionID: id)
+                    let regions = LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .book, feedCount: n, optionID: id)
+                    let tag = "\(id) n=\(n) \(screen)"
+                    for r in Self.regionRects(regions) + frames.filter(\.visible).map(\.rect) {
+                        #expect(!r.intersects(usable), "\(tag) \(r)")
+                        #expect(r.minX >= 6 - 0.01 && r.minY >= 6 - 0.01, "\(tag) \(r)")
+                        #expect(r.maxX <= screen.width - 6 + 0.01 && r.maxY <= screen.height - 6 + 0.01, "\(tag) \(r)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func regionsNeverOverlapTiles() {
+        for screen in Self.screens + Self.oddScreens {
+            let fold = Self.fold(for: .book, screen: screen)
+            for id in ["book.logbook", "book.rivals"] {
+                for n in 1...4 {
+                    let frames = LayoutEngine.frames(screen: screen, foldFrame: fold, posture: .book, feedCount: n, optionID: id)
+                    let rects = Self.regionRects(LayoutEngine.dataRegions(screen: screen, foldFrame: fold, posture: .book,
+                                                                          feedCount: n, optionID: id))
+                    let tag = "\(id) n=\(n) \(screen)"
+                    for (i, r) in rects.enumerated() {
+                        #expect(r.width >= 200 - 0.01 && r.height > 0, "\(tag) \(r)")
+                        for f in frames where f.visible { #expect(!r.intersects(f.rect), "\(tag) \(r) \(f.rect)") }
+                        for o in rects.dropFirst(i + 1) { #expect(!r.intersects(o), "\(tag)") }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func plainListsUnchanged() {
+        let today: [Posture: [Int: [String]]] = [
+            .book: [1: ["book.across", "book.oneSide"], 2: ["book.perScreen", "book.across"],
+                    3: ["book.oneLeftTwoRight", "book.perScreen", "book.across"],
+                    4: ["book.twoPerScreen", "book.perScreen", "book.across"]],
+            .flat: [1: ["flat.full"], 2: ["flat.mainBelow", "flat.twoStacked"],
+                    3: ["flat.mainBelow", "flat.pyramid"], 4: ["flat.mainBelow", "flat.mainBesideBelow", "flat.grid"]],
+            .laptop: [1: ["laptop.mainUp"], 2: ["laptop.oneUpOneDown"],
+                      3: ["laptop.twoStacked", "laptop.twoSideBySide"], 4: ["laptop.pyramid"]],
+        ]
+        for (posture, byCount) in today {
+            for (n, ids) in byCount {
+                #expect(LayoutEngine.optionIDs(posture: posture, feedCount: n) == ids, "\(posture) n=\(n)")
+                #expect(LayoutEngine.optionIDs(posture: posture, feedCount: n, hasTiming: false) == ids)
+            }
+        }
+        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 3) == ["closed.main"])
+        // Unknown posture lists as flat.
+        #expect(LayoutEngine.optionIDs(posture: .unknown, feedCount: 2) == ["flat.mainBelow", "flat.twoStacked"])
     }
 }

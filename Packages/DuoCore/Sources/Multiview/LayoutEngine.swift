@@ -29,15 +29,24 @@ public struct DataRegions: Equatable, Sendable {
     public var console: CGRect?
     /// Scrub Deck's event strip and lap chart.
     public var deck: CGRect?
+    /// Onboard and Logbook's logbook: the whole right screen.
+    public var logbook: CGRect?
+    /// Rivals' strips, each under its screen's tile.
+    public var leftStrip: CGRect?
+    public var rightStrip: CGRect?
 
-    public init(map: CGRect? = nil, tower: CGRect? = nil, console: CGRect? = nil, deck: CGRect? = nil) {
+    public init(map: CGRect? = nil, tower: CGRect? = nil, console: CGRect? = nil, deck: CGRect? = nil,
+                logbook: CGRect? = nil, leftStrip: CGRect? = nil, rightStrip: CGRect? = nil) {
         self.map = map
         self.tower = tower
         self.console = console
         self.deck = deck
+        self.logbook = logbook
+        self.leftStrip = leftStrip
+        self.rightStrip = rightStrip
     }
 
-    var rects: [CGRect] { [map, tower, console, deck].compactMap { $0 } }
+    var rects: [CGRect] { [map, tower, console, deck, logbook, leftStrip, rightStrip].compactMap { $0 } }
 }
 
 /// Pure layout engine: 16:9 tiles that use as much of the screen as possible.
@@ -47,6 +56,8 @@ public enum LayoutEngine {
     static let gap: CGFloat = 6
     static let minWidth: CGFloat = 200
     static let aspect: CGFloat = 9.0 / 16.0
+    /// Rivals' strip: at least this tall.
+    static let minStripHeight: CGFloat = 64
 
     // MARK: Options
 
@@ -63,7 +74,9 @@ public enum LayoutEngine {
         switch posture {
         case .closed: return plain
         case .flat, .unknown: return plain + ["flat.director"]
-        case .book: return plain + ["book.dataScreen"]
+        case .book:
+            // Rivals needs two feeds, one per screen.
+            return plain + ["book.dataScreen", "book.logbook"] + (min(max(feedCount, 1), 4) >= 2 ? ["book.rivals"] : [])
         case .laptop:
             if min(max(feedCount, 1), 4) == 1 { return ["laptop.scrubDeck", "laptop.raceEngineer"] }
             return plain + ["laptop.raceEngineer", "laptop.scrubDeck"]
@@ -384,6 +397,32 @@ public enum LayoutEngine {
         return Layout(tiles: feeds.map { TileFrame(rect: $0) }, regions: DataRegions(map: map, tower: tower))
     }
 
+    /// Onboard and Logbook: the main feed on the left screen, the logbook the whole right screen;
+    /// the other feeds are hidden under the main tile.
+    private static func logbook(_ l: Region, _ r: Region, _ n: Int) -> Layout {
+        let main = one(l)
+        let tiles = (0..<n).map { TileFrame(rect: main, visible: $0 == 0) }
+        return Layout(tiles: tiles, regions: DataRegions(logbook: r.rect))
+    }
+
+    /// Rivals: feeds 0 and 1, one per screen, each the largest 16:9 tile that leaves a strip of at
+    /// least 64 pt below it. The tile sits at the top of its screen; the strip takes the rest of
+    /// the height under it and the tile's width. The other feeds are hidden under the first tile.
+    private static func rivals(_ l: Region, _ r: Region, _ n: Int) -> Layout? {
+        guard n >= 2 else { return nil }
+        func pair(_ region: Region) -> (tile: CGRect, strip: CGRect)? {
+            let available = region.h - gap - minStripHeight
+            guard available > 0 else { return nil }
+            let s = fit(region.w, available)
+            let tile = tile(region.x + (region.w - s.width) / 2, region.y, s.width)
+            let stripY = tile.maxY + gap
+            return (tile, CGRect(x: tile.minX, y: stripY, width: tile.width, height: region.y + region.h - stripY))
+        }
+        guard let left = pair(l), let right = pair(r) else { return nil }
+        let tiles = (0..<n).map { $0 < 2 ? TileFrame(rect: [left.tile, right.tile][$0]) : TileFrame(rect: left.tile, visible: false) }
+        return Layout(tiles: tiles, regions: DataRegions(leftStrip: left.strip, rightStrip: right.strip))
+    }
+
     /// Race Engineer and Scrub Deck: the main feed in the top half, the others hidden under it;
     /// the console or deck is the whole bottom half inside the margins.
     private static func laptopData(top: Region, bottom: Region, n: Int, console: Bool) -> Layout {
@@ -449,6 +488,8 @@ public enum LayoutEngine {
             let pair = [one(halves.0), one(halves.1)]
             return Layout(tiles: (0..<n).map { $0 < 2 ? TileFrame(rect: pair[$0]) : TileFrame(rect: pair[0], visible: false) })
         case "book.dataScreen": return s().flatMap { dataScreen($0.0, $0.1, n) }
+        case "book.logbook": return s().map { logbook($0.0, $0.1, n) }
+        case "book.rivals": return s().flatMap { rivals($0.0, $0.1, n) }
         case "laptop.raceEngineer", "laptop.scrubDeck":
             return h().map { laptopData(top: $0.0, bottom: $0.1, n: n, console: id == "laptop.raceEngineer") }
         case "book.oneLeftTwoRight": rects = s().map { [one($0.0)] + column($0.1, 2) }
