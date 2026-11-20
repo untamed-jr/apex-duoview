@@ -3,6 +3,7 @@ import AVKit
 import F1TV
 import Foundation
 import Library
+import MediaPlayer
 import LiveTiming
 import Multiview
 import Observation
@@ -10,9 +11,11 @@ import UIKit
 
 /// Plays one feed at a time: asks F1 TV for the stream, drives an `AVPlayer`, saves the place
 /// (bookmark and watch history) while playing, and tears everything down on `close()`.
-/// It also holds AVKit's player view controller (the picture only; the app's own controls sit on
-/// it), so picture in picture outlives the cover: it starts by itself on leaving the app, and the
-/// window's restore brings the cover back with the same view controller.
+/// It also holds the picture (`PlayerSurfaceView`, a player layer; the app's own controls sit on
+/// it) and its picture-in-picture controller, so picture in picture outlives the cover: started
+/// from the controls' button, the cover steps aside while the window plays; it also starts by
+/// itself on leaving the app; the window's restore brings the cover back with the same picture.
+/// A now-playing session keeps the lock screen and Control Centre controls.
 /// It attaches the session's timing (shared with the multiview) once the PLAY is answered, with a
 /// clock reading this player's program date and position, and detaches it on close.
 /// Tap a car (`showOnboard`) switches to that car's onboard at the same moment; an onboard shows
@@ -80,7 +83,11 @@ final class PlayerController {
     @ObservationIgnored private var notificationTokens: [NSObjectProtocol] = []
     /// AVKit's view controller for `player`, kept here rather than by the cover's view, so hiding
     /// the cover never ends picture in picture. A new player gets a new one.
-    @ObservationIgnored private var playerViewController: AVPlayerViewController?
+    /// The picture, kept while picture in picture uses its layer with the cover hidden.
+    @ObservationIgnored private var surface: PlayerSurfaceView?
+    @ObservationIgnored private var pictureInPictureController: AVPictureInPictureController?
+    /// The lock screen's and Control Centre's now playing (AVKit's view controller did this before).
+    @ObservationIgnored private var nowPlaying: MPNowPlayingSession?
     /// AVKit holds its delegate weakly: this keeps it.
     @ObservationIgnored private let pictureInPictureDelegate: PlayerPictureInPictureDelegate
     /// What the app's own controls show (play, scrubber, LIVE, speed, audio). Refreshed twice a
@@ -378,23 +385,40 @@ final class PlayerController {
 
     // MARK: Picture in picture
 
-    /// The view controller the cover shows for `player`: the same one each time the cover comes
-    /// back, so a picture in picture it started keeps going. Touches only unobserved state (it is
-    /// called while SwiftUI makes the view).
-    func playerViewController(for player: AVPlayer) -> AVPlayerViewController {
-        if let existing = playerViewController {
-            if existing.player !== player { existing.player = player }
+    /// The picture the cover shows for `player`: the same view each time the cover comes back, so
+    /// a picture in picture started from its layer keeps going. Touches only unobserved state (it
+    /// is called while SwiftUI makes the view).
+    func surfaceView(for player: AVPlayer) -> PlayerSurfaceView {
+        if let existing = surface {
+            if existing.playerLayer.player !== player { existing.playerLayer.player = player }
             return existing
         }
-        let viewController = AVPlayerViewController()
-        viewController.player = player
-        // The app's own controls instead (`PlayerChrome`, owner 2026-11-20, option B).
-        viewController.showsPlaybackControls = false
-        viewController.allowsPictureInPicturePlayback = true
-        viewController.canStartPictureInPictureAutomaticallyFromInline = true
-        viewController.delegate = pictureInPictureDelegate
-        playerViewController = viewController
-        return viewController
+        let view = PlayerSurfaceView()
+        view.backgroundColor = .black
+        // Touches go to the controls' tap layer above.
+        view.isUserInteractionEnabled = false
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = player
+        surface = view
+        if AVPictureInPictureController.isPictureInPictureSupported(),
+           let pip = AVPictureInPictureController(playerLayer: view.playerLayer) {
+            pip.delegate = pictureInPictureDelegate
+            pip.canStartPictureInPictureAutomaticallyFromInline = true
+            pictureInPictureController = pip
+        }
+        return view
+    }
+
+    /// The controls' picture-in-picture button.
+    func startPictureInPicture() {
+        guard let pip = pictureInPictureController, pip.isPictureInPicturePossible,
+              !pip.isPictureInPictureActive else { return }
+        pip.startPictureInPicture()
+    }
+
+    /// Callbacks only count from the controller in use (an older one may still report its stop).
+    fileprivate func isCurrentPictureInPicture(_ source: ObjectIdentifier) -> Bool {
+        pictureInPictureController.map { ObjectIdentifier($0) == source } ?? false
     }
 
     fileprivate func pictureInPictureWillStart() {
@@ -402,9 +426,8 @@ final class PlayerController {
         isInPictureInPicture = true
     }
 
-    /// Started with the app in front (no button for it now, since AVKit's controls are off; kept
-    /// in case iOS starts it another way): the cover steps aside so the app can be used while the
-    /// window plays. Started on leaving the app, the cover stays.
+    /// Started with the app in front (the controls' button): the cover steps aside so the app can
+    /// be used while the window plays. Started on leaving the app, the cover stays.
     fileprivate func pictureInPictureDidStart() {
         guard isInPictureInPicture, isPresented, UIApplication.shared.applicationState == .active else { return }
         isPresented = false
@@ -416,7 +439,7 @@ final class PlayerController {
         if player != nil, !isPresented { isPresented = true }
     }
 
-    /// The window's restore: the cover comes back (with the same view controller). Answers
+    /// The window's restore: the cover comes back (with the same picture). Answers
     /// whether there is a player to come back to.
     fileprivate func pictureInPictureRestore() -> Bool {
         guard player != nil, currentItem != nil else { return false }
@@ -471,6 +494,7 @@ final class PlayerController {
         ) { @Sendable [weak self] _ in
             MainActor.assumeIsolated { self?.tick(itemID: itemID) }
         }
+        startNowPlaying(player)
         transport.reset()
         seekTarget = nil
         audioGroup = nil
@@ -704,8 +728,14 @@ final class PlayerController {
         player?.replaceCurrentItem(with: nil)
         // Ends a picture in picture still up; its stop then finds nothing to do.
         isInPictureInPicture = false
-        playerViewController?.player = nil
-        playerViewController = nil
+        if let pip = pictureInPictureController {
+            pip.canStartPictureInPictureAutomaticallyFromInline = false
+            if pip.isPictureInPictureActive { pip.stopPictureInPicture() }
+        }
+        pictureInPictureController = nil
+        surface?.playerLayer.player = nil
+        surface = nil
+        nowPlaying = nil
         player = nil
         canSave = false
         pendingStart = .position(0)
@@ -817,6 +847,35 @@ final class PlayerController {
         transport.setMuted(wantsMuted)
     }
 
+    /// Lock screen and Control Centre: play, pause and the position, for this player.
+    private func startNowPlaying(_ player: AVPlayer) {
+        let session = MPNowPlayingSession(players: [player])
+        session.automaticallyPublishesNowPlayingInfo = true
+        let commands = session.remoteCommandCenter
+        commands.playCommand.addTarget { [weak player] _ in
+            player?.play()
+            return .success
+        }
+        commands.pauseCommand.addTarget { [weak player] _ in
+            player?.pause()
+            return .success
+        }
+        commands.togglePlayPauseCommand.addTarget { [weak player] _ in
+            guard let player else { return .noActionableNowPlayingItem }
+            if player.timeControlStatus == .paused { player.play() } else { player.pause() }
+            return .success
+        }
+        commands.changePlaybackPositionCommand.addTarget { [weak player] event in
+            guard let player, let event = event as? MPChangePlaybackPositionCommandEvent else {
+                return .commandFailed
+            }
+            player.seek(to: CMTime(seconds: event.positionTime, preferredTimescale: 600))
+            return .success
+        }
+        session.becomeActiveIfPossible { _ in }
+        nowPlaying = session
+    }
+
     private func forgetViewerChoices() {
         wantsMuted = false
         wantedSubtitle = nil
@@ -858,7 +917,8 @@ final class PlayerController {
     private func refreshTransport(itemID: ObjectIdentifier? = nil) {
         if let itemID, itemID != currentItemID { return }
         guard let player else { return }
-        transport.update(player: player, heldPosition: seekTarget)
+        transport.update(player: player, heldPosition: seekTarget,
+                         pictureInPicturePossible: pictureInPictureController?.isPictureInPicturePossible ?? false)
         // At the live point the speed menu hides, so any other speed goes back to 1× there (as
         // in multiview).
         if transport.isLive, transport.rate != 1, transport.behindLive != nil, transport.isAtLiveEdge {
@@ -920,49 +980,68 @@ final class PlayerController {
 }
 
 /// AVKit's picture-in-picture callbacks for the single-feed player. `nonisolated`, so they satisfy
-/// the protocol whether or not the SDK isolates it to the main actor; only plain values (and a
-/// boxed completion handler) go to the main actor, at once when called on the main thread as
-/// AVKit does, so a restore and the stop after it are handled in order.
+/// the protocol whether or not the SDK isolates it to the main actor; only plain values (the
+/// calling controller's identity, a boxed completion handler) go to the main actor, at once when
+/// called on the main thread as AVKit does, so a restore and the stop after it are handled in
+/// order. Callbacks from a controller no longer in use are dropped.
 @MainActor
-final class PlayerPictureInPictureDelegate: NSObject, AVPlayerViewControllerDelegate {
+final class PlayerPictureInPictureDelegate: NSObject, AVPictureInPictureControllerDelegate {
     weak var owner: PlayerController?
 
-    /// The app hides the cover itself (only when started from inside the app), keeping the view
-    /// controller; AVKit dismissing it would take the cover away behind SwiftUI's back.
-    nonisolated func playerViewControllerShouldAutomaticallyDismissAtPictureInPictureStart(
-        _ playerViewController: AVPlayerViewController
-    ) -> Bool {
-        false
-    }
-
-    nonisolated func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
-        onMainActor { [weak self] in self?.owner?.pictureInPictureWillStart() }
-    }
-
-    nonisolated func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
-        onMainActor { [weak self] in self?.owner?.pictureInPictureDidStart() }
-    }
-
-    nonisolated func playerViewController(
-        _ playerViewController: AVPlayerViewController,
-        failedToStartPictureInPictureWithError error: any Error
+    nonisolated func pictureInPictureControllerWillStartPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
     ) {
-        onMainActor { [weak self] in self?.owner?.pictureInPictureFailed() }
-    }
-
-    nonisolated func playerViewController(
-        _ playerViewController: AVPlayerViewController,
-        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
-    ) {
-        let completion = PictureInPictureCompletion(completionHandler)
+        let source = ObjectIdentifier(pictureInPictureController)
         onMainActor { [weak self] in
-            let restored = self?.owner?.pictureInPictureRestore() ?? false
-            completion.call(restored)
+            guard let owner = self?.owner, owner.isCurrentPictureInPicture(source) else { return }
+            owner.pictureInPictureWillStart()
         }
     }
 
-    nonisolated func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
-        onMainActor { [weak self] in self?.owner?.pictureInPictureDidStop() }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        let source = ObjectIdentifier(pictureInPictureController)
+        onMainActor { [weak self] in
+            guard let owner = self?.owner, owner.isCurrentPictureInPicture(source) else { return }
+            owner.pictureInPictureDidStart()
+        }
+    }
+
+    nonisolated func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        failedToStartPictureInPictureWithError error: any Error
+    ) {
+        let source = ObjectIdentifier(pictureInPictureController)
+        onMainActor { [weak self] in
+            guard let owner = self?.owner, owner.isCurrentPictureInPicture(source) else { return }
+            owner.pictureInPictureFailed()
+        }
+    }
+
+    nonisolated func pictureInPictureController(
+        _ pictureInPictureController: AVPictureInPictureController,
+        restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+    ) {
+        let source = ObjectIdentifier(pictureInPictureController)
+        let completion = PictureInPictureCompletion(completionHandler)
+        onMainActor { [weak self] in
+            guard let owner = self?.owner, owner.isCurrentPictureInPicture(source) else {
+                completion.call(false)
+                return
+            }
+            completion.call(owner.pictureInPictureRestore())
+        }
+    }
+
+    nonisolated func pictureInPictureControllerDidStopPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        let source = ObjectIdentifier(pictureInPictureController)
+        onMainActor { [weak self] in
+            guard let owner = self?.owner, owner.isCurrentPictureInPicture(source) else { return }
+            owner.pictureInPictureDidStop()
+        }
     }
 }
 

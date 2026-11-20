@@ -36,13 +36,17 @@ change is its own commit so it can be kept or reverted on its own.
   first); Settings › Watching › "Clear watch history" clears Continue watching and the watched
   marks (asks first). DuoCore: `RecentsStore.removeAll()`, `WatchHistory.removeAll()` (tested).
 - **Single-feed player: the app's own controls** (owner's screenshots, FP1 night, option B):
-  Apple's player controls are off. In their place, the multiview's look: one ✕, Map and AirPlay
-  at the top; at the bottom the scrubber, play/pause, back and forward 10 s, a LIVE that takes
-  you live when tapped (red at the live point, outlined behind it), the speed and the commentary
-  language. They hide 4 s after the last touch; tap the picture to bring them back; they stay up
-  while paused, loading or scrubbing. Fixes the doubled ✕ and Map, the LIVE that didn't go
-  live, and Apple's controls that stayed stuck on screen. Picture in picture has no button now:
-  it starts by itself on leaving the app. Apple's volume slider and subtitles button are gone.
+  Apple's player is gone; the picture is the app's own, with the multiview's look: ✕ and mute,
+  then Map, picture in picture and AirPlay at the top; at the bottom the scrubber, play/pause,
+  back and forward 10 s, a LIVE that takes you live when tapped (red at the live point, outlined
+  behind it), the speed, and one menu for the commentary language and subtitles (subtitles only
+  if the video has any). They hide 4 s after the last touch; tap the picture to bring them
+  back; they stay up while paused, loading or scrubbing. Mute and the subtitle choice stay when
+  tapping a car switches feeds. Picture in picture also still starts by itself on leaving the
+  app; the lock screen and Control Centre keep play, pause and the position; on AirPlay a line
+  says "Playing on AirPlay". Fixes the doubled ✕ and Map, the LIVE that didn't go live, and
+  Apple's controls that stayed stuck on screen. Not brought back: Apple's volume slider (the
+  side buttons set the volume; mute is the app's) and its zoom-to-fill.
   Untested: everything (not built yet); live checks need the phone after the race.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.

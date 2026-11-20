@@ -30,6 +30,10 @@ final class PlayerTransport {
     /// The group allows no subtitles at all ("Off" in the menu).
     private(set) var subtitlesCanBeOff = true
     private(set) var isMuted = false
+    /// Picture in picture can start now (the button shows only then).
+    private(set) var canPictureInPicture = false
+    /// Playing on an AirPlay screen: the picture here stays black, so a line says so.
+    private(set) var isExternal = false
     /// The scrubber is held: the controls stay up.
     var scrubbing = false
 
@@ -51,14 +55,19 @@ final class PlayerTransport {
         if !subtitleOptions.isEmpty { subtitleOptions = [] }
         if selectedSubtitle != nil { selectedSubtitle = nil }
         if !subtitlesCanBeOff { subtitlesCanBeOff = true }
+        if canPictureInPicture { canPictureInPicture = false }
+        if isExternal { isExternal = false }
         scrubbing = false
     }
 
     /// Reads the player. While a seek is under way the player may still report the old place, so
     /// `heldPosition` (the seek's target) wins until it lands.
-    func update(player: AVPlayer, heldPosition: Double?) {
+    func update(player: AVPlayer, heldPosition: Double?, pictureInPicturePossible: Bool) {
         let paused = player.timeControlStatus == .paused
         if isPaused != paused { isPaused = paused }
+        if canPictureInPicture != pictureInPicturePossible { canPictureInPicture = pictureInPicturePossible }
+        let external = player.isExternalPlaybackActive
+        if isExternal != external { isExternal = external }
         guard let item = player.currentItem else { return }
         let now = player.currentTime()
         if let heldPosition {

@@ -6,7 +6,8 @@ import SwiftUI
 /// doubled the ✕ and Map, had a LIVE label that didn't go live, and could stay stuck on screen).
 /// The same look as the multiview's:
 ///
-/// - Top: one ✕ and mute; on the right, Map (only with timing) and AirPlay.
+/// - Top: one ✕ and mute; on the right, Map (only with timing), picture in picture (when it can
+///   start) and AirPlay.
 /// - Bottom: the scrubber with the elapsed and remaining time (live: how far behind), play/pause,
 ///   back and forward 10 s, LIVE for live video (red at the live point; outlined behind it, and a
 ///   tap goes live), the speed (not at the live point), and one menu for the commentary language
@@ -17,7 +18,7 @@ import SwiftUI
 /// between the picture's tap layer and the bars, so they take their own touches. The onboard's
 /// driver card stays under the top bar whether or not the controls show.
 ///
-/// Picture in picture has no button: it starts by itself on leaving the app while a video plays.
+/// Picture in picture also starts by itself on leaving the app while a video plays.
 struct PlayerChrome: View {
     let controller: PlayerController
     let fold: FoldState
@@ -49,6 +50,7 @@ struct PlayerChrome: View {
                     .accessibilityLabel(shown ? "Hide controls" : "Show controls")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { toggle(pinned: pinned) }
+                ExternalPlaybackNote(transport: transport)
                 PlayerPanelsLayer(controller: controller, fold: fold, onInteraction: noteUse)
             }
             VStack(spacing: 0) {
@@ -133,6 +135,7 @@ private struct PlayerTopBar: View {
                 if showsTiming {
                     TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
                         .appTip(TapCarTip())
+                    PictureInPictureButton(controller: controller, transport: controller.transport)
                     AirPlayButton()
                         .frame(width: 32, height: 32)
                         .videoGlass(in: Circle())
@@ -142,6 +145,44 @@ private struct PlayerTopBar: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
+        }
+    }
+}
+
+/// Starts picture in picture; shown only when it can start.
+private struct PictureInPictureButton: View {
+    let controller: PlayerController
+    let transport: PlayerTransport
+
+    var body: some View {
+        if transport.canPictureInPicture {
+            Button {
+                controller.startPictureInPicture()
+            } label: {
+                Image(systemName: "pip.enter")
+                    .font(.footnote.bold())
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .videoGlass(in: Circle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Picture in picture")
+        }
+    }
+}
+
+/// While the video plays on an AirPlay screen, the picture here is black: one line says why.
+private struct ExternalPlaybackNote: View {
+    let transport: PlayerTransport
+
+    var body: some View {
+        if transport.isExternal {
+            Label("Playing on AirPlay", systemImage: "airplayvideo")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+                .allowsHitTesting(false)
         }
     }
 }

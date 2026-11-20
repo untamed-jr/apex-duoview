@@ -1,19 +1,29 @@
 import AVKit
 import SwiftUI
 
-/// AVKit's player as the picture only: its own controls are off (`PlayerChrome` has the app's).
-/// Picture in picture and AirPlay still go through it. The view controller comes from `PlayerController`, which keeps it while picture in
+/// The picture: a player layer, no controls of its own (`PlayerChrome` has the app's). Picture in
+/// picture uses this layer. The view comes from `PlayerController`, which keeps it while picture in
 /// picture plays with the cover hidden, so the cover coming back shows the same one.
-struct PlayerView: UIViewControllerRepresentable {
+struct PlayerView: UIViewRepresentable {
     let controller: PlayerController
     let player: AVPlayer
 
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        controller.playerViewController(for: player)
+    func makeUIView(context: Context) -> PlayerSurfaceView {
+        controller.surfaceView(for: player)
     }
 
-    func updateUIViewController(_ viewController: AVPlayerViewController, context: Context) {
-        if viewController.player !== player { viewController.player = player }
+    func updateUIView(_ view: PlayerSurfaceView, context: Context) {
+        if view.playerLayer.player !== player { view.playerLayer.player = player }
+    }
+}
+
+/// A view whose own layer is the `AVPlayerLayer`, so it resizes with the view.
+final class PlayerSurfaceView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+
+    var playerLayer: AVPlayerLayer {
+        // layerClass guarantees the type.
+        layer as! AVPlayerLayer
     }
 }
 
