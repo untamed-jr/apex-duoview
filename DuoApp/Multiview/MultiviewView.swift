@@ -222,6 +222,12 @@ struct MultiviewView: View {
             .ignoresSafeArea()
         }
         .overlay { status }
+        // First time closed during a video: "Closed, it keeps playing" (once; tips can be off).
+        .overlay(alignment: .bottom) {
+            if fold.posture == .closed {
+                ClosedPhoneTipView()
+            }
+        }
         // While a live programme plays: another one that went live, at the top (never in
         // picture in picture). "Switch" opens it in multiview.
         .overlay(alignment: .top) {
@@ -541,7 +547,8 @@ struct MultiviewView: View {
             onSwitchLayout: {
                 controller.cycleLayout(posture: posture, feedCount: feedCount, hasTiming: hasTiming, usable: usable)
             },
-            onFeeds: { openEditor(slot: nil) })
+            onFeeds: { openEditor(slot: nil) },
+            isFlat: fold.posture == .flat)
     }
 
     /// Book posture: how much of the controls' width (the safe area, the space the layout engine

@@ -40,6 +40,8 @@ struct MultiviewControls: View {
     let onInteraction: @MainActor () -> Void
     let onSwitchLayout: @MainActor () -> Void
     let onFeeds: @MainActor () -> Void
+    /// The phone is open flat: the "Try laptop pose" tip may show.
+    var isFlat = false
 
     var body: some View {
         // The error has its own Close, over everything.
@@ -51,7 +53,8 @@ struct MultiviewControls: View {
                         canSwitchLayout: canSwitchLayout,
                         onInteraction: onInteraction,
                         onSwitchLayout: onSwitchLayout,
-                        onFeeds: onFeeds)
+                        onFeeds: onFeeds,
+                        isFlat: isFlat)
                     Spacer(minLength: 0)
                     MultiviewPlaybackBar(controller: controller, scrubbing: $scrubbing, onInteraction: onInteraction)
                         .padding(.leading, mainHalfLeading)
@@ -67,6 +70,7 @@ struct MultiviewControls: View {
                     HStack(spacing: 0) {
                         Spacer(minLength: 0)
                         MultiviewControlsHandle(onShow: onShow)
+                            .appTip(ControlsHiddenTip())
                         Spacer(minLength: 0)
                     }
                     .padding(.leading, handleLeading)
@@ -95,6 +99,8 @@ struct MultiviewTopBar: View {
     let onInteraction: @MainActor () -> Void
     let onSwitchLayout: @MainActor () -> Void
     let onFeeds: @MainActor () -> Void
+    /// The phone is open flat: the "Try laptop pose" tip may show on Switch layout.
+    var isFlat = false
 
     var body: some View {
         // Design pass q1: the bar's pieces are clear glass in one container, so they blend as
@@ -140,8 +146,10 @@ struct MultiviewTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
+                .appTip(isFlat ? LaptopPoseTip() : nil)
             }
             TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
+                .appTip(TapCarTip())
             if !controller.channels.isEmpty {
                 Button {
                     onInteraction()

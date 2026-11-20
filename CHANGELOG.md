@@ -26,6 +26,11 @@ change is its own commit so it can be kept or reverted on its own.
     size (unchanged at the default size).
   - Waiting: q8 (44 pt touch areas) and q9 (VoiceOver for the map and pit circle, Move and Resize
     actions for panels), until the laptop-pose tap and drag problems are found. q4 is no change.
+- **Welcome tour and first-time tips** (owner's picks, 2026-11-20): five swipeable cards on the
+  first launch (Skip on each; Settings › Help › "How to use" plays them again), and tips the
+  first time: try laptop pose (flat multiview), tap a car (the Map button), tap to bring the
+  controls back, and closed it keeps playing. Settings › Help also has "Show tips" and "Reset
+  tips". The card pictures are placeholders until the screenshots are taken after the race.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 

@@ -13,6 +13,10 @@ struct SettingsView: View {
     let onSignOut: () -> Void
 
     private var fake: FakeFoldProvider { FakeFoldProvider(state: fold) }
+    /// Help: the welcome tour again, and the first-time tips.
+    @State private var showTour = false
+    @State private var tipsReset = false
+    @AppStorage(AppTips.showKey) private var showTips = true
 
     var body: some View {
         NavigationStack {
@@ -21,6 +25,7 @@ struct SettingsView: View {
                 MultiviewSettingsSection(model: model).listRowBackground(Theme.surface)
                 TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
                 foldSection.listRowBackground(Theme.surface)
+                helpSection.listRowBackground(Theme.surface)
                 aboutSection.listRowBackground(Theme.surface)
                 creditsSection.listRowBackground(Theme.surface)
                 debugSection.listRowBackground(Theme.surface)
@@ -34,6 +39,31 @@ struct SettingsView: View {
                     Button("Done", action: onDone)
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showTour) {
+            WelcomeTourView { showTour = false }
+        }
+    }
+
+    // MARK: Help
+
+    private var helpSection: some View {
+        Section {
+            Button("How to use") { showTour = true }
+            Toggle("Show tips", isOn: $showTips)
+                .tint(Theme.accent)
+            Button("Reset tips") {
+                UserDefaults.standard.set(true, forKey: AppTips.resetKey)
+                tipsReset = true
+            }
+            .disabled(tipsReset)
+            if tipsReset {
+                Text("The tips come back the next time you open the app.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        } header: {
+            Text("Help").sectionLabel()
         }
     }
 
