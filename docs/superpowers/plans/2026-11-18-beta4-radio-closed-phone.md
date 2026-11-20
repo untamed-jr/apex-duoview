@@ -88,6 +88,14 @@ driver's onboard from the session page in the single-feed player and see that it
 driver's onboard. If it is, add the FairPlay multiview task (separate PLAY and key session per
 feed) before Task 12.
 
+**Confirmed (owner, FP1, 2026-11-19):** picking a driver's onboard on the live session page played
+that driver's onboard, live. **Ruling:** add a task before Task 12, "Live multiview through
+FairPlay": for a live session, open each feed with its own Safari-style single PLAY
+(`playChannelId`, so INTERNATIONAL goes without a channelId) and its own `FairPlayKeys` session,
+instead of the one multiview PLAY; keep "Watch the main feed" as the fallback when any feed
+fails. Sized and written into this plan on Sunday, before Task 8 starts. Cost if wrong: one
+task's work, and live keeps the single-feed fallback it has now.
+
 ## Global Constraints
 
 **Weekend freeze (Las Vegas, build 16 under live test)**
