@@ -10,9 +10,9 @@ import UIKit
 
 /// Plays one feed at a time: asks F1 TV for the stream, drives an `AVPlayer`, saves the place
 /// (bookmark and watch history) while playing, and tears everything down on `close()`.
-/// It also holds AVKit's player view controller, so picture in picture outlives the cover: started
-/// from the player's button, the cover steps aside while the window plays; the window's restore
-/// brings the cover back with the same view controller.
+/// It also holds AVKit's player view controller (the picture only; the app's own controls sit on
+/// it), so picture in picture outlives the cover: it starts by itself on leaving the app, and the
+/// window's restore brings the cover back with the same view controller.
 /// It attaches the session's timing (shared with the multiview) once the PLAY is answered, with a
 /// clock reading this player's program date and position, and detaches it on close.
 /// Tap a car (`showOnboard`) switches to that car's onboard at the same moment; an onboard shows
@@ -370,6 +370,8 @@ final class PlayerController {
         }
         let viewController = AVPlayerViewController()
         viewController.player = player
+        // The app's own controls instead (`PlayerChrome`, owner 2026-11-20, option B).
+        viewController.showsPlaybackControls = false
         viewController.allowsPictureInPicturePlayback = true
         viewController.canStartPictureInPictureAutomaticallyFromInline = true
         viewController.delegate = pictureInPictureDelegate
@@ -382,8 +384,9 @@ final class PlayerController {
         isInPictureInPicture = true
     }
 
-    /// Started with the app in front (the player's button): the cover steps aside so the app can
-    /// be used while the window plays. Started on leaving the app, the cover stays.
+    /// Started with the app in front (no button for it now, since AVKit's controls are off; kept
+    /// in case iOS starts it another way): the cover steps aside so the app can be used while the
+    /// window plays. Started on leaving the app, the cover stays.
     fileprivate func pictureInPictureDidStart() {
         guard isInPictureInPicture, isPresented, UIApplication.shared.applicationState == .active else { return }
         isPresented = false

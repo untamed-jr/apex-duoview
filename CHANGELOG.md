@@ -35,6 +35,15 @@ change is its own commit so it can be kept or reverted on its own.
   watching tile › "Remove from Continue watching"; "Clear all" beside the row's title (asks
   first); Settings › Watching › "Clear watch history" clears Continue watching and the watched
   marks (asks first). DuoCore: `RecentsStore.removeAll()`, `WatchHistory.removeAll()` (tested).
+- **Single-feed player: the app's own controls** (owner's screenshots, FP1 night, option B):
+  Apple's player controls are off. In their place, the multiview's look: one ✕, Map and AirPlay
+  at the top; at the bottom the scrubber, play/pause, back and forward 10 s, a LIVE that takes
+  you live when tapped (red at the live point, outlined behind it), the speed and the commentary
+  language. They hide 4 s after the last touch; tap the picture to bring them back; they stay up
+  while paused, loading or scrubbing. Fixes the doubled ✕ and Map, the LIVE that didn't go
+  live, and Apple's controls that stayed stuck on screen. Picture in picture has no button now:
+  it starts by itself on leaving the app. Apple's volume slider and subtitles button are gone.
+  Untested: everything (not built yet); live checks need the phone after the race.
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 
