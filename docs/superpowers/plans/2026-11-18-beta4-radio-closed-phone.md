@@ -61,6 +61,29 @@ These landed during the weekend's device checks. Tasks 8–14 build on them and 
   VoiceOver for map and pit circle) wait for the laptop-pose tap and drag fix. Simulator build:
   0 warnings. `scripts/check-build.sh` builds for the simulator without the phone.
 
+- **The single-feed player has the app's own controls (owner, 2026-11-20, option B; built with 0
+  warnings at 342b966, not yet used on the phone).** Apple's `AVPlayerViewController` is gone:
+  - the picture is `PlayerSurfaceView` (an `AVPlayerLayer`, in `PlayerView.swift`), owned by
+    `PlayerController` and kept while picture in picture runs with the cover hidden;
+  - picture in picture is an `AVPictureInPictureController` on that layer (a button in the top bar,
+    and automatic on leaving the app); `PlayerPictureInPictureDelegate` drops callbacks from a
+    controller no longer in use;
+  - lock screen and Control Centre come from an `MPNowPlayingSession` made in `begin`;
+  - the controls are `PlayerChrome` in `DuoApp/Player/PlayerControls.swift` (top bar: ✕, mute;
+    Map, picture in picture, AirPlay; bottom: scrubber, play/pause, ±10 s, LIVE, speed, one menu
+    for commentary and subtitles). The floating panels and the driver card moved there too
+    (`PlayerPanelsLayer`, `PlayerCardLayer`);
+  - `PlayerTransport` (`DuoApp/Player/PlayerTransport.swift`) is the controls' observable state;
+    `PlayerController` has `togglePlay()`, `seek(toSeconds:)`, `skip(by:)`, `goLive()`,
+    `setRate(_:)` (sets `defaultRate`), `selectAudioOption(_:)`, `selectSubtitle(_:)`,
+    `toggleMute()`, `startPictureInPicture()`.
+  - **For Task 10's `PlaybackHost` on the single player:** `playbackRate` is `transport.rate`;
+    `setFeedVolume` sets `player.volume` only, because `player.isMuted` is now the viewer's mute
+    (`wantsMuted`, re-applied in `begin`); `seekGeneration` goes up in `seek(toSeconds:)` and on
+    the item's `timeJumpedNotification`. The "Radio" button goes in `PlayerTopBar`
+    (`PlayerControls.swift`), beside Map, not in `PlayerView.swift`; the Radio panel joins
+    `PlayerPanelsLayer`.
+
 **Open (decide after the FP1 multiview probe, owner-run):** asked the app's multiview way
 (Android-style, `WEB_DASH`), F1 TV sends live multiview as Widevine, which iOS cannot play; asked
 Safari-style it sends FairPlay, but for replays only one feed. Until the probe shows the
@@ -542,7 +565,7 @@ Tasks 1, 2 and 5 wait for the radio groundwork, being built by another worker, t
 - [ ] **Step 2: Check it against a local stub.** Run `python3 -m http.server` serving a folder with a synthetic MPEG header file, then `--base-url http://127.0.0.1:<port>`. Expected: one report line per try, and no token in the output.
 - [ ] **Step 3: Commit** "Spike: radio probe for T-A4".
 
-## Post-freeze tasks (merge on or after Sun 22 Nov)
+## Post-freeze tasks (owner, 2026-11-20: start now; the phone stays on the race build until after the race)
 
 ### Task 8: Radio in the session's loading (DuoCore, after freeze)
 
@@ -763,6 +786,68 @@ Task 10 works either way (no token first, then once with it). The answer goes in
     - whether a permission prompt appears (O1);
     - whether a fallback ran (O7);
     - warmth over 20 minutes of radio on screen.
+
+### Task 11b: App — live multiview through FairPlay (added 2026-11-20)
+
+From the FP1 ruling above. Live multiview asked as one PLAY comes as Widevine (no iPhone can play
+it); each feed asked on its own, Safari-style, comes as FairPlay, and several such sessions play
+side by side (probes B and C) and are the right drivers (owner, FP1). So a live multiview opens
+each feed with its own PLAY and its own key session.
+
+**Files:**
+- Modify:
+  - `Packages/DuoCore/Sources/F1TV/PlayCoordinator.swift`: live feeds alongside the one-session
+    rule.
+  - `DuoApp/Multiview/MultiviewController.swift`: open, attach, link refresh and teardown for live
+    feeds.
+  - `CHANGELOG.md`
+- Test: `Packages/DuoCore/Tests/F1TVTests/PlayCoordinatorTests.swift`.
+
+**Interfaces:**
+- Consumes: `PlayCoordinator.play(contentId:channelId:)`'s request (Safari-style `player_bm`,
+  `webHLS`), `Channel.playChannelId` (nil for INTERNATIONAL, which answers 404 when asked by
+  channelId), `PlayInfo.isFairPlay`, `PlayInfo.licenseURL`, `FairPlayKeys(f1:licenseURL:)` with
+  `attach(_ asset:)` and `stop()`, `MainFeedFallback`.
+- Produces (DuoCore):
+  - `public func playLiveFeed(contentId: Int, channelId: Int, playChannelId: Int?) async throws -> PlayInfo`:
+    one Safari-style single PLAY for one feed of a live multiview, kept in its own set keyed by
+    `channelId`. It never ends the other live feeds, and asking again for a feed already played
+    returns its answer without a new request (unless `refresh: true`, a defaulted parameter). A
+    feed whose answer is DRM other than FairPlay throws `.protectedContent`.
+  - `play`, `playMultiview` and `stop()` clear the live feeds (a new single or multiview session
+    replaces them, as today's one-session rule).
+- Produces (app):
+  - `open(item:detail:startAt:)`: when `playMultiview` throws `.protectedContent` and the item is
+    live (`CatalogItem.isLive`), it switches to live feeds instead of showing the error: the
+    channel list is the session's channels (each assumed playable), and each slot's feed is
+    played with `playLiveFeed` when it is attached (the remembered slots at once, up to four
+    requests side by side; a feed picked later when it is picked).
+  - Each live feed's `AVPlayerItem` is made from an `AVURLAsset` that a `FairPlayKeys` for that
+    feed's licence URL has taken first (as `PlayerController.begin` does); the keys live as long
+    as the feed and stop when it is detached or torn down.
+  - A feed whose PLAY fails shows that tile's error, like any feed that stops; if every feed
+    fails, `mainFeedFallback` is offered as today ("Watch the main feed").
+  - Link refresh asks that one feed again (`refresh: true`), not the whole multiview.
+  - Replays are unchanged: one multiview PLAY, clear streams.
+
+- [ ] **Step 1: Write failing tests** (a fake HTTP client, as the existing coordinator tests):
+  - `liveFeedAsksSafariStyleWithItsChannel`: `player_bm`, the HLS platform, `channelId` =
+    `playChannelId`;
+  - `liveFeedWithoutChannelIdForInternational`: nil `playChannelId` sends no `channelId`;
+  - `liveFeedsCoexist`: a second feed's PLAY keeps the first (no new request for the first after);
+  - `liveFeedAgainSendsNoRequest`, and `refreshSendsOne`;
+  - `widevineLiveFeedRejected`: `.protectedContent`;
+  - `singlePlayClearsLiveFeeds` and `stopClearsLiveFeeds`.
+- [ ] **Step 2: Run the tests.** Expected: FAIL.
+- [ ] **Step 3: Implement the coordinator.** Run all DuoCore tests: PASS, 0 warnings.
+- [ ] **Step 4: Implement the app side.** `swiftc -parse` on the changed files; no `print`, no
+  token or licence URL in any string or log.
+- [ ] **Step 5: CHANGELOG** (Unreleased: "Live multiview", untested: everything; it can only be
+  tried on the phone during a live session, since the simulator can't play FairPlay).
+- [ ] **Step 6: Commit** "Live multiview: each feed on its own FairPlay session".
+- [ ] **Owner check T-B11b (next live weekend, on the phone):** a live session › Watch multiview
+  plays four feeds; the onboards are the right drivers; swapping a feed in Feeds plays it; 10
+  minutes without a stall; "Watch the main feed" still shows if F1 TV refuses.
 
 ### Task 12: App, build 19 — the closed phone and Unfold to See
 
