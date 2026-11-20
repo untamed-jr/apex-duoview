@@ -86,11 +86,16 @@ final class PlayerController {
     /// What the app's own controls show (play, scrubber, LIVE, speed, audio). Refreshed twice a
     /// second; its own object, so the cover's body never redraws for it.
     @ObservationIgnored let transport = PlayerTransport()
-    @ObservationIgnored private var transportObserver: Any?
+    /// Refreshes `transport` twice a second by the wall clock, so it stays true while paused or
+    /// buffering too (a time observer only fires while the video moves).
+    @ObservationIgnored private var transportTask: Task<Void, Never>?
     /// The playing item's audio choices (commentary languages), once loaded.
     @ObservationIgnored private var audioGroup: AVMediaSelectionGroup?
     /// A seek's target, shown by the scrubber until the player gets there.
     @ObservationIgnored private var seekTarget: Double?
+    /// Bumped by every seek: only the newest one's completion lets go of `seekTarget` (quick
+    /// −10/+10 taps cancel the earlier seeks, whose completions still come).
+    @ObservationIgnored private var seekCount = 0
 
     static let saveInterval: Double = 5
     /// How long a notice stays up, as the multiview's.
@@ -456,10 +461,11 @@ final class PlayerController {
         transport.reset()
         seekTarget = nil
         audioGroup = nil
-        transportObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(value: 1, timescale: 2), queue: .main
-        ) { @Sendable [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshTransport(itemID: itemID) }
+        transportTask = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.refreshTransport(itemID: itemID)
+                try? await Task.sleep(for: .milliseconds(500))
+            }
         }
         item.asset.loadMediaSelectionGroup(for: .audible) { @Sendable [weak self] group, _ in
             let box = PlayerAudioGroupBox(group)
@@ -693,10 +699,8 @@ final class PlayerController {
             observedPlayer.removeTimeObserver(timeObserver)
         }
         timeObserver = nil
-        if let transportObserver, let observedPlayer {
-            observedPlayer.removeTimeObserver(transportObserver)
-        }
-        transportObserver = nil
+        transportTask?.cancel()
+        transportTask = nil
         audioGroup = nil
         seekTarget = nil
         transport.reset()
@@ -726,12 +730,14 @@ final class PlayerController {
         var target = max(seconds, 0)
         if let span = transport.timeline { target = min(max(target, span.lowerBound), span.upperBound) }
         seekTarget = target
+        seekCount += 1
+        let seek = seekCount
         let itemID = currentItemID
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: CMTime(value: 1, timescale: 2),
                     toleranceAfter: CMTime(value: 1, timescale: 2)) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentItemID == itemID else { return }
+                guard let self, self.currentItemID == itemID, self.seekCount == seek else { return }
                 self.seekTarget = nil
                 self.refreshTransport()
             }

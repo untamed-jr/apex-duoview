@@ -99,7 +99,7 @@ task's work, and live keeps the single-feed fallback it has now.
 ## Global Constraints
 
 **Weekend freeze (Las Vegas, build 16 under live test)**
-- The owner tests build 16 live from FP1, Thu 19 Nov 16:30 PST, to the race, Sat 21 Nov 20:00 PST. He pulls `main` and rebuilds between sessions.
+- The owner tests build 16 live from FP1, Thu 19 Nov 16:30 PST, to the race, Sat 21 Nov 20:00 PST. The phone stays on the race build (commit `cc569d2`) until after the race; new work on `main` is only built in the Mac simulator until then.
 - **Tasks 1–7 may merge to `main` at any time.** They must be purely additive:
   - new files and new types only;
   - no new cases on existing public enums;
