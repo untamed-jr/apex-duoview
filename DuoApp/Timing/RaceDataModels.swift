@@ -89,7 +89,6 @@ enum ConsoleText {
     static let circleNextLine = "The pit circle appears when the leader next crosses the line."
     /// Race Engineer with no onboard on the top screen.
     static let pickOnboard = "Tap a car to pick an onboard"
-    static let radio = "Saved for beta.4: team radio"
     /// A channel F1 left out: never shown as 0.
     static let absent = "\u{2014}"
 

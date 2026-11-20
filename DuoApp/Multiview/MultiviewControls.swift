@@ -7,7 +7,7 @@ import SwiftUI
 /// headings, red only for progress and LIVE), laid inside the safe area by `MultiviewView`.
 ///
 /// - Top: Close, the session title, "Switch layout" (only with more than one usable layout), "Map"
-///   (only with timing) and "Feeds".
+///   and "Radio" (only with timing) and "Feeds".
 /// - Bottom: one scrubber for every feed with the elapsed and remaining time, play/pause, LIVE for
 ///   live sessions, the speed (not at the live edge) and the audio language of the feed with the
 ///   sound (only with more than one option).
@@ -150,6 +150,7 @@ struct MultiviewTopBar: View {
             }
             TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
                 .appTip(TapCarTip())
+            RadioButton(radio: controller.radio, timing: controller.timing, onInteraction: onInteraction)
             if !controller.channels.isEmpty {
                 Button {
                     onInteraction()

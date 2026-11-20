@@ -9,7 +9,7 @@ import SwiftUI
 /// │ P4  ▲ NOR +1.2s closing  ▼ RUS -0.8s ↗    │
 /// │ Medium · 18 laps   Pit now → P7 behind ALO│
 /// │ L41 1:32.4 ■■■  L40 1:32.9 ■■□  L39 …     │
-/// │ [ Saved for beta.4: team radio ]          │
+/// │ Team radio: HAM Lap 38 ▶ · Lap 40 ▶ · …   │
 /// └───────────────────────────────────────────┘
 /// ```
 /// - The readouts (speed, gear, revs, throttle and brake bars, and the DRS or Aero light only when
@@ -18,13 +18,14 @@ import SwiftUI
 /// - The race lines: position, the car ahead and behind with the gap and its trend (tap either to
 ///   make it the top onboard), the tyre, the pit line, and the last 5 laps with sector colours.
 /// - A mini map with only this car highlighted (tap a car there too).
-/// - The drawn and labelled "Saved for beta.4: team radio" spot.
+/// - Team radio: this car's last three clips at picture time, each with ▶ (build 17).
 ///
 /// Everything comes from `TimingController.console`, built at the 2 Hz tick; only the leaf views
 /// read it. With no onboard on top it says "Tap a car to pick an onboard", and the mini map shows
 /// every car to tap.
 struct RaceEngineerConsole: View {
     let timing: TimingController
+    let radio: RadioController
     /// A car tapped (ahead, behind, or on the mini map), by racing number: it becomes the top
     /// onboard.
     let onCar: @MainActor (String) -> Void
@@ -40,8 +41,8 @@ struct RaceEngineerConsole: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Theme.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        DataRegionPlaceholder(caption: ConsoleText.radio, inset: 6)
-                            .frame(height: 48)
+                        ConsoleRadio(timing: timing, radio: radio)
+                            .frame(height: ConsoleRadio.height)
                     }
                     .frame(width: max(proxy.size.width * 0.38, 0))
                 }
@@ -50,6 +51,61 @@ struct RaceEngineerConsole: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Race Engineer")
+    }
+}
+
+/// Team radio's spot: the engineered driver's (the top onboard's) last three clips at picture
+/// time, oldest first, each with its lap and ▶ (■ while it plays). It reads only the radio's rows
+/// and the top car, so the console's 2 Hz values don't redraw it.
+private struct ConsoleRadio: View {
+    let timing: TimingController
+    let radio: RadioController
+
+    /// The title and three rows.
+    static let height: CGFloat = 122
+
+    var body: some View {
+        let car = timing.consoleCar
+        let clips = car.map { radio.clips(for: $0, limit: 3) } ?? []
+        VStack(alignment: .leading, spacing: 0) {
+            Text(RadioModels.title)
+                .font(.caption2)
+                .bold()
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.leading, 6)
+                .padding(.bottom, 2)
+                .accessibilityAddTraits(.isHeader)
+            if let car {
+                if clips.isEmpty {
+                    Text(RadioModels.noRadio(from: radio.drivers.first { $0.number == car }?.tla ?? car))
+                        .font(.caption)
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.leading, 6)
+                } else {
+                    ForEach(clips) { row in
+                        RadioRow(row: row, playing: radio.playing == row.path, showsLabel: true) {
+                            if radio.playing == row.path {
+                                radio.stop()
+                            } else {
+                                radio.play(path: row.path)
+                            }
+                        }
+                    }
+                }
+                if let notice = radio.notice {
+                    Text(notice)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.flagYellow)
+                        .padding(.leading, 6)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Theme.background, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(RadioModels.title)
     }
 }
 

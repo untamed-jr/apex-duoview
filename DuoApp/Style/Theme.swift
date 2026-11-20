@@ -33,6 +33,9 @@ enum Theme {
     /// Floating panels sit over the video at this opacity.
     static let panelOpacity = 0.9
 
+    /// Team radio: the Scrub Deck's ticks.
+    static let radio = rgb(0x5A, 0xC8, 0xFA)
+
     /// The fastest of all (lap or sector), F1's purple.
     static let timingPurple = rgb(0xB1, 0x4A, 0xED)
     /// A personal best (lap or sector), F1's green.

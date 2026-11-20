@@ -6,8 +6,8 @@ import SwiftUI
 /// doubled the ✕ and Map, had a LIVE label that didn't go live, and could stay stuck on screen).
 /// The same look as the multiview's:
 ///
-/// - Top: one ✕ and mute; on the right, Map (only with timing), picture in picture (when it can
-///   start) and AirPlay.
+/// - Top: one ✕ and mute; on the right, Map and Radio (only with timing), picture in picture (when
+///   it can start) and AirPlay.
 /// - Bottom: the scrubber with the elapsed and remaining time (live: how far behind), play/pause,
 ///   back and forward 10 s, LIVE for live video (red at the live point; outlined behind it, and a
 ///   tap goes live), the speed (not at the live point), and one menu for the commentary language
@@ -135,6 +135,7 @@ private struct PlayerTopBar: View {
                 if showsTiming {
                     TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
                         .appTip(TapCarTip())
+                    RadioButton(radio: controller.radio, timing: controller.timing, onInteraction: onInteraction)
                     PictureInPictureButton(controller: controller, transport: controller.transport)
                     AirPlayButton()
                         .frame(width: 32, height: 32)
@@ -494,8 +495,8 @@ private struct PlayerScrubber: View {
 
 // MARK: - Panels and card
 
-/// The floating panels over the picture, only while one shows. Its own view: the chrome's body
-/// never reads the timing.
+/// The floating panels over the picture (map, tower, team radio), only while one shows. Its own
+/// view: the chrome's body never reads the timing or the radio.
 private struct PlayerPanelsLayer: View {
     let controller: PlayerController
     let fold: FoldState
@@ -503,10 +504,12 @@ private struct PlayerPanelsLayer: View {
 
     var body: some View {
         let timing = controller.timing
-        if timing.showsData, !timing.panels.isEmpty {
+        let radio = controller.radio
+        if timing.showsData, !timing.panels.isEmpty || radio.panelShown {
             GeometryReader { proxy in
                 FloatingPanels(
                     timing: timing,
+                    radio: radio,
                     bounds: CGRect(origin: .zero, size: proxy.size),
                     postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
                     onCar: { number in

@@ -6,14 +6,16 @@ import SwiftUI
 /// Qualifying and practice show only the strip, by time.
 ///
 /// - The strip: lights out, pit stops (small ticks for everyone, a tall one for your driver),
-///   safety car, VSC and red flag bands, each new fastest lap, retirements and the chequered flag.
+///   safety car, VSC and red flag bands, each new fastest lap, retirements and the chequered flag;
+///   team radio as small blue ticks hanging from the top (taller for your driver), behind the
+///   fog like every marker.
 /// - No spoilers: everything is drawn only up to picture time; the rest is an empty fog that
 ///   fills in as the race plays. "Show the whole race" (Settings › Track map) lifts it.
 /// - Dragging anywhere previews a moment with its time (and lap, outside the fog); letting go moves
 ///   every feed there through the multiview's seek, once, as the scrubber does. In the fog the
 ///   moment is the video's own time, spread evenly to its end (no data past picture time).
-/// - Tapping a marker jumps to 5 s before it. Tapping a line highlights that driver and offers
-///   "Open onboard".
+/// - Tapping a marker or a radio tick jumps to 5 s before it. Tapping a line highlights that driver
+///   and offers "Open onboard".
 ///
 /// Its values come from `TimingController.deck` (2 Hz) and the main feed's timeline; times map
 /// to the player's seconds with the inverse of picture time, as the timeline marks do.
@@ -83,6 +85,11 @@ private struct ScrubDeckContent: View {
 
     private func deckBody(_ deck: DeckState, axis: DeckAxis) -> some View {
         let markers = DeckMarker.place(deck, axis: axis)
+        // The clips at the deck's own moment (every clip with the whole race on), placed as markers.
+        let radio = RadioModels.tickFractions(
+            clips: timing.loadedSession?.radio ?? RadioClips(), pictureTime: deck.pictureTime,
+            wholeRace: deck.wholeRace, favourite: deck.favourite,
+            fraction: { axis.fraction(ofSeconds: deck.seconds(of: $0)) })
         return VStack(spacing: 4) {
             header(deck, axis: axis)
                 .frame(height: Self.headerHeight)
@@ -96,7 +103,7 @@ private struct ScrubDeckContent: View {
                 Canvas { graphics, canvasSize in
                     DeckDrawing.draw(in: &graphics, size: canvasSize, deck: deck, axis: axis, markers: markers,
                                      stripHeight: strip, chartHeight: chart.height, selected: chosen, drag: drag,
-                                     textScale: scale)
+                                     textScale: scale, radio: radio)
                 }
                 .contentShape(Rectangle())
                 .gesture(
@@ -112,7 +119,7 @@ private struct ScrubDeckContent: View {
                                 dragFraction = nil
                                 if let seconds = axis.seconds(atFraction: f) { controller.seek(toSeconds: seconds) }
                             } else {
-                                tapped(at: value.location, deck: deck, axis: axis, markers: markers,
+                                tapped(at: value.location, deck: deck, axis: axis, markers: markers, radio: radio,
                                        width: size.width, strip: strip, chart: chart)
                             }
                         })
@@ -165,12 +172,17 @@ private struct ScrubDeckContent: View {
         }
     }
 
-    /// A tap: on the strip, a marker (5 s before it); on the chart, a line (highlighted), or
-    /// nothing (the highlight goes).
-    private func tapped(at point: CGPoint, deck: DeckState, axis: DeckAxis, markers: [DeckMarker],
+    /// A tap: on the strip, the nearer of a marker and a radio tick (5 s before it); on the chart,
+    /// a line (highlighted), or nothing (the highlight goes).
+    private func tapped(at point: CGPoint, deck: DeckState, axis: DeckAxis, markers: [DeckMarker], radio: [RadioTick],
                         width: CGFloat, strip: CGFloat, chart: CGSize) {
         if point.y <= strip {
-            if let marker = DeckHitTest.marker(atX: Double(point.x), in: markers, width: Double(width)) {
+            let x = Double(point.x), w = Double(width)
+            let marker = DeckHitTest.marker(atX: x, in: markers, width: w)
+            if let tick = RadioModels.tick(atX: x, in: radio, width: w),
+               marker.map({ tick.distance < abs($0.f * w - x) }) ?? true {
+                controller.seek(toSeconds: deck.markerTarget(tick.tick.utc, timeline: controller.timeline))
+            } else if let marker {
                 controller.seek(toSeconds: deck.markerTarget(marker.event.t, timeline: controller.timeline))
             }
             return
@@ -204,6 +216,7 @@ private struct Legend: View {
             key(Theme.flagRed, "Red")
             key(Theme.textSecondary, "Pit")
             key(Theme.timingPurple, "Fastest")
+            key(Theme.radio, "Radio")
         }
         .font(.caption2)
         .foregroundStyle(Theme.textSecondary)
@@ -223,7 +236,7 @@ private struct Legend: View {
 enum DeckDrawing {
     static func draw(in graphics: inout GraphicsContext, size: CGSize, deck: DeckState, axis: DeckAxis,
                      markers: [DeckMarker], stripHeight: CGFloat, chartHeight: CGFloat, selected: String?,
-                     drag: Double?, textScale: CGFloat = 1) {
+                     drag: Double?, textScale: CGFloat = 1, radio: [RadioTick] = []) {
         let width = size.width
         guard width > 0 else { return }
         func x(_ f: Double) -> CGFloat { CGFloat(f) * width }
@@ -248,6 +261,13 @@ enum DeckDrawing {
         }
 
         drawMarkers(in: &graphics, markers: markers, deck: deck, stripHeight: stripHeight, x: x, textScale: textScale)
+        // Team radio: hanging from the strip's top, taller for your driver; under the fog.
+        for tick in radio {
+            var mark = Path()
+            mark.move(to: CGPoint(x: x(tick.f), y: 1))
+            mark.addLine(to: CGPoint(x: x(tick.f), y: tick.mine ? stripHeight / 2 - 1 : 7))
+            graphics.stroke(mark, with: .color(Theme.radio), lineWidth: tick.mine ? 2 : 1.2)
+        }
         if deck.race {
             drawChart(in: &graphics, deck: deck, axis: axis, top: stripHeight + 4,
                       size: CGSize(width: width, height: chartHeight), selected: selected)

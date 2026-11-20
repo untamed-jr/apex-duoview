@@ -48,7 +48,7 @@ struct DockedTowerPanel: View {
 }
 
 /// Space kept for a later beta, drawn and labelled (the beta.2 rule): a dashed outline with its
-/// caption, such as Race Engineer's "Saved for beta.4: team radio". Not interactive, so a tap on
+/// caption. Not interactive, so a tap on
 /// it reaches what is under it.
 struct DataRegionPlaceholder: View {
     let caption: String

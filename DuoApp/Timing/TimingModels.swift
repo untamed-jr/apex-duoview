@@ -349,6 +349,14 @@ enum PanelLayout {
         }
     }
 
+    /// Where the Radio panel starts: at the top right under the map's default place. Saved as
+    /// "radio" per posture, as the map and the tower are.
+    static func defaultRadioFrame(in bounds: CGRect) -> CGRect {
+        let size = CGSize(width: 300, height: 280)
+        let top = bounds.minY + 60 + 230 + 12
+        return clamped(CGRect(x: bounds.maxX - size.width - 12, y: top, width: size.width, height: size.height), in: bounds)
+    }
+
     /// At least the minimum size (unless the area is smaller), no larger than the area, and
     /// wholly inside it.
     static func clamped(_ frame: CGRect, in bounds: CGRect) -> CGRect {

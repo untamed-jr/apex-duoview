@@ -209,6 +209,7 @@ struct MultiviewView: View {
                     if controller.errorText == nil {
                         FloatingPanels(
                             timing: controller.timing,
+                            radio: controller.radio,
                             bounds: Self.safeRect(screen: proxy.size, insets: insets),
                             postureKey: PanelLayout.postureKey(posture: fold.posture.rawValue, size: proxy.size),
                             onCar: { number in carTapped(number) })
@@ -275,7 +276,7 @@ struct MultiviewView: View {
                 .transition(.opacity)
         }
         if let rect = regions.console {
-            RaceEngineerConsole(timing: controller.timing, onCar: { number in carTapped(number) })
+            RaceEngineerConsole(timing: controller.timing, radio: controller.radio, onCar: { number in carTapped(number) })
                 .frame(width: rect.width, height: rect.height)
                 .position(x: rect.midX, y: rect.midY)
                 .transition(.opacity)

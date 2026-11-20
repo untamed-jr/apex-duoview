@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The map and the tower as panels over the video, in any fold and layout, and over the
 /// single-feed player. The "Map" control (`TimingMapButton`) turns both on or off; each has its
-/// own ✕. A panel moves by its header, resizes from its corner handle or with a pinch, sits at
+/// own ✕. The Radio panel ("Team radio") is one more, with its own "Radio" control
+/// (`RadioButton`) and ✕ ("Hide team radio"); its frame is saved as "radio". A panel moves by its header, resizes from its corner handle or with a pinch, sits at
 /// 0.9 opacity, and is remembered per posture and screen shape (`PanelLayout.postureKey`).
 ///
 /// Only the panels take touches: the space around them reaches the feeds underneath. Nothing
@@ -15,6 +16,7 @@ import SwiftUI
 /// position, code and gap.
 struct FloatingPanels: View {
     let timing: TimingController
+    let radio: RadioController
     /// Where the panels may sit, in this view's own space (the safe area).
     let bounds: CGRect
     let postureKey: String
@@ -45,6 +47,17 @@ struct FloatingPanels: View {
                         MapPanel(timing: timing, onCar: onCar)
                     }
                 }
+                if radio.panelShown {
+                    FloatingPanel(
+                        name: "radio", defaultFrame: PanelLayout.defaultRadioFrame(in: bounds), title: RadioModels.title,
+                        closeLabel: RadioModels.hide, settings: timing.settings, bounds: bounds, postureKey: postureKey,
+                        onClose: { radio.hidePanel() }
+                    ) {
+                        EmptyView()
+                    } content: {
+                        RadioPanelContent(radio: radio)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -55,8 +68,13 @@ struct FloatingPanels: View {
 /// and a corner handle that resizes it; a pinch anywhere on it scales it. Frames are kept inside
 /// `bounds` (`PanelLayout`) and saved per posture key when a gesture ends.
 struct FloatingPanel<Accessory: View, Content: View>: View {
-    let panel: TimingPanel
+    /// What its frame is saved under ("map", "tower", "radio").
+    let name: String
+    /// Where it starts until moved.
+    let defaultFrame: CGRect
     let title: String
+    /// The ✕'s spoken label ("Close Map", "Hide team radio").
+    let closeLabel: String
     let settings: TimingSettings
     let bounds: CGRect
     let postureKey: String
@@ -74,8 +92,18 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
     init(panel: TimingPanel, title: String, settings: TimingSettings, bounds: CGRect, postureKey: String,
          onClose: @escaping @MainActor () -> Void,
          @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
-        self.panel = panel
+        self.init(name: panel.rawValue, defaultFrame: PanelLayout.defaultFrame(panel, in: bounds), title: title,
+                  closeLabel: "Close \(title)", settings: settings, bounds: bounds, postureKey: postureKey,
+                  onClose: onClose, accessory: accessory, content: content)
+    }
+
+    init(name: String, defaultFrame: CGRect, title: String, closeLabel: String, settings: TimingSettings,
+         bounds: CGRect, postureKey: String, onClose: @escaping @MainActor () -> Void,
+         @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
+        self.name = name
+        self.defaultFrame = defaultFrame
         self.title = title
+        self.closeLabel = closeLabel
         self.settings = settings
         self.bounds = bounds
         self.postureKey = postureKey
@@ -83,12 +111,12 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
         self.accessory = accessory()
         self.content = content()
         // Seeded here, so a panel shows at its saved place from its first frame (no jump).
-        _stored = State(initialValue: settings.panelFrame(panel.rawValue, posture: postureKey))
+        _stored = State(initialValue: settings.panelFrame(name, posture: postureKey))
     }
 
     /// Where it rests: saved, or the default, kept on screen.
     private var base: CGRect {
-        PanelLayout.clamped(stored ?? PanelLayout.defaultFrame(panel, in: bounds), in: bounds)
+        PanelLayout.clamped(stored ?? defaultFrame, in: bounds)
     }
 
     /// Where it shows, with the gestures in progress.
@@ -137,7 +165,7 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
             accessory
-            PanelIconButton(systemImage: "xmark", accessibility: "Close \(title)") { onClose() }
+            PanelIconButton(systemImage: "xmark", accessibility: closeLabel) { onClose() }
         }
         .padding(.leading, 10)
         .padding(.trailing, 2)
@@ -173,12 +201,12 @@ struct FloatingPanel<Accessory: View, Content: View>: View {
     }
 
     private func load() {
-        stored = settings.panelFrame(panel.rawValue, posture: postureKey)
+        stored = settings.panelFrame(name, posture: postureKey)
     }
 
     private func commit(_ frame: CGRect) {
         stored = frame
-        settings.setPanelFrame(frame, panel: panel.rawValue, posture: postureKey)
+        settings.setPanelFrame(frame, panel: name, posture: postureKey)
     }
 }
 
