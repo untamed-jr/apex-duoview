@@ -83,6 +83,14 @@ final class PlayerController {
     @ObservationIgnored private var playerViewController: AVPlayerViewController?
     /// AVKit holds its delegate weakly: this keeps it.
     @ObservationIgnored private let pictureInPictureDelegate: PlayerPictureInPictureDelegate
+    /// What the app's own controls show (play, scrubber, LIVE, speed, audio). Refreshed twice a
+    /// second; its own object, so the cover's body never redraws for it.
+    @ObservationIgnored let transport = PlayerTransport()
+    @ObservationIgnored private var transportObserver: Any?
+    /// The playing item's audio choices (commentary languages), once loaded.
+    @ObservationIgnored private var audioGroup: AVMediaSelectionGroup?
+    /// A seek's target, shown by the scrubber until the player gets there.
+    @ObservationIgnored private var seekTarget: Double?
 
     static let saveInterval: Double = 5
     /// How long a notice stays up, as the multiview's.
@@ -442,6 +450,18 @@ final class PlayerController {
         ) { @Sendable [weak self] _ in
             MainActor.assumeIsolated { self?.tick(itemID: itemID) }
         }
+        transport.reset()
+        seekTarget = nil
+        audioGroup = nil
+        transportObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(value: 1, timescale: 2), queue: .main
+        ) { @Sendable [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshTransport(itemID: itemID) }
+        }
+        item.asset.loadMediaSelectionGroup(for: .audible) { @Sendable [weak self] group, _ in
+            let box = PlayerAudioGroupBox(group)
+            Task { @MainActor [weak self] in self?.audioGroupLoaded(itemID: itemID, box: box) }
+        }
 
         let center = NotificationCenter.default
         notificationTokens.append(center.addObserver(
@@ -670,11 +690,103 @@ final class PlayerController {
             observedPlayer.removeTimeObserver(timeObserver)
         }
         timeObserver = nil
+        if let transportObserver, let observedPlayer {
+            observedPlayer.removeTimeObserver(transportObserver)
+        }
+        transportObserver = nil
+        audioGroup = nil
+        seekTarget = nil
+        transport.reset()
         observedPlayer = nil
         statusObservation?.invalidate()
         statusObservation = nil
         for token in notificationTokens { NotificationCenter.default.removeObserver(token) }
         notificationTokens = []
+    }
+
+    // MARK: The app's own controls
+
+    /// Play or pause. Playing goes at the chosen speed (`defaultRate`).
+    func togglePlay() {
+        guard let player else { return }
+        if player.timeControlStatus == .paused {
+            player.play()
+        } else {
+            player.pause()
+        }
+        refreshTransport()
+    }
+
+    /// Moves to `seconds`, kept inside the scrubber's span.
+    func seek(toSeconds seconds: Double) {
+        guard let player, seconds.isFinite else { return }
+        var target = max(seconds, 0)
+        if let span = transport.timeline { target = min(max(target, span.lowerBound), span.upperBound) }
+        seekTarget = target
+        let itemID = currentItemID
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: CMTime(value: 1, timescale: 2),
+                    toleranceAfter: CMTime(value: 1, timescale: 2)) { @Sendable [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.currentItemID == itemID else { return }
+                self.seekTarget = nil
+                self.refreshTransport()
+            }
+        }
+        refreshTransport()
+    }
+
+    /// Back or forward 10 s.
+    func skip(by seconds: Double) {
+        seek(toSeconds: transport.position + seconds)
+    }
+
+    /// The LIVE button: back to the live point. It only moves; a paused player stays paused.
+    func goLive() {
+        refreshTransport()
+        guard transport.isLive, let span = transport.timeline else { return }
+        seek(toSeconds: span.upperBound)
+    }
+
+    /// One speed, kept for this video until it closes or switches.
+    func setRate(_ newRate: Double) {
+        guard newRate.isFinite, newRate > 0, let player else { return }
+        player.defaultRate = Float(newRate)
+        if player.timeControlStatus != .paused { player.rate = Float(newRate) }
+        transport.setRate(newRate)
+    }
+
+    /// One of `transport.audioOptions` (the commentary language), for the playing item.
+    func selectAudioOption(_ id: Int) {
+        guard let group = audioGroup, let item = player?.currentItem, group.options.indices.contains(id) else { return }
+        item.select(group.options[id], in: group)
+        transport.setAudio(options: transport.audioOptions, selected: id)
+    }
+
+    private func refreshTransport(itemID: ObjectIdentifier? = nil) {
+        if let itemID, itemID != currentItemID { return }
+        guard let player else { return }
+        transport.update(player: player, heldPosition: seekTarget)
+        // At the live point the speed menu hides, so any other speed goes back to 1× there (as
+        // in multiview).
+        if transport.isLive, transport.rate != 1, transport.behindLive != nil, transport.isAtLiveEdge {
+            setRate(1)
+            showNotice(MultiviewController.caughtUpNotice)
+        }
+    }
+
+    private func audioGroupLoaded(itemID: ObjectIdentifier, box: PlayerAudioGroupBox) {
+        guard itemID == currentItemID, let item = player?.currentItem, let group = box.group else { return }
+        audioGroup = group
+        let current = item.currentMediaSelection.selectedMediaOption(in: group)
+        var options: [MultiviewAudioOption] = []
+        var selected: Int?
+        for (index, option) in group.options.enumerated() {
+            let name = option.displayName
+            options.append(MultiviewAudioOption(id: index, name: name.isEmpty ? "Track \(index + 1)" : name))
+            if let current, option == current { selected = index }
+        }
+        transport.setAudio(options: options, selected: selected)
     }
 
     // MARK: Messages

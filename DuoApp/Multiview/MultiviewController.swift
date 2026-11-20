@@ -1542,7 +1542,8 @@ final class MultiviewController {
     /// offset AVPlayer keeps from live (the configured one, else its recommendation). Correct
     /// whether or not the seekable end already leaves that offset out: a place past the live
     /// point counts as live. nil while the window is unknown or too short to scrub.
-    private static func liveWindow(_ item: AVPlayerItem) -> ClosedRange<Double>? {
+    /// Also the single-feed player's (`PlayerTransport`).
+    static func liveWindow(_ item: AVPlayerItem) -> ClosedRange<Double>? {
         guard let range = item.seekableTimeRanges.last?.timeRangeValue else { return nil }
         let start = range.start
         let end = range.end
