@@ -22,6 +22,14 @@ final class PlayerTransport {
     private(set) var rate: Double = 1
     private(set) var audioOptions: [MultiviewAudioOption] = []
     private(set) var selectedAudioOption: Int?
+    /// The video's subtitle languages (forced-only tracks left out); ids are the indices in its
+    /// legible group. Empty when it has none.
+    private(set) var subtitleOptions: [MultiviewAudioOption] = []
+    /// nil: subtitles off.
+    private(set) var selectedSubtitle: Int?
+    /// The group allows no subtitles at all ("Off" in the menu).
+    private(set) var subtitlesCanBeOff = true
+    private(set) var isMuted = false
     /// The scrubber is held: the controls stay up.
     var scrubbing = false
 
@@ -40,6 +48,9 @@ final class PlayerTransport {
         if rate != 1 { rate = 1 }
         if !audioOptions.isEmpty { audioOptions = [] }
         if selectedAudioOption != nil { selectedAudioOption = nil }
+        if !subtitleOptions.isEmpty { subtitleOptions = [] }
+        if selectedSubtitle != nil { selectedSubtitle = nil }
+        if !subtitlesCanBeOff { subtitlesCanBeOff = true }
         scrubbing = false
     }
 
@@ -72,6 +83,17 @@ final class PlayerTransport {
 
     func setRate(_ newRate: Double) {
         if rate != newRate { rate = newRate }
+    }
+
+    func setSubtitles(options: [MultiviewAudioOption], selected: Int?, canBeOff: Bool) {
+        if subtitleOptions != options { subtitleOptions = options }
+        if selectedSubtitle != selected { selectedSubtitle = selected }
+        if subtitlesCanBeOff != canBeOff { subtitlesCanBeOff = canBeOff }
+    }
+
+    /// Kept across feeds (`reset` leaves it): the controller re-applies it to each new player.
+    func setMuted(_ muted: Bool) {
+        if isMuted != muted { isMuted = muted }
     }
 
     func setAudio(options: [MultiviewAudioOption], selected: Int?) {

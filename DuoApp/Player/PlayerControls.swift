@@ -6,11 +6,11 @@ import SwiftUI
 /// doubled the ✕ and Map, had a LIVE label that didn't go live, and could stay stuck on screen).
 /// The same look as the multiview's:
 ///
-/// - Top: one ✕ and, on the right, Map (only with timing) and AirPlay.
+/// - Top: one ✕ and mute; on the right, Map (only with timing) and AirPlay.
 /// - Bottom: the scrubber with the elapsed and remaining time (live: how far behind), play/pause,
 ///   back and forward 10 s, LIVE for live video (red at the live point; outlined behind it, and a
-///   tap goes live), the speed (not at the live point) and the commentary language (only with more
-///   than one).
+///   tap goes live), the speed (not at the live point), and one menu for the commentary language
+///   and subtitles (only when there is a choice), as Apple's menu was.
 ///
 /// They hide 4 s after the last touch and a tap on the picture brings them back (a tap while they
 /// show hides them). Held up while paused, loading or scrubbing. The map and tower panels sit
@@ -125,6 +125,10 @@ private struct PlayerTopBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
+                if showsTiming {
+                    MuteButton(controller: controller, transport: controller.transport,
+                               onInteraction: onInteraction)
+                }
                 Spacer(minLength: 8)
                 if showsTiming {
                     TimingMapButton(timing: controller.timing, onInteraction: onInteraction)
@@ -139,6 +143,31 @@ private struct PlayerTopBar: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
         }
+    }
+}
+
+/// Sound off or on: the app's own (the iPhone's side buttons set the volume).
+private struct MuteButton: View {
+    let controller: PlayerController
+    let transport: PlayerTransport
+    let onInteraction: @MainActor () -> Void
+
+    var body: some View {
+        let muted = transport.isMuted
+        Button {
+            controller.toggleMute()
+            onInteraction()
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.footnote.bold())
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .videoGlass(in: Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(muted ? "Sound off. Turn sound on" : "Mute")
     }
 }
 
@@ -182,7 +211,7 @@ private struct PlayerPlaybackBar: View {
                 if !transport.isAtLiveEdge {
                     speedMenu
                 }
-                if transport.audioOptions.count > 1 {
+                if transport.audioOptions.count > 1 || !transport.subtitleOptions.isEmpty {
                     audioMenu
                 }
             }
@@ -288,27 +317,64 @@ private struct PlayerPlaybackBar: View {
         .accessibilityLabel("Speed \(MultiviewClock.speedText(current))")
     }
 
+    /// Commentary language and subtitles in one menu. Its label is the commentary language, or
+    /// "Subtitles" when there is only one commentary.
     private var audioMenu: some View {
         let options = transport.audioOptions
         let selected = transport.selectedAudioOption
-        let chosenName = options.first(where: { $0.id == selected })?.name ?? "Audio"
+        let subtitles = transport.subtitleOptions
+        let subtitle = transport.selectedSubtitle
+        let hasAudioChoice = options.count > 1
+        let chosenName = hasAudioChoice
+            ? options.first(where: { $0.id == selected })?.name ?? "Audio"
+            : "Subtitles"
         return Menu {
-            Section("Commentary") {
-                ForEach(options) { option in
-                    Button {
-                        controller.selectAudioOption(option.id)
-                        onInteraction()
-                    } label: {
-                        if option.id == selected {
-                            Label(option.name, systemImage: "checkmark")
-                        } else {
-                            Text(option.name)
+            if hasAudioChoice {
+                Section("Commentary") {
+                    ForEach(options) { option in
+                        Button {
+                            controller.selectAudioOption(option.id)
+                            onInteraction()
+                        } label: {
+                            if option.id == selected {
+                                Label(option.name, systemImage: "checkmark")
+                            } else {
+                                Text(option.name)
+                            }
+                        }
+                    }
+                }
+            }
+            if !subtitles.isEmpty {
+                Section("Subtitles") {
+                    if transport.subtitlesCanBeOff {
+                        Button {
+                            controller.selectSubtitle(nil)
+                            onInteraction()
+                        } label: {
+                            if subtitle == nil {
+                                Label("Off", systemImage: "checkmark")
+                            } else {
+                                Text("Off")
+                            }
+                        }
+                    }
+                    ForEach(subtitles) { option in
+                        Button {
+                            controller.selectSubtitle(option.id)
+                            onInteraction()
+                        } label: {
+                            if option.id == subtitle {
+                                Label(option.name, systemImage: "checkmark")
+                            } else {
+                                Text(option.name)
+                            }
                         }
                     }
                 }
             }
         } label: {
-            Label(chosenName, systemImage: "waveform")
+            Label(chosenName, systemImage: hasAudioChoice ? "waveform" : "captions.bubble")
                 .font(.footnote.bold())
                 .fontWidth(.condensed)
                 .foregroundStyle(.white)
@@ -320,7 +386,7 @@ private struct PlayerPlaybackBar: View {
         .menuStyle(.button)
         .buttonStyle(.borderless)
         .simultaneousGesture(TapGesture().onEnded { onInteraction() })
-        .accessibilityLabel("Audio language, \(chosenName)")
+        .accessibilityLabel(hasAudioChoice ? "Audio and subtitles, \(chosenName)" : "Subtitles")
     }
 }
 

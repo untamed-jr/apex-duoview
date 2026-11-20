@@ -91,6 +91,14 @@ final class PlayerController {
     @ObservationIgnored private var transportTask: Task<Void, Never>?
     /// The playing item's audio choices (commentary languages), once loaded.
     @ObservationIgnored private var audioGroup: AVMediaSelectionGroup?
+    /// The playing item's subtitle choices, once loaded.
+    @ObservationIgnored private var subtitleGroup: AVMediaSelectionGroup?
+    /// The viewer's subtitle choice for this video, kept when tap-a-car switches feeds: nil = not
+    /// chosen (the item's own default, which follows the iPhone's captions setting), "" = off,
+    /// otherwise the language (`extendedLanguageTag`, or the display name).
+    @ObservationIgnored private var wantedSubtitle: String?
+    /// Mute, kept across feeds until the player closes.
+    @ObservationIgnored private var wantsMuted = false
     /// A seek's target, shown by the scrubber until the player gets there.
     @ObservationIgnored private var seekTarget: Double?
     /// Bumped by every seek: only the newest one's completion lets go of `seekTarget` (quick
@@ -159,8 +167,12 @@ final class PlayerController {
         // Keep the place in the feed being left, then drop it.
         save()
         teardownPlayback()
-        // Another feed of the same session keeps its timing; other content drops it.
-        if currentItem?.contentId != item.contentId { timing.detach(owner: self) }
+        // Another feed of the same session keeps its timing, mute and subtitle choice; other
+        // content drops them.
+        if currentItem?.contentId != item.contentId {
+            timing.detach(owner: self)
+            forgetViewerChoices()
+        }
         // The feed before had its own card: none until this one plays, so a failed PLAY leaves
         // no card, tick or car data download behind.
         timing.setCardFeeds([:], owner: self)
@@ -315,6 +327,7 @@ final class PlayerController {
         currentChannel = nil
         onboard = nil
         sessionChannels = nil
+        forgetViewerChoices()
         dismissNotice()
         errorText = nil
         isLoading = false
@@ -461,6 +474,9 @@ final class PlayerController {
         transport.reset()
         seekTarget = nil
         audioGroup = nil
+        subtitleGroup = nil
+        player.isMuted = wantsMuted
+        transport.setMuted(wantsMuted)
         transportTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.refreshTransport(itemID: itemID)
@@ -470,6 +486,10 @@ final class PlayerController {
         item.asset.loadMediaSelectionGroup(for: .audible) { @Sendable [weak self] group, _ in
             let box = PlayerAudioGroupBox(group)
             Task { @MainActor [weak self] in self?.audioGroupLoaded(itemID: itemID, box: box) }
+        }
+        item.asset.loadMediaSelectionGroup(for: .legible) { @Sendable [weak self] group, _ in
+            let box = PlayerAudioGroupBox(group)
+            Task { @MainActor [weak self] in self?.subtitleGroupLoaded(itemID: itemID, box: box) }
         }
 
         let center = NotificationCenter.default
@@ -702,6 +722,7 @@ final class PlayerController {
         transportTask?.cancel()
         transportTask = nil
         audioGroup = nil
+        subtitleGroup = nil
         seekTarget = nil
         transport.reset()
         observedPlayer = nil
@@ -770,6 +791,68 @@ final class PlayerController {
         guard let group = audioGroup, let item = player?.currentItem, group.options.indices.contains(id) else { return }
         item.select(group.options[id], in: group)
         transport.setAudio(options: transport.audioOptions, selected: id)
+    }
+
+    /// A subtitle language (an id from `transport.subtitleOptions`), or nil for off. Kept for the
+    /// next feed tap-a-car switches to.
+    func selectSubtitle(_ id: Int?) {
+        guard let group = subtitleGroup, let item = player?.currentItem else { return }
+        if let id, group.options.indices.contains(id) {
+            let option = group.options[id]
+            item.select(option, in: group)
+            wantedSubtitle = Self.subtitleKey(option)
+        } else {
+            guard group.allowsEmptySelection else { return }
+            item.select(nil, in: group)
+            wantedSubtitle = ""
+        }
+        transport.setSubtitles(options: transport.subtitleOptions, selected: id,
+                               canBeOff: group.allowsEmptySelection)
+    }
+
+    /// Sound off or on, for this video and the feeds tap-a-car switches to.
+    func toggleMute() {
+        wantsMuted.toggle()
+        player?.isMuted = wantsMuted
+        transport.setMuted(wantsMuted)
+    }
+
+    private func forgetViewerChoices() {
+        wantsMuted = false
+        wantedSubtitle = nil
+        transport.setMuted(false)
+    }
+
+    private static func subtitleKey(_ option: AVMediaSelectionOption) -> String {
+        option.extendedLanguageTag ?? option.displayName
+    }
+
+    private func subtitleGroupLoaded(itemID: ObjectIdentifier, box: PlayerAudioGroupBox) {
+        guard itemID == currentItemID, let item = player?.currentItem, let group = box.group else { return }
+        subtitleGroup = group
+        // Forced-only tracks (signs, foreign speech) aren't a choice: the player shows them itself.
+        let shown = AVMediaSelectionGroup.mediaSelectionOptions(
+            from: group.options, withoutMediaCharacteristics: [.containsOnlyForcedSubtitles])
+        var options: [MultiviewAudioOption] = []
+        for (index, option) in group.options.enumerated() where shown.contains(option) {
+            let name = option.displayName
+            options.append(MultiviewAudioOption(id: index, name: name.isEmpty ? "Subtitles \(index + 1)" : name))
+        }
+        // The viewer's earlier choice in this video, on the new feed's matching track.
+        if let wanted = wantedSubtitle {
+            if wanted.isEmpty {
+                if group.allowsEmptySelection { item.select(nil, in: group) }
+            } else if let match = group.options.firstIndex(where: { Self.subtitleKey($0) == wanted }) {
+                item.select(group.options[match], in: group)
+            }
+        }
+        var selected: Int?
+        if let current = item.currentMediaSelection.selectedMediaOption(in: group),
+           let index = group.options.firstIndex(of: current),
+           options.contains(where: { $0.id == index }) {
+            selected = index
+        }
+        transport.setSubtitles(options: options, selected: selected, canBeOff: group.allowsEmptySelection)
     }
 
     private func refreshTransport(itemID: ObjectIdentifier? = nil) {
