@@ -71,6 +71,20 @@ final class TestClock: @unchecked Sendable {
         #expect(history.isFinished(1) == true)
     }
 
+    @Test func removeAllForgetsWatchedTimeAndFinished() {
+        let clock = TestClock()
+        let backing = MemoryStore()
+        let history = WatchHistory(store: backing, now: clock.now)
+        history.record(contentId: 1, positionMs: 0, durationMs: 10_000)
+        clock.advance(seconds: 10)
+        history.record(contentId: 1, positionMs: 0, durationMs: 10_000)
+        #expect(history.isFinished(1) == true)
+        history.removeAll()
+        #expect(history.isFinished(1) == false)
+        #expect(history.watchedMs(1) == 0)
+        #expect(WatchHistory(store: backing, now: clock.now).watchedMs(1) == 0)
+    }
+
     @Test func unknownContentIsNotFinished() {
         let history = WatchHistory(store: MemoryStore(), now: TestClock().now)
         #expect(history.isFinished(42) == false)

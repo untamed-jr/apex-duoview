@@ -31,6 +31,10 @@ change is its own commit so it can be kept or reverted on its own.
   first time: try laptop pose (flat multiview), tap a car (the Map button), tap to bring the
   controls back, and closed it keeps playing. Settings › Help also has "Show tips" and "Reset
   tips". The card pictures are placeholders until the screenshots are taken after the race.
+- **Clearing what you've watched** (owner request, FP1 night): touch and hold a Continue
+  watching tile › "Remove from Continue watching"; "Clear all" beside the row's title (asks
+  first); Settings › Watching › "Clear watch history" clears Continue watching and the watched
+  marks (asks first). DuoCore: `RecentsStore.removeAll()`, `WatchHistory.removeAll()` (tested).
 - **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
   touching the phone; `--shots` also saves screenshots of the opening.
 

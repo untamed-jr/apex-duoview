@@ -17,6 +17,9 @@ struct SettingsView: View {
     @State private var showTour = false
     @State private var tipsReset = false
     @AppStorage(AppTips.showKey) private var showTips = true
+    /// "Clear watch history" asks first, then says it's done.
+    @State private var confirmClearHistory = false
+    @State private var historyCleared = false
 
     var body: some View {
         NavigationStack {
@@ -25,6 +28,7 @@ struct SettingsView: View {
                 MultiviewSettingsSection(model: model).listRowBackground(Theme.surface)
                 TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
                 foldSection.listRowBackground(Theme.surface)
+                watchingSection.listRowBackground(Theme.surface)
                 helpSection.listRowBackground(Theme.surface)
                 aboutSection.listRowBackground(Theme.surface)
                 creditsSection.listRowBackground(Theme.surface)
@@ -42,6 +46,36 @@ struct SettingsView: View {
         }
         .fullScreenCover(isPresented: $showTour) {
             WelcomeTourView { showTour = false }
+        }
+    }
+
+    // MARK: Watching
+
+    /// Owner request (FP1 night): Continue watching and the watched marks can be cleared.
+    private var watchingSection: some View {
+        Section {
+            Button("Clear watch history", role: .destructive) { confirmClearHistory = true }
+                .disabled(historyCleared)
+                .confirmationDialog("Clear watch history?", isPresented: $confirmClearHistory, titleVisibility: .visible) {
+                    Button("Clear", role: .destructive) {
+                        model.recents.removeAll()
+                        model.history.removeAll()
+                        historyCleared = true
+                    }
+                } message: {
+                    Text("Continue watching and the watched marks are cleared. Your account and settings stay.")
+                }
+            if historyCleared {
+                Text("Watch history cleared.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        } header: {
+            Text("Watching").sectionLabel()
+        } footer: {
+            Text("To remove one video from Continue watching, touch and hold its tile.")
+                .font(.footnote)
+                .foregroundStyle(Theme.textSecondary)
         }
     }
 

@@ -110,6 +110,29 @@ private func bookmark(
         #expect(reopened.map(\.multiview) == [false, true])
     }
 
+    @Test func removeTakesOutOnlyThatItemAndPersists() {
+        let backing = MemoryStore()
+        let store = RecentsStore(store: backing, now: { Date(timeIntervalSince1970: 100) })
+        store.save(bookmark(1))
+        store.save(bookmark(2))
+        store.save(bookmark(3))
+        store.remove(contentId: 2)
+        #expect(RecentsStore(store: backing).all().map(\.contentId) == [3, 1])
+    }
+
+    @Test func removeAllEmptiesAndPersists() {
+        let backing = MemoryStore()
+        let store = RecentsStore(store: backing, now: { Date(timeIntervalSince1970: 100) })
+        store.save(bookmark(1))
+        store.save(bookmark(2))
+        store.removeAll()
+        #expect(store.all().isEmpty)
+        #expect(RecentsStore(store: backing).all().isEmpty)
+        // Still usable afterwards.
+        store.save(bookmark(5))
+        #expect(store.all().map(\.contentId) == [5])
+    }
+
     @Test func bookmarkDefaultsToSingleFeed() {
         #expect(bookmark(3).multiview == false)
     }

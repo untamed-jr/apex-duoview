@@ -17,6 +17,8 @@ struct RaceWeekendRoom: View {
     @State private var liveAttempt = 0
     @State private var weekendAttempt = 0
     @State private var now = Date()
+    /// "Clear all" on Continue watching asks first.
+    @State private var confirmClear = false
 
     var body: some View {
         NavigationStack {
@@ -85,10 +87,28 @@ struct RaceWeekendRoom: View {
     private var continueWatching: some View {
         if !bookmarks.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Continue watching")
-                    .sectionLabel()
-                    .padding(.horizontal)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Continue watching")
+                        .sectionLabel()
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    // Owner request (FP1 night): a way to clear the list.
+                    Button("Clear all") { confirmClear = true }
+                        .font(.footnote.bold())
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("Clear Continue watching")
+                }
+                .padding(.horizontal)
+                .confirmationDialog("Clear Continue watching?", isPresented: $confirmClear, titleVisibility: .visible) {
+                    Button("Clear all", role: .destructive) {
+                        context.model.recents.removeAll()
+                        withAnimation(.snappy) { bookmarks = [] }
+                    }
+                } message: {
+                    Text("Your places in these videos are forgotten. The videos stay in Archive.")
+                }
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
                         ForEach(Array(bookmarks.enumerated()), id: \.offset) { _, bookmark in
@@ -100,6 +120,13 @@ struct RaceWeekendRoom: View {
                                     contentId: bookmark.contentId, title: bookmark.title,
                                     picturePath: bookmark.picturePath)),
                                 progress: Self.progress(bookmark))
+                            // Long-press: remove just this one (VoiceOver lists it as an action).
+                            .contextMenu {
+                                Button("Remove from Continue watching", systemImage: "minus.circle", role: .destructive) {
+                                    context.model.recents.remove(contentId: bookmark.contentId)
+                                    withAnimation(.snappy) { bookmarks = context.model.recents.all() }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal)

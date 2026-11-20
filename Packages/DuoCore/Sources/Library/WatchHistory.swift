@@ -72,6 +72,13 @@ public final class WatchHistory: @unchecked Sendable {
         return load().first(where: { $0.contentId == contentId })?.watchedMs ?? 0
     }
 
+    /// Forgets all watched time and finished marks (Settings › Clear watch history).
+    public func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        persist([])
+    }
+
     private func load() -> [Entry] {
         guard let data = store.data(forKey: Self.key) else { return [] }
         return (try? JSONDecoder().decode([Entry].self, from: data)) ?? []

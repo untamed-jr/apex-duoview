@@ -48,6 +48,13 @@ public final class RecentsStore: @unchecked Sendable {
         persist(items)
     }
 
+    /// Clears Continue watching ("Clear all", or Settings › Clear watch history).
+    public func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        persist([])
+    }
+
     private func load() -> [WatchBookmark] {
         guard let data = store.data(forKey: Self.key) else { return [] }
         return (try? JSONDecoder().decode([WatchBookmark].self, from: data)) ?? []
