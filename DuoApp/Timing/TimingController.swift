@@ -609,6 +609,10 @@ final class TimingController {
         return ms.map { Int(clamping: $0) }
     }
 
+    /// Your driver's last name (Settings › Multiview › My driver), for the radio's "My driver" and
+    /// the Scrub Deck's taller ticks; `Tower.carNumber(forDriver:in:)` turns it into a racing number.
+    var favouriteDriverName: String? { favouriteDriver }
+
     /// Settings › Multiview › My driver (a last name), for the battle highlight; nil turns it off.
     func setFavouriteDriver(_ lastName: String?) {
         guard favouriteDriver != lastName else { return }

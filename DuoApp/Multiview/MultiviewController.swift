@@ -127,6 +127,14 @@ final class MultiviewController {
     @ObservationIgnored private let history: WatchHistory
     /// The session's timing, shared with the single-feed player; the panels and marks read it.
     @ObservationIgnored let timing: TimingController
+    /// Team radio, shared with the single-feed player: this multiview is its host while open.
+    @ObservationIgnored let radio: RadioController
+    /// The feeds' own level, set by the radio (0 while a clip plays): the feed with the sound gets
+    /// it, as `player.volume`. Never the mute rule (only that feed is heard), which `isMuted` keeps.
+    @ObservationIgnored private var feedVolume: Float = 1
+    /// Goes up on every seek (the scrubber, the deck, LIVE), when the main feed lands, and on the
+    /// main feed's own time jumps: the radio tells a seek from normal play by it.
+    @ObservationIgnored private(set) var seekGeneration = 0
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var defaultChannelId: Int?
@@ -218,12 +226,13 @@ final class MultiviewController {
     @ObservationIgnored private let pictureInPictureDelegate: MultiviewPictureInPictureDelegate
 
     init(coordinator: PlayCoordinator, store: MultiviewStore, recents: RecentsStore, history: WatchHistory,
-         timing: TimingController) {
+         timing: TimingController, radio: RadioController) {
         self.coordinator = coordinator
         self.store = store
         self.recents = recents
         self.history = history
         self.timing = timing
+        self.radio = radio
         pictureInPictureDelegate = MultiviewPictureInPictureDelegate()
         presets = store.presets
         fewerFeeds = store.fewerFeeds
@@ -270,6 +279,7 @@ final class MultiviewController {
         save()
         teardownAll()
         timing.detach(owner: self)
+        radio.detach(host: self)
         currentItem = nil
         resetSlots()
         feedURLs = [:]
@@ -323,6 +333,7 @@ final class MultiviewController {
         save()
         teardownAll()
         timing.detach(owner: self)
+        radio.detach(host: self)
         var showing = item
         if showing.title.isEmpty { showing.title = detail.title }
         // A bookmark or resume keeps no metadata: the video's details say where its timing is.
@@ -374,6 +385,7 @@ final class MultiviewController {
         // The view may have reported before the attach, when the timing ignored it.
         timing.setDockedPanels(dockedPanels, owner: self)
         sendRaceViews()
+        radio.attach(host: self)
 
         feedURLs = info.feeds
         // Links can't have expired seconds after this PLAY: a failure in the first minute is an
@@ -408,6 +420,9 @@ final class MultiviewController {
     func close() {
         save()
         generation += 1
+        // The radio's clip stops (the feeds get their volume back) before the audio session goes.
+        radio.detach(host: self)
+        feedVolume = 1
         teardownAll()
         timing.detach(owner: self)
         currentItem = nil
@@ -433,6 +448,8 @@ final class MultiviewController {
 
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
+        radio.detach(host: self)
+        feedVolume = 1
         teardownAll()
         timing.detach(owner: self)
         currentItem = nil
@@ -1000,6 +1017,7 @@ final class MultiviewController {
     /// Moves every feed by the same amount as the main one, so they stay in step.
     func seek(toSeconds seconds: Double) {
         guard seconds.isFinite, !refreshing, let main = mainFeed, main.positioned else { return }
+        seekGeneration &+= 1
         var target = max(seconds, 0)
         let duration = main.item.duration
         if duration.isNumeric, !duration.isIndefinite { target = min(target, max(duration.seconds, 0)) }
@@ -1170,6 +1188,9 @@ final class MultiviewController {
     private func applyRole(_ feed: MultiviewFeed) {
         let muted = feed.channelId != audioChannelId
         if feed.player.isMuted != muted { feed.player.isMuted = muted }
+        // The radio's level goes with the sound: a feed that takes it over while a clip plays is quiet too.
+        let volume = muted ? 1 : feedVolume
+        if feed.player.volume != volume { feed.player.volume = volume }
         if isMain(feed) {
             feed.item.preferredMaximumResolution = .zero
             feed.item.preferredPeakBitRate = 0
@@ -1208,6 +1229,18 @@ final class MultiviewController {
         ) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in self?.feedEnded(channelId: channelId, itemID: itemID) }
         })
+        // The main feed's time jumped (a seek from anywhere, the system's included): not normal
+        // play, for the radio.
+        feed.tokens.append(center.addObserver(
+            forName: AVPlayerItem.timeJumpedNotification, object: feed.item, queue: .main
+        ) { @Sendable [weak self] _ in
+            Task { @MainActor [weak self] in self?.timeJumped(channelId: channelId, itemID: itemID) }
+        })
+    }
+
+    private func timeJumped(channelId: Int, itemID: ObjectIdentifier) {
+        guard let feed = liveFeed(channelId, itemID), isMain(feed) else { return }
+        seekGeneration &+= 1
     }
 
     private func liveFeed(_ channelId: Int, _ itemID: ObjectIdentifier) -> MultiviewFeed? {
@@ -1418,6 +1451,8 @@ final class MultiviewController {
     private func seekFinished(channelId: Int, itemID: ObjectIdentifier, token: Int) {
         // Dropped if the feed was replaced, or the seek superseded or timed out.
         guard let feed = liveFeed(channelId, itemID), feed.seekToken == token, feed.seekStartedAt != nil else { return }
+        // The main feed landed: picture time jumps now, so the radio counts it as a seek too.
+        if isMain(feed) { seekGeneration &+= 1 }
         finishSeek(feed)
     }
 
@@ -2448,5 +2483,18 @@ private final class MultiviewPictureInPictureDelegate: NSObject, AVPictureInPict
     ) {
         let source = ObjectIdentifier(pictureInPictureController)
         onMainActor { [weak self] in self?.owner?.pictureInPictureDidStop(source) }
+    }
+}
+
+// MARK: - Team radio's host
+
+extension MultiviewController: PlaybackHost {
+    var playbackRate: Double { rate }
+
+    /// The feed with the sound gets `volume` (`player.volume`); its mute (the role rule) stays.
+    func setFeedVolume(_ volume: Float) {
+        feedVolume = volume
+        guard let id = audioChannelId, let feed = feeds[id] else { return }
+        if feed.player.volume != volume { feed.player.volume = volume }
     }
 }

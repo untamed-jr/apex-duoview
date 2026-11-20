@@ -51,6 +51,14 @@ final class PlayerController {
     @ObservationIgnored private var fairPlayKeys: FairPlayKeys?
     /// The session's timing, shared with the multiview; the cover's map panel reads it.
     @ObservationIgnored let timing: TimingController
+    /// Team radio, shared with the multiview: this player is its host while it plays.
+    @ObservationIgnored let radio: RadioController
+    /// The feed's own level, set by the radio (0 while a clip plays), as `player.volume`; kept for
+    /// the next player (tap-a-car). The viewer's mute is `isMuted` (`wantsMuted`), never this.
+    @ObservationIgnored private var feedVolume: Float = 1
+    /// Goes up on every seek (the controls, the lock screen) and on the item's own time jumps (a
+    /// seek from anywhere, the system's included): the radio tells a seek from normal play by it.
+    @ObservationIgnored private(set) var seekGeneration = 0
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var currentChannel: Channel?
@@ -123,13 +131,14 @@ final class PlayerController {
     static let beginningAttempts = 40
 
     init(coordinator: PlayCoordinator, recents: RecentsStore, history: WatchHistory, catalogue: Catalogue,
-         timing: TimingController, f1: F1TVSession) {
+         timing: TimingController, radio: RadioController, f1: F1TVSession) {
         self.coordinator = coordinator
         self.f1 = f1
         self.recents = recents
         self.history = history
         self.catalogue = catalogue
         self.timing = timing
+        self.radio = radio
         pictureInPictureDelegate = PlayerPictureInPictureDelegate()
         pictureInPictureDelegate.owner = self
     }
@@ -178,6 +187,7 @@ final class PlayerController {
         // content drops them.
         if currentItem?.contentId != item.contentId {
             timing.detach(owner: self)
+            radio.detach(host: self)
             forgetViewerChoices()
         }
         // The feed before had its own card: none until this one plays, so a failed PLAY leaves
@@ -216,6 +226,7 @@ final class PlayerController {
         })
         // An onboard gets its driver card (unless hidden).
         timing.setCardFeeds(card.map { [$0.channelId: $0.number] } ?? [:], owner: self)
+        radio.attach(host: self)
         // Live sessions come as FairPlay: their keys come from F1 TV's licence service. Replays
         // are clear and take the plain path, as before.
         begin(url: info.url, license: info.isFairPlay ? info.licenseURL : nil, startAt: startAt, date: date)
@@ -328,6 +339,9 @@ final class PlayerController {
     func close() {
         save()
         generation += 1
+        // The radio's clip stops (the feed gets its volume back) before the audio session goes.
+        radio.detach(host: self)
+        feedVolume = 1
         teardownPlayback()
         timing.detach(owner: self)
         currentItem = nil
@@ -363,6 +377,8 @@ final class PlayerController {
 
     /// Hides the cover without a stop(): nothing was playing (a cancelled request).
     private func dismiss() {
+        radio.detach(host: self)
+        feedVolume = 1
         teardownPlayback()
         timing.detach(owner: self)
         currentItem = nil
@@ -500,6 +516,7 @@ final class PlayerController {
         audioGroup = nil
         subtitleGroup = nil
         player.isMuted = wantsMuted
+        player.volume = feedVolume
         transport.setMuted(wantsMuted)
         transportTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -533,6 +550,16 @@ final class PlayerController {
             Task { @MainActor [weak self] in
                 guard self?.currentItemID == itemID else { return }
                 self?.save()
+            }
+        })
+        // The time jumped (the controls, the lock screen, a resume seek): not normal play, for
+        // the radio.
+        notificationTokens.append(center.addObserver(
+            forName: AVPlayerItem.timeJumpedNotification, object: item, queue: .main
+        ) { @Sendable [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.currentItemID == itemID else { return }
+                self.seekGeneration &+= 1
             }
         })
         // The one background save: no scenePhase involved, so nothing saves twice. Delivered on
@@ -782,13 +809,17 @@ final class PlayerController {
         if let span = transport.timeline { target = min(max(target, span.lowerBound), span.upperBound) }
         seekTarget = target
         seekCount += 1
+        seekGeneration &+= 1
         let seek = seekCount
         let itemID = currentItemID
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: CMTime(value: 1, timescale: 2),
                     toleranceAfter: CMTime(value: 1, timescale: 2)) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentItemID == itemID, self.seekCount == seek else { return }
+                guard let self, self.currentItemID == itemID else { return }
+                // Landed: picture time jumps now, so the radio counts it as a seek too.
+                self.seekGeneration &+= 1
+                guard self.seekCount == seek else { return }
                 self.seekTarget = nil
                 self.refreshTransport()
             }
@@ -1087,5 +1118,17 @@ struct PlayerOnboard: Equatable, Sendable {
         guard channel.isOnboard, let id = channel.id, let racingNumber = channel.racingNumber else { return nil }
         channelId = id
         number = String(racingNumber)
+    }
+}
+
+// MARK: - Team radio's host
+
+extension PlayerController: PlaybackHost {
+    var playbackRate: Double { transport.rate }
+
+    /// The feed's `player.volume` only: the viewer's mute (`isMuted`) stays as it is.
+    func setFeedVolume(_ volume: Float) {
+        feedVolume = volume
+        if let player, player.volume != volume { player.volume = volume }
     }
 }

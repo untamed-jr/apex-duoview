@@ -37,6 +37,11 @@ final class AppModel {
     /// Timing for whatever plays (F1's archive with this sign-in, MultiViewer's circuits), with the
     /// one `TimingSettings` and `TimingArchive`; both players attach it.
     @ObservationIgnored let timing: TimingController
+    /// The beta.4 choices (team radio, the closed phone, haptics), kept between launches.
+    @ObservationIgnored let companion: CompanionSettings
+    /// Team radio for whatever plays, beside the timing: both players attach it as its host, and
+    /// it starts afresh with each session the timing loads. Clips come from F1's archive host only.
+    @ObservationIgnored let radio: RadioController
     /// Your driver (Settings › Multiview › My driver): their onboard is the second default feed.
     /// Mirrors the multiview store, which isn't observed.
     private(set) var favouriteDriver: String?
@@ -76,13 +81,26 @@ final class AppModel {
             http: timingHTTP,
             live: liveTiming)
         self.timing = timing
+        // Team radio: the timing's own client (the token never follows a redirect to another
+        // host), sent only on a refused clip. Clips older than 7 days go at launch.
+        let companion = CompanionSettings(store: store)
+        self.companion = companion
+        let radio = RadioController(settings: companion, timing: timing, http: timingHTTP,
+                                    token: { await session.bearerToken() })
+        self.radio = radio
+        if let radioCache = RadioFetch.defaultBase {
+            Task.detached(priority: .background) {
+                RadioFetch.deleteExpired(in: radioCache, now: Date())
+            }
+        }
         self.playback = PlayerController(
             coordinator: player, recents: recents, history: history, catalogue: catalogue, timing: timing,
-            f1: session)
+            radio: radio, f1: session)
         let multiviewStore = MultiviewStore(store: store)
         self.multiviewStore = multiviewStore
         self.multiview = MultiviewController(
-            coordinator: player, store: multiviewStore, recents: recents, history: history, timing: timing)
+            coordinator: player, store: multiviewStore, recents: recents, history: history, timing: timing,
+            radio: radio)
         favouriteDriver = multiviewStore.favouriteDriver
         // Your driver's battles glow in the tower.
         timing.setFavouriteDriver(favouriteDriver)
