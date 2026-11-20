@@ -107,7 +107,9 @@ Paulo race data); the first real compile is the owner's Mac build.
   Scrub Deck tap. If clips never flash, the video's own time-jump notice may be firing in normal
   play (it suppresses the flash, and later the auto-play).
 - The radio ticks on the Scrub Deck (taller for your driver; none past the picture) and a tap on
-  one; Race Engineer's spot for the top onboard.
+  one; Race Engineer's spot for the top onboard (the mini map above it is a little shorter now).
+- The multiview's top bar with one more button (Radio): that it still fits closed and in book
+  pose, the title shortening first.
 - A clip download that F1 refuses: "Couldn't load this clip", the video plays on, nobody is
   signed out.
 - Headphones plugged in or out while a clip plays: the clip ends and the next one plays.

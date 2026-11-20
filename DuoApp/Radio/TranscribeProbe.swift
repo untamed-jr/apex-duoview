@@ -83,7 +83,8 @@ enum TranscribeProbe {
                 if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
                     try await request.downloadAndInstall()
                 }
-                report.model += " \u{2192} " + describe(await AssetInventory.status(forModules: [transcriber]))
+                let after = await AssetInventory.status(forModules: [transcriber])
+                report.model += " \u{2192} " + describe(after)
             }
             let started = ContinuousClock.now
             async let words = transcriber.results.reduce(into: "") { text, result in
