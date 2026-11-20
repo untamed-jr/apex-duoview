@@ -71,6 +71,13 @@ no task changes now; if the probe shows all feeds (FairPlay), add a task before 
 FairPlay multiview (one key session for all the feeds' assets); if not, ask the owner whether the
 closed pages should also come to the single-feed player.
 
+**FP1 probe, shape matrix (owner's Mac, 2026-11-19 16:33 PST, FP1 1000010435, player_tm):** every
+Safari-style shape (WEB_HLS and WEB_DASH, with or without channelId) answered one SWITCHER feed in
+FairPlay (`CMAFFP`); both Android-style shapes answered all 26 feeds (`MULTI`) in Widevine
+(`CMAFWV`). So one live multiview request never gives more than one feed iOS can play. Still open:
+probes A, B and C (a separate Safari-style PLAY per channel, side by side), which decide whether
+live multiview can be built from separate FairPlay feeds. Until then the ruling above stands.
+
 ## Global Constraints
 
 **Weekend freeze (Las Vegas, build 16 under live test)**
