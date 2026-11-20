@@ -135,6 +135,8 @@ final class MultiviewController {
     /// Goes up on every seek (the scrubber, the deck, LIVE), when the main feed lands, and on the
     /// main feed's own time jumps: the radio tells a seek from normal play by it.
     @ObservationIgnored private(set) var seekGeneration = 0
+    /// The main feed's last place, for telling a real time jump from one in normal play.
+    @ObservationIgnored private var jumpSample: PlaybackSample?
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var defaultChannelId: Int?
@@ -1238,9 +1240,20 @@ final class MultiviewController {
         })
     }
 
+    /// Counted only when the time really moved: the notice also comes in normal play.
     private func timeJumped(channelId: Int, itemID: ObjectIdentifier) {
         guard let feed = liveFeed(channelId, itemID), isMain(feed) else { return }
-        seekGeneration &+= 1
+        let now = feed.player.currentTime()
+        guard now.isNumeric else {
+            seekGeneration &+= 1
+            return
+        }
+        let uptime = ProcessInfo.processInfo.systemUptime
+        if TimeJump.isJump(from: jumpSample, channelId: channelId, to: now.seconds, uptime: uptime) {
+            seekGeneration &+= 1
+        }
+        jumpSample = PlaybackSample(channelId: channelId, seconds: now.seconds, uptime: uptime,
+                                    rate: Double(feed.player.rate))
     }
 
     private func liveFeed(_ channelId: Int, _ itemID: ObjectIdentifier) -> MultiviewFeed? {
@@ -1554,6 +1567,10 @@ final class MultiviewController {
         let seeking = main.seekStartedAt.map { Date().timeIntervalSince($0) < Self.seekTimeout } ?? false
         let now = main.player.currentTime()
         if !seeking, now.isNumeric, now.seconds.isFinite, position != now.seconds { position = now.seconds }
+        if now.isNumeric {
+            jumpSample = PlaybackSample(channelId: main.channelId, seconds: now.seconds,
+                                        uptime: ProcessInfo.processInfo.systemUptime, rate: Double(main.player.rate))
+        }
         let duration = main.item.duration
         let live = duration.isIndefinite
         if isLive != live { isLive = live }

@@ -104,8 +104,9 @@ Paulo race data); the first real compile is the owner's Mac build.
 - In multiview, moving the sound to another tile while a clip plays: that tile stays quiet until
   the clip ends.
 - The soft flash: once for a clip crossed in normal play; never after a seek, a scrub, ±10 s or a
-  Scrub Deck tap. If clips never flash, the video's own time-jump notice may be firing in normal
-  play (it suppresses the flash, and later the auto-play).
+  Scrub Deck tap. The video's own time-jump notice counts as a seek only when the time moved more
+  than a second from where it should be, so a notice in normal play (a speed change, the end of a
+  stall) no longer stops the flash; check a speed change while a clip is due.
 - The radio ticks on the Scrub Deck (taller for your driver; none past the picture) and a tap on
   one; Race Engineer's spot for the top onboard (the mini map above it is a little shorter now).
 - The multiview's top bar with one more button (Radio): that it still fits closed and in book
@@ -113,17 +114,17 @@ Paulo race data); the first real compile is the owner's Mac build.
 - A clip download that F1 refuses: "Couldn't load this clip", the video plays on, nobody is
   signed out.
 - Headphones plugged in or out while a clip plays: the clip ends and the next one plays.
+- A call, an alarm or Siri while a clip plays: the clip ends and the feeds' sound comes back.
 - The probe in the simulator **and on the Duo** (O4): available, locale, model, seconds, text.
   The speech-recognition reason in Info.plist only arrives with build 18: if iOS wants it for
   this kind of transcription, tapping the probe closes the app (that is the O1 answer, not a bug
   to chase here).
-- Live (next live weekend): with only the Radio panel open in the single-feed player, the live
-  timing isn't rebuilt (it rebuilds only while the map, tower, cards, console or deck show), so
-  new live clips may not appear until one of those is opened. Replays are not affected.
+- Live (next live weekend): new clips arrive with only the Radio panel open (the radio now keeps
+  the live timing being rebuilt while a player is open, as the map and tower do).
 - Tapping a car in the single-feed player while a clip plays: picture time is missing while the
   new feed loads, so the clip stops and the list empties for a moment.
-- Pan for later builds (Rivals' one ear each): set on the clip's player, ahead of the speed
-  control; whether it still applies there is not yet heard.
+- Pan for later builds (Rivals' one ear each): the clip now goes through a stereo submixer
+  before the speed control, so pan on the clip's player applies; not yet heard.
 
 ### v1.0-beta.4 groundwork — radio and the closed phone (not in the app yet)
 

@@ -228,3 +228,30 @@ enum RadioModels {
         return best
     }
 }
+
+// MARK: - Time jumps
+
+/// Where a player's item was, by the monotonic clock, and how fast it was going (its actual
+/// rate: 0 while paused).
+struct PlaybackSample: Equatable, Sendable {
+    var channelId: Int?
+    var seconds: Double
+    var uptime: TimeInterval
+    var rate: Double
+}
+
+/// AVFoundation's `timeJumpedNotification` can also come in normal play (a rate change, a stall's
+/// end). It counts as a seek for the radio only when the item's time is more than a second away
+/// from where the last sample says it should be (that sample advanced by the wall time × its
+/// rate). With no sample (or one for another feed), it counts.
+enum TimeJump {
+    static let toleranceSeconds = 1.0
+
+    static func isJump(from last: PlaybackSample?, channelId: Int? = nil, to seconds: Double,
+                       uptime: TimeInterval) -> Bool {
+        guard let last, last.channelId == channelId, seconds.isFinite, last.seconds.isFinite,
+              uptime.isFinite, last.uptime.isFinite, last.rate.isFinite else { return true }
+        let expected = last.seconds + max(uptime - last.uptime, 0) * last.rate
+        return abs(seconds - expected) > toleranceSeconds
+    }
+}

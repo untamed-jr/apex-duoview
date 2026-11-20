@@ -176,6 +176,9 @@ final class TimingController {
     private(set) var consoleCar: String?
     /// The attached player shows the Scrub Deck.
     @ObservationIgnored private var deckShown = false
+    /// Team radio reads the session for the attached player (`setRadioReader`): a live session
+    /// keeps being rebuilt for it, even with no panel open.
+    @ObservationIgnored private var radioReading = false
     /// The console and the deck as last built, with what they were built from: kept while that
     /// doesn't change (paused; the whole race is built once). Builds run off the main actor, one
     /// of each at a time.
@@ -302,7 +305,10 @@ final class TimingController {
                 if !cards.isEmpty { cards = [:] }
             }
             if ownerID != newOwner, !dockedPanels.isEmpty { dockedPanels = [] }
-            if ownerID != newOwner { clearRaceViews() }
+            if ownerID != newOwner {
+                clearRaceViews()
+                radioReading = false
+            }
             ownerID = newOwner
             wantsMarks = timelineMarks
             // The new clock may change the status (estimated or not) even with no reader ticking.
@@ -361,6 +367,7 @@ final class TimingController {
         lapStates = nil
         archiveSession = nil
         cardFeeds = [:]
+        radioReading = false
         contentIsLive = false
         carData?.cancel()
         carData = nil
@@ -507,6 +514,15 @@ final class TimingController {
     func setDeck(shown: Bool, owner: AnyObject) {
         guard ownerID == ObjectIdentifier(owner), deckShown != shown else { return }
         deckShown = shown
+        updateTicking()
+        publish()
+    }
+
+    /// Team radio reads the session for the attached player (`owner`): the tick runs (so a live
+    /// session keeps being rebuilt) while it does. Ignored from a player that isn't attached.
+    func setRadioReader(_ reading: Bool, owner: AnyObject) {
+        guard ownerID == ObjectIdentifier(owner), radioReading != reading else { return }
+        radioReading = reading
         updateTicking()
         publish()
     }
@@ -782,9 +798,10 @@ final class TimingController {
     }
 
     /// Whether the tick has a reader: a session loaded, and a panel showing (floating or docked),
-    /// the marks shown or a driver card showing.
+    /// the marks shown, a driver card showing, or the radio reading.
     private var needsTicking: Bool {
-        loaded != nil && (wantsMarks || !readPanels.isEmpty || !cardCars.isEmpty || consoleShown || deckShown)
+        loaded != nil
+            && (wantsMarks || !readPanels.isEmpty || !cardCars.isEmpty || consoleShown || deckShown || radioReading)
     }
 
     /// Starts or stops the tick to match `needsTicking`.

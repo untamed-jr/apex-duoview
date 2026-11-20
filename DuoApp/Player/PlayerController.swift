@@ -59,6 +59,8 @@ final class PlayerController {
     /// Goes up on every seek (the controls, the lock screen) and on the item's own time jumps (a
     /// seek from anywhere, the system's included): the radio tells a seek from normal play by it.
     @ObservationIgnored private(set) var seekGeneration = 0
+    /// The item's last place, for telling a real time jump from one in normal play.
+    @ObservationIgnored private var jumpSample: PlaybackSample?
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var currentChannel: Channel?
@@ -559,7 +561,7 @@ final class PlayerController {
         ) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.currentItemID == itemID else { return }
-                self.seekGeneration &+= 1
+                self.timeJumped()
             }
         })
         // The one background save: no scenePhase involved, so nothing saves twice. Delivered on
@@ -751,6 +753,7 @@ final class PlayerController {
         fairPlayKeys?.stop()
         fairPlayKeys = nil
         removeObservers()
+        jumpSample = nil
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         // Ends a picture in picture still up; its stop then finds nothing to do.
@@ -825,6 +828,20 @@ final class PlayerController {
             }
         }
         refreshTransport()
+    }
+
+    /// The item's time jumped: counted only when it really moved (the notice also comes in normal
+    /// play, as a rate change or a stall's end).
+    private func timeJumped() {
+        guard let player else { return }
+        let now = player.currentTime()
+        guard now.isNumeric else {
+            seekGeneration &+= 1
+            return
+        }
+        let uptime = ProcessInfo.processInfo.systemUptime
+        if TimeJump.isJump(from: jumpSample, to: now.seconds, uptime: uptime) { seekGeneration &+= 1 }
+        jumpSample = PlaybackSample(seconds: now.seconds, uptime: uptime, rate: Double(player.rate))
     }
 
     /// Back or forward 10 s.
@@ -957,6 +974,11 @@ final class PlayerController {
         guard let player else { return }
         transport.update(player: player, heldPosition: seekTarget,
                          pictureInPicturePossible: pictureInPictureController?.isPictureInPicturePossible ?? false)
+        let now = player.currentTime()
+        if now.isNumeric {
+            jumpSample = PlaybackSample(seconds: now.seconds, uptime: ProcessInfo.processInfo.systemUptime,
+                                        rate: Double(player.rate))
+        }
         // At the live point the speed menu hides, so any other speed goes back to 1× there (as
         // in multiview).
         if transport.isLive, transport.rate != 1, transport.behindLive != nil, transport.isAtLiveEdge {

@@ -2,15 +2,20 @@ import AVFoundation
 import Foundation
 
 /// Plays team radio clips: one `AVAudioEngine` with an `AVAudioPlayerNode` → an
-/// `AVAudioUnitTimePitch` (rate = the feeds' speed, the pitch kept) → the main mixer. Pan and
-/// volume are on the player node. The engine runs only while a clip plays, and starts again after
-/// a configuration change (a route or format change stops it); the clip playing then ends.
+/// `AVAudioMixerNode` (stereo out, so a mono clip can be panned) → an `AVAudioUnitTimePitch`
+/// (rate = the feeds' speed, the pitch kept) → the main mixer. Pan and volume are on the player
+/// node: they apply at the submixer's input bus (mixing settings only apply at a mixer's input).
+/// The engine runs only while a clip plays, and starts again for the next clip after a
+/// configuration change (a route or format change stops it) or an audio interruption (a call,
+/// Siri); the clip playing then ends, so the feeds get their sound back.
 ///
 /// It plays in the app's audio session (`.playback`, set by the players), alongside the feeds.
 @MainActor
 final class RadioAudio: RadioPlayback {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    /// Where the node's pan and volume apply.
+    private let submixer = AVAudioMixerNode()
     private let pitch = AVAudioUnitTimePitch()
     /// The format the nodes are connected with (the last clip's), so a clip in another format
     /// reconnects them.
@@ -20,19 +25,32 @@ final class RadioAudio: RadioPlayback {
     private var token = 0
     private var onEnd: (@MainActor () -> Void)?
     private var observer: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
 
     init() {
         engine.attach(node)
+        engine.attach(submixer)
         engine.attach(pitch)
         observer = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { @Sendable [weak self] _ in
-            MainActor.assumeIsolated { self?.configurationChanged() }
+            MainActor.assumeIsolated { self?.stoppedBySystem() }
+        }
+        // A call or Siri stops the engine without the clip's end being reported.
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main
+        ) { @Sendable [weak self] note in
+            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let began = raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
+            MainActor.assumeIsolated {
+                if began { self?.stoppedBySystem() }
+            }
         }
     }
 
     isolated deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
         node.stop()
         engine.stop()
     }
@@ -43,12 +61,18 @@ final class RadioAudio: RadioPlayback {
         guard file.length > 0 else { throw RadioAudioError.empty }
         let format = file.processingFormat
         if connected != format {
+            // Stereo out of the submixer, at the clip's rate, so a mono clip can be panned.
+            guard let stereo = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 2) else {
+                throw RadioAudioError.format
+            }
             // Reconnected only while stopped.
             engine.stop()
             engine.disconnectNodeOutput(node)
+            engine.disconnectNodeOutput(submixer)
             engine.disconnectNodeOutput(pitch)
-            engine.connect(node, to: pitch, format: format)
-            engine.connect(pitch, to: engine.mainMixerNode, format: format)
+            engine.connect(node, to: submixer, format: format)
+            engine.connect(submixer, to: pitch, format: stereo)
+            engine.connect(pitch, to: engine.mainMixerNode, format: stereo)
             connected = format
         }
         pitch.rate = Self.clamped(rate)
@@ -87,14 +111,19 @@ final class RadioAudio: RadioPlayback {
         onEnd()
     }
 
-    /// The system stopped the engine (a route or format change): the clip ends; the next one
-    /// starts the engine again.
-    private func configurationChanged() {
+    var isPlaying: Bool {
+        onEnd != nil && engine.isRunning
+    }
+
+    /// The system stopped the engine (a route or format change, or an interruption): the clip
+    /// ends; the next one connects and starts the engine again.
+    private func stoppedBySystem() {
         connected = nil
         let ending = onEnd
         token &+= 1
         onEnd = nil
         node.stop()
+        if engine.isRunning { engine.stop() }
         ending?()
     }
 
@@ -107,6 +136,7 @@ final class RadioAudio: RadioPlayback {
 
 enum RadioAudioError: Error {
     case empty
+    case format
 }
 
 extension RadioController {

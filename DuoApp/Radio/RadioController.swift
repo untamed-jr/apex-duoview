@@ -29,6 +29,8 @@ protocol RadioPlayback: AnyObject {
     func setRate(_ rate: Float)
     /// Stops at once; no `onEnd`.
     func stop()
+    /// A clip is playing now (false once it ended or the system stopped the audio).
+    var isPlaying: Bool { get }
 }
 
 /// A driver for the Radio panel's chips.
@@ -113,6 +115,8 @@ final class RadioController {
     @ObservationIgnored private var playTask: Task<Void, Never>?
     /// Bumped by every play and finish: a late download or a late end for an older clip is dropped.
     @ObservationIgnored private var playToken = 0
+    /// The audio was started for `playing` (not just downloading).
+    @ObservationIgnored private var audioStarted = false
 
     init(settings: CompanionSettings, timing: TimingController, http: any HTTPClient,
          token: @escaping @Sendable () async -> String?,
@@ -136,8 +140,13 @@ final class RadioController {
 
     /// The player now playing. Another host's clip stops first (its feeds get their volume back).
     func attach(host newHost: any PlaybackHost) {
-        if let host, host !== newHost { finish() }
+        if let host, host !== newHost {
+            finish()
+            timing.setRadioReader(false, owner: host)
+        }
         host = newHost
+        // A live session keeps being rebuilt for the radio, even with no timing panel open.
+        timing.setRadioReader(true, owner: newHost)
         lastSeekGeneration = nil
         seekTicksLeft = 0
         startTicking()
@@ -148,6 +157,7 @@ final class RadioController {
     /// rows and the panel go.
     func detach() {
         finish()
+        if let host { timing.setRadioReader(false, owner: host) }
         host = nil
         tickTask?.cancel()
         tickTask = nil
@@ -262,6 +272,7 @@ final class RadioController {
             try audio.play(fileURL: file, pan: pan, rate: Float(host.playbackRate)) { [weak self] in
                 self?.ended(token: mine)
             }
+            audioStarted = true
             host.setFeedVolume(0)
         } catch {
             // A damaged file: gone, so the next try downloads it again.
@@ -281,6 +292,7 @@ final class RadioController {
         playTask?.cancel()
         playTask = nil
         playToken &+= 1
+        audioStarted = false
         audio.stop()
         if playing != nil { playing = nil }
         host?.setFeedVolume(1)
@@ -372,6 +384,8 @@ final class RadioController {
            RadioModels.shouldStop(playing: clip, pictureTime: pictureTime, wholeRace: whole) {
             finish()
         }
+        // The audio stopped by itself (an interruption, with no end reported): the clip is over.
+        if playing != nil, audioStarted, !audio.isPlaying { finish() }
         if playing != nil { audio.setRate(Float(host.playbackRate)) }
 
         let visible = RadioModels.visible(session.radio, pictureTime: pictureTime, wholeRace: whole)
