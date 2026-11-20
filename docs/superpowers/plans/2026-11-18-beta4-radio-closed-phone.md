@@ -78,6 +78,16 @@ FairPlay (`CMAFFP`); both Android-style shapes answered all 26 feeds (`MULTI`) i
 probes A, B and C (a separate Safari-style PLAY per channel, side by side), which decide whether
 live multiview can be built from separate FairPlay feeds. Until then the ruling above stands.
 
+**FP1 probes A, B, C (same evening, ~16:45 PST):** C opened separate Safari-style multiview
+sessions for 1033, 1003 and 1004 at the same time, all still serving after 20 s; B's separate
+single-feed (player_bm) requests both played and kept playing, with different links, but the
+answer doesn't name the channel, so it is not yet shown that each link is the feed asked for; A
+stopped at 1025. 1025 (INTERNATIONAL) answered 404 when asked by channelId in A and C, matching
+the no-channelId rule (`Channel.playChannelId`). Next check (owner, in the app, live): pick a
+driver's onboard from the session page in the single-feed player and see that it is that
+driver's onboard. If it is, add the FairPlay multiview task (separate PLAY and key session per
+feed) before Task 12.
+
 ## Global Constraints
 
 **Weekend freeze (Las Vegas, build 16 under live test)**
