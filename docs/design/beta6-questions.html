@@ -1,0 +1,423 @@
+<title>Beta 6 Decisions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column of decision cards, a sticky tally on top; same family as the beta 3 test checklist. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4; --ok: #138a4b; --ok-bg: #e3f5ea; --alt: #b45309; --alt-bg: #fdf0dc;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { padding-top: 24px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+  border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar b { color: var(--fg); }
+.save { margin-left: auto; font-family: var(--f-mono); font-size: 12px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.q[data-s="agree"] { border-color: var(--ok); }
+.q[data-s="other"] { border-color: var(--alt); }
+.qhead { display: flex; gap: 10px; align-items: baseline; }
+.num { font-family: var(--f-mono); color: var(--accent); font-size: 13px; flex: none; }
+h2 { font-size: 19px; line-height: 1.25; }
+.ask { margin: 0; }
+.rec { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.rec b { font-family: var(--f-display); letter-spacing: .02em; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"][data-v="agree"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="other"] { background: var(--alt-bg); border-color: var(--alt); color: var(--alt); font-weight: 600; }
+.seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { font-size: 13px; color: var(--muted); }
+textarea { font: inherit; width: 100%; box-sizing: border-box; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+.foot { color: var(--muted); font-size: 13px; }
+/* Added for beta 5 and 6: options, and mockups drawn in the app's own (always dark) colours. */
+.opts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.opts li { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.opts li.is-rec { border-color: var(--ok); }
+.opts .k { font-family: var(--f-mono); font-size: 13px; color: var(--accent); flex: none; }
+.opts .tag { font-size: 12px; font-weight: 600; color: var(--ok); white-space: nowrap; }
+.opts span.l { flex: 1; min-width: 0; }
+.mock { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mock .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.mock .cell { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mock .cell.narrow { flex: 0 1 180px; }
+.mock svg { display: block; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 0 0 3px #050506, 0 0 0 4px #2c2c30; background: #0a0a0b; }
+.mock svg.plain { box-shadow: none; background: transparent; border-radius: 0; }
+.mock .cap { font-size: 12px; color: var(--muted); }
+.mock figcaption { font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · v1.0-beta.6 · Between races</div>
+    <h1><span id="n-all1">Twelve</span> decisions before beta 6 is built</h1>
+    <p class="lede">Calendar and reminders, Kitchen Board, Countdown Lamp, Archive Atlas, the recap and the Dynamic Island, plus two Android extras. Each question has my recommendation. Tap the option you want, or "Something else" and say what you'd like instead. Your answers save here and Claude reads them. The full draft is docs/superpowers/specs/2026-11-20-beta6-between-races-design.md.</p>
+  </header>
+  <div class="bar" role="status"><span><b id="n-done">0</b> of <b id="n-all">12</b> answered</span><span><b id="n-agree">0</b> agree</span><span><b id="n-other">0</b> something else</span><span class="save" id="save">Saved on this device only</span></div>
+  <main id="list" class="wrap" style="gap:14px"></main>
+  <p class="foot">Nothing in beta 6 is built until these are settled; it comes after beta 5. The drawings are stand-ins in the app's colours, never F1's pictures. Question 8 is the same as question 7 on the beta 5 page: one answer covers both.</p>
+</div>
+
+<template id="m-cal"><div class="row"><div class="cell narrow"><svg viewBox="0 0 466 678" role="img" aria-label="The Calendar on the closed phone, with session times in your own time" style="max-width:280px"><rect width="466" height="678" fill="#0a0a0b"/><text x="24" y="60" font-size="34" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Calendar</text><path d="M420 62 h28 l-4 -6 v-12 a10 10 0 0 0 -20 0 v12 z M430 66 a4 4 0 0 0 8 0" fill="#e9e9ec"/><text x="24" y="110" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Upcoming</text><rect x="16" y="130" width="434" height="330" rx="14" fill="#151517" stroke="#2a2a2e"/><text x="36" y="168" font-size="24" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Next race weekend</text><text x="36" y="196" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Friday to Sunday</text><text x="36" y="236" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Fri</text><text x="88" y="236" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9:30 AM</text><text x="210" y="236" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Practice 1</text><text x="36" y="280" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Fri</text><text x="88" y="280" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1:00 PM</text><text x="210" y="280" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Practice 2</text><text x="36" y="324" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Sat</text><text x="88" y="324" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >10:30 AM</text><text x="210" y="324" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Practice 3</text><text x="36" y="368" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Sat</text><text x="88" y="368" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2:00 PM</text><text x="210" y="368" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Qualifying</text><text x="36" y="412" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Sun</text><text x="88" y="412" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1:00 PM</text><text x="210" y="412" font-size="19" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Race</text><text x="36" y="450" font-size="16" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Times in your time zone</text><text x="24" y="510" font-size="22" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Later</text><rect x="16" y="526" width="434" height="70" rx="14" fill="#151517" stroke="#2a2a2e"/><text x="36" y="568" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >The weekend after · dates</text></svg><span class="cap">A · your time only (recommended)</span></div></div><figcaption>Drawn at the Duo's outer screen, 466 × 678 pt (measured on your phone). Names and times here are made up.</figcaption></template>
+<template id="m-stand"><div class="row"><div class="cell narrow"><svg class="plain" viewBox="0 0 300 190" role="img" aria-label="Seen from above: half-open like a book, standing on the table"><path d="M150 40 L70 140 M150 40 L230 140" stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/><path d="M146 50 L78 136 M154 50 L222 136" stroke="#ec0014" stroke-width="3" fill="none"/><circle cx="150" cy="40" r="6" fill="currentColor"/><text x="150" y="182" font-size="15" text-anchor="middle" fill="currentColor" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">you, across the room</text><text x="150" y="24" font-size="13" text-anchor="middle" fill="currentColor" opacity=".7" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">hinge</text></svg><span class="cap">A · half-open like a book, stood up (recommended)</span></div><div class="cell narrow"><svg class="plain" viewBox="0 0 300 190" role="img" aria-label="Seen from the side: like a laptop, one half flat, one upright"><line x1="10" y1="170" x2="290" y2="170" stroke="currentColor" stroke-opacity=".35" stroke-width="2"/><path d="M60 166 L200 166 M200 166 L200 40" stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/><path d="M194 160 L194 46" stroke="#ec0014" stroke-width="3"/><text x="120" y="150" font-size="14" text-anchor="middle" fill="currentColor" opacity=".7" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">flat half</text><text x="260" y="100" font-size="15" text-anchor="middle" fill="currentColor" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">you →</text></svg><span class="cap">B · like a laptop</span></div><div class="cell narrow"><svg class="plain" viewBox="0 0 300 190" role="img" aria-label="Seen from the side: closed, propped up on its edge"><line x1="10" y1="170" x2="290" y2="170" stroke="currentColor" stroke-opacity=".35" stroke-width="2"/><path d="M150 166 L178 40" stroke="currentColor" stroke-width="14" stroke-linecap="round"/><path d="M140 166 L178 40" stroke="#ec0014" stroke-width="3"/><path d="M180 166 L200 110" stroke="currentColor" stroke-opacity=".5" stroke-width="5" stroke-linecap="round"/><text x="70" y="100" font-size="15" text-anchor="middle" fill="currentColor" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">← you</text><text x="225" y="150" font-size="13" fill="currentColor" opacity=".7" font-family="-apple-system, Helvetica Neue, Arial, sans-serif">stand</text></svg><span class="cap">C · closed and propped up</span></div></div><figcaption>The red line is the screen you'd look at.</figcaption></template>
+<template id="m-board"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option A: one big timing board across both halves"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="20" y="84" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1</text><rect x="80" y="51" width="8" height="35" rx="3" fill="#27f4d2"/><text x="102" y="84" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><text x="931" y="84" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LAP 23</text><text x="20" y="146" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2</text><rect x="80" y="113" width="8" height="35" rx="3" fill="#ff8000"/><text x="102" y="146" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><text x="931" y="146" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+2.4</text><text x="20" y="208" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >3</text><rect x="80" y="175" width="8" height="35" rx="3" fill="#27f4d2"/><text x="102" y="208" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><text x="931" y="208" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+5.1</text><text x="20" y="270" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >4</text><rect x="80" y="237" width="8" height="35" rx="3" fill="#3671c6"/><text x="102" y="270" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >VER</text><text x="931" y="270" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+7.9</text><text x="20" y="332" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >5</text><rect x="80" y="299" width="8" height="35" rx="3" fill="#e8002d"/><text x="102" y="332" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LEC</text><text x="931" y="332" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+9.3</text><text x="20" y="394" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >6</text><rect x="80" y="361" width="8" height="35" rx="3" fill="#ff8000"/><text x="102" y="394" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text><text x="931" y="394" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+11.0</text><text x="20" y="456" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >7</text><rect x="80" y="423" width="8" height="35" rx="3" fill="#229971"/><text x="102" y="456" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ALO</text><text x="931" y="456" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+14.6</text><text x="20" y="518" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >8</text><rect x="80" y="485" width="8" height="35" rx="3" fill="#0093cc"/><text x="102" y="518" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >GAS</text><text x="931" y="518" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+16.2</text><text x="20" y="580" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9</text><rect x="80" y="547" width="8" height="35" rx="3" fill="#e8002d"/><text x="102" y="580" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM</text><text x="931" y="580" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+18.8</text><text x="20" y="642" font-size="35.2" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >10</text><rect x="80" y="609" width="8" height="35" rx="3" fill="#6692ff"/><text x="102" y="642" font-size="44" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAD</text><text x="931" y="642" font-size="44" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+21.5</text></svg><span class="cap">A · one board across both halves</span></div><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option B, shown during a yellow flag: tower on the left, lap, flag and leader on the right, both halves yellow"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><rect width="951" height="669" fill="#ffd60a"/><rect x="456" y="0" width="40" height="669" fill="#b39500"/><text x="16" y="82" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1</text><rect x="76" y="50" width="8" height="34" rx="3" fill="#27f4d2"/><text x="98" y="82" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><text x="440" y="82" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LAP 23</text><text x="16" y="144" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2</text><rect x="76" y="112" width="8" height="34" rx="3" fill="#ff8000"/><text x="98" y="144" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><text x="440" y="144" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+2.4</text><text x="16" y="206" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >3</text><rect x="76" y="174" width="8" height="34" rx="3" fill="#27f4d2"/><text x="98" y="206" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><text x="440" y="206" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+5.1</text><text x="16" y="268" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >4</text><rect x="76" y="236" width="8" height="34" rx="3" fill="#3671c6"/><text x="98" y="268" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >VER</text><text x="440" y="268" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+7.9</text><text x="16" y="330" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >5</text><rect x="76" y="298" width="8" height="34" rx="3" fill="#e8002d"/><text x="98" y="330" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LEC</text><text x="440" y="330" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+9.3</text><text x="16" y="392" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >6</text><rect x="76" y="360" width="8" height="34" rx="3" fill="#ff8000"/><text x="98" y="392" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text><text x="440" y="392" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+11.0</text><text x="16" y="454" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >7</text><rect x="76" y="422" width="8" height="34" rx="3" fill="#229971"/><text x="98" y="454" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ALO</text><text x="440" y="454" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+14.6</text><text x="16" y="516" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >8</text><rect x="76" y="484" width="8" height="34" rx="3" fill="#0093cc"/><text x="98" y="516" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >GAS</text><text x="440" y="516" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+16.2</text><text x="16" y="578" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9</text><rect x="76" y="546" width="8" height="34" rx="3" fill="#e8002d"/><text x="98" y="578" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM</text><text x="440" y="578" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+18.8</text><text x="16" y="640" font-size="33.6" font-weight="700" fill="#3a3300" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >10</text><rect x="76" y="608" width="8" height="34" rx="3" fill="#6692ff"/><text x="98" y="640" font-size="42" font-weight="800" fill="#111" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAD</text><text x="440" y="640" font-size="42" font-weight="700" fill="#111" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+21.5</text><text x="724" y="120" font-size="64" font-weight="800" fill="#111" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LAP 23/71</text><text x="724" y="300" font-size="84" font-weight="900" fill="#111" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >YELLOW</text><text x="724" y="420" font-size="46" font-weight="700" fill="#111" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT leads</text><text x="724" y="520" font-size="38" font-weight="700" fill="#111" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM  P9  +2.6 to GAS</text></svg><span class="cap">B · tower left, big facts right (recommended), shown on a yellow flag</span></div><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option C: tower on one half, the other half dark"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="16" y="82" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1</text><rect x="76" y="50" width="8" height="34" rx="3" fill="#27f4d2"/><text x="98" y="82" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><text x="440" y="82" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LAP 23</text><text x="16" y="144" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2</text><rect x="76" y="112" width="8" height="34" rx="3" fill="#ff8000"/><text x="98" y="144" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><text x="440" y="144" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+2.4</text><text x="16" y="206" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >3</text><rect x="76" y="174" width="8" height="34" rx="3" fill="#27f4d2"/><text x="98" y="206" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><text x="440" y="206" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+5.1</text><text x="16" y="268" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >4</text><rect x="76" y="236" width="8" height="34" rx="3" fill="#3671c6"/><text x="98" y="268" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >VER</text><text x="440" y="268" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+7.9</text><text x="16" y="330" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >5</text><rect x="76" y="298" width="8" height="34" rx="3" fill="#e8002d"/><text x="98" y="330" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LEC</text><text x="440" y="330" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+9.3</text><text x="16" y="392" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >6</text><rect x="76" y="360" width="8" height="34" rx="3" fill="#ff8000"/><text x="98" y="392" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text><text x="440" y="392" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+11.0</text><text x="16" y="454" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >7</text><rect x="76" y="422" width="8" height="34" rx="3" fill="#229971"/><text x="98" y="454" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ALO</text><text x="440" y="454" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+14.6</text><text x="16" y="516" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >8</text><rect x="76" y="484" width="8" height="34" rx="3" fill="#0093cc"/><text x="98" y="516" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >GAS</text><text x="440" y="516" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+16.2</text><text x="16" y="578" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9</text><rect x="76" y="546" width="8" height="34" rx="3" fill="#e8002d"/><text x="98" y="578" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM</text><text x="440" y="578" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+18.8</text><text x="16" y="640" font-size="33.6" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >10</text><rect x="76" y="608" width="8" height="34" rx="3" fill="#6692ff"/><text x="98" y="640" font-size="42" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAD</text><text x="440" y="640" font-size="42" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+21.5</text><rect x="496" y="0" width="455" height="669" fill="#050506"/></svg><span class="cap">C · one half only</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. Stood up like a book, each half is taller than it is wide. Driver codes and gaps are examples.</figcaption></template>
+<template id="m-lamp"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="The Countdown Lamp: next session and countdown on the left, a glowing circuit and five start lights on the right"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="40" y="120" font-size="28" font-weight="700" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NEXT</text><text x="40" y="190" font-size="62" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Qualifying</text><text x="40" y="240" font-size="30" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Next race weekend</text><text x="40" y="420" font-size="100" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >0:02:14</text><text x="40" y="470" font-size="28" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Lights out in</text><text x="40" y="600" font-size="26" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Race Sun · 1:00 PM</text><defs><filter id="glow"><feGaussianBlur stdDeviation="6"/></filter></defs><g filter="url(#glow)" opacity=".8"><path d="M20 20 L110 20 L118 45 L70 55 L112 80 L100 100 L25 100 L12 60 Z" transform="translate(560 90) scale(3.0)" fill="none" stroke="#ec0014" stroke-width="3.33" stroke-linejoin="round"/></g><path d="M20 20 L110 20 L118 45 L70 55 L112 80 L100 100 L25 100 L12 60 Z" transform="translate(560 90) scale(3.0)" fill="none" stroke="#ff5a66" stroke-width="1.33" stroke-linejoin="round"/><circle cx="560" cy="520" r="30" fill="#ec0014" stroke="#3a1015" stroke-width="3"/><circle cx="642" cy="520" r="30" fill="#ec0014" stroke="#3a1015" stroke-width="3"/><circle cx="724" cy="520" r="30" fill="#ec0014" stroke="#3a1015" stroke-width="3"/><circle cx="806" cy="520" r="30" fill="#2a0a0d" stroke="#3a1015" stroke-width="3"/><circle cx="888" cy="520" r="30" fill="#2a0a0d" stroke="#3a1015" stroke-width="3"/></svg><span class="cap">The lamp at 2:14 to go: three of the five lights on</span></div><div class="cell narrow"><svg viewBox="0 0 340 160" role="img" aria-label="A Lock Screen widget with the same countdown" style="max-width:260px"><rect width="340" height="160" rx="26" fill="#1c1c20"/><text x="24" y="46" font-size="18" font-weight="700" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NEXT · QUALIFYING</text><text x="24" y="110" font-size="56" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2:14:05</text><text x="24" y="142" font-size="17" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Next race weekend</text></svg><span class="cap">B adds this widget on the Lock Screen and in StandBy</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. The circuit drawing is invented.</figcaption></template>
+<template id="m-atlas"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option B: a grid of track drawings on the left, the races at the chosen circuit on the right"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="20" y="46" font-size="30" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Pick a circuit</text><rect x="20" y="74" width="134" height="170" rx="12" fill="#1e1e21" stroke="#ec0014" stroke-width="3"/><path d="M10 60 L40 20 L90 18 L110 40 L95 62 L120 80 L100 100 L40 98 L20 84 Z" transform="translate(27 86) scale(1.0)" fill="none" stroke="#ec0014" stroke-width="4.00" stroke-linejoin="round"/><text x="87" y="226" font-size="18" font-weight="600" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Brazil</text><rect x="166" y="74" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M15 30 L70 15 L115 30 L118 70 L85 72 L80 95 L30 100 L12 70 Z" transform="translate(173 86) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="233" y="226" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Italy</text><rect x="312" y="74" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M20 20 L110 20 L118 45 L70 55 L112 80 L100 100 L25 100 L12 60 Z" transform="translate(319 86) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="379" y="226" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Monaco</text><rect x="20" y="264" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M30 15 L100 25 L116 60 L90 100 L50 92 L56 64 L18 58 L14 30 Z" transform="translate(27 276) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="87" y="416" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Japan</text><rect x="166" y="264" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M12 50 L35 18 L80 30 L118 18 L110 70 L70 62 L60 100 L18 92 Z" transform="translate(173 276) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="233" y="416" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Britain</text><rect x="312" y="264" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M18 18 L118 30 L100 52 L118 96 L64 84 L30 102 L12 66 L40 48 Z" transform="translate(319 276) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="379" y="416" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Belgium</text><rect x="20" y="454" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M10 60 L40 20 L90 18 L110 40 L95 62 L120 80 L100 100 L40 98 L20 84 Z" transform="translate(27 466) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="87" y="606" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Canada</text><rect x="166" y="454" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M15 30 L70 15 L115 30 L118 70 L85 72 L80 95 L30 100 L12 70 Z" transform="translate(173 466) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="233" y="606" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Hungary</text><rect x="312" y="454" width="134" height="170" rx="12" fill="#151517" stroke="#2a2a2e" stroke-width="1"/><path d="M20 20 L110 20 L118 45 L70 55 L112 80 L100 100 L25 100 L12 60 Z" transform="translate(319 466) scale(1.0)" fill="none" stroke="#9a9aa2" stroke-width="4.00" stroke-linejoin="round"/><text x="379" y="606" font-size="18" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Spain</text><text x="512" y="46" font-size="30" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Races at this circuit</text><text x="512" y="80" font-size="20" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >since 1981</text><rect x="508" y="100" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="142" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2025</text><text x="606" y="142" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="115.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="140.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="178" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="220" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2024</text><text x="606" y="220" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="193.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="218.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="256" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="298" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2019</text><text x="606" y="298" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="271.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="296.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="334" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="376" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2008</text><text x="606" y="376" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="349.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="374.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="412" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="454" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2001</text><text x="606" y="454" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="427.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="452.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="490" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="532" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1993</text><text x="606" y="532" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><rect x="815.0" y="505.0" width="110" height="38" rx="19.0" fill="#ec0014" stroke="#2a2a2e"/><text x="870" y="530.48" font-size="18" font-weight="700" fill="#fff" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Watch</text><rect x="508" y="568" width="434" height="68" rx="10" fill="#151517" stroke="#2a2a2e"/><text x="526" y="610" font-size="26" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1989</text><text x="606" y="610" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Grand Prix</text><text x="926" y="609" font-size="16" font-weight="600" fill="#66666d" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >No video on F1 TV</text></svg><span class="cap">B · a grid of track drawings (recommended)</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. The drawings and the list are invented examples; results stay hidden unless you switch them on.</figcaption></template>
+<template id="m-recap"><div class="row"><div class="cell narrow"><svg viewBox="0 0 466 678" role="img" aria-label="The recap's first card on the outer screen: the podium and places 4 to 10" style="max-width:280px"><rect width="466" height="678" fill="#0a0a0b"/><text x="233" y="60" font-size="20" font-weight="700" fill="#66666d" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RECAP · 1 OF 6</text><text x="233" y="120" font-size="46" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Podium</text><rect x="60" y="290" width="120" height="180" rx="10" fill="#1e1e21" stroke="#2a2a2e"/><text x="120" y="274" font-size="30" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><text x="120" y="350" font-size="52" font-weight="800" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2</text><rect x="100" y="226" width="40" height="6" rx="3" fill="#ff8000"/><rect x="173" y="230" width="120" height="240" rx="10" fill="#1e1e21" stroke="#2a2a2e"/><text x="233" y="214" font-size="30" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><text x="233" y="290" font-size="52" font-weight="800" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1</text><rect x="213" y="166" width="40" height="6" rx="3" fill="#27f4d2"/><rect x="286" y="330" width="120" height="140" rx="10" fill="#1e1e21" stroke="#2a2a2e"/><text x="346" y="314" font-size="30" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><text x="346" y="390" font-size="52" font-weight="800" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >3</text><rect x="326" y="266" width="40" height="6" rx="3" fill="#27f4d2"/><text x="233" y="530" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >4 VER   5 LEC   6 PIA   7 ALO</text><text x="233" y="566" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >8 GAS   9 HAM   10 HAD</text><rect x="103" y="630" width="38" height="5" rx="2.5" fill="#e9e9ec"/><rect x="149" y="630" width="38" height="5" rx="2.5" fill="#66666d"/><rect x="195" y="630" width="38" height="5" rx="2.5" fill="#66666d"/><rect x="241" y="630" width="38" height="5" rx="2.5" fill="#66666d"/><rect x="287" y="630" width="38" height="5" rx="2.5" fill="#66666d"/><rect x="333" y="630" width="38" height="5" rx="2.5" fill="#66666d"/><text x="233" y="664" font-size="17" font-weight="500" fill="#66666d" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Swipe to skip</text></svg><span class="cap">The first of six cards</span></div></div><figcaption>Drawn at the Duo's outer screen, 466 × 678 pt (measured on your phone). Names are examples.</figcaption></template>
+<template id="m-island"><div class="row"><div class="cell narrow"><svg viewBox="0 0 466 678" role="img" aria-label="The Lock Screen with the flag ring in the Dynamic Island and the race card below" style="max-width:280px"><rect width="466" height="678" fill="#0a0a0b"/><text x="233" y="150" font-size="96" font-weight="300" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9:41</text><text x="233" y="190" font-size="22" font-weight="500" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Sunday</text><rect x="113" y="14" width="240" height="44" rx="22" fill="#000" stroke="#2a2a2e"/><circle cx="140" cy="36" r="14" fill="none" stroke="#ffd60a" stroke-width="5"/><text x="140" y="42" font-size="14" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >44</text><text x="336" y="43" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >L23/71</text><rect x="18" y="430" width="430" height="200" rx="26" fill="#1c1c20"/><circle cx="62" cy="480" r="22" fill="none" stroke="#ffd60a" stroke-width="7"/><text x="62" y="487" font-size="18" font-weight="800" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >44</text><text x="100" y="474" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >São Paulo · Race</text><text x="100" y="500" font-size="22" font-weight="800" fill="#ffd60a" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >YELLOW · Lap 23/71</text><text x="40" y="560" font-size="40" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM  P9</text><text x="40" y="600" font-size="19" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+2.6 to GAS ahead · 1.1 to HAD behind</text></svg><span class="cap">Dynamic Island (top) and Lock Screen card</span></div></div><figcaption>Drawn at the Duo's outer screen, 466 × 678 pt (measured on your phone). Whether the Duo has a Dynamic Island is still to be checked; the Lock Screen card works either way. The yellow ring means a yellow flag. Names, lap and gaps are examples.</figcaption></template>
+
+<script>
+const QS = [
+ {
+  "id": "q1",
+  "t": "Calendar times",
+  "m": "cal",
+  "a": "The new Calendar lists every weekend and its sessions, with times in your own time, like the Android app.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Your time only."
+   },
+   {
+    "k": "b",
+    "l": "Your time, with the circuit's local time in small type."
+   },
+   {
+    "k": "c",
+    "l": "A switch between the two."
+   }
+  ],
+  "rec": "a",
+  "r": "F1 TV doesn't give the circuit's own time for future sessions, so B and C would need extra data."
+ },
+ {
+  "id": "q2",
+  "t": "Session reminders",
+  "a": "A notification a few minutes before a session starts, like the Android app. It stays off until you turn it on.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "One switch: every session, 15 minutes before (as on Android)."
+   },
+   {
+    "k": "b",
+    "l": "A, plus \"only qualifying, sprints and races\", and a choice of 5, 15, 30 or 60 minutes before."
+   },
+   {
+    "k": "c",
+    "l": "A bell on each session, so you pick them one by one."
+   }
+  ],
+  "rec": "b",
+  "r": "Android's two switches, plus a choice of how early. If the season is over when this is built, a test button checks that a reminder fires."
+ },
+ {
+  "id": "q3",
+  "t": "How you stand the phone",
+  "m": "stand",
+  "a": "The Kitchen Board and the Countdown Lamp are for the phone standing on a table. The iPhone can't tell us it is standing, so we need to know how you'd stand it. Please try it with your Duo.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Half-open like a book, stood up on the table, the big screen facing the room."
+   },
+   {
+    "k": "b",
+    "l": "Like a laptop, with the board on the upright half."
+   },
+   {
+    "k": "c",
+    "l": "Closed and propped up, using the outer screen."
+   }
+  ],
+  "rec": "a",
+  "r": "But go with what feels natural on your Duo. B and C change the layout, not the idea."
+ },
+ {
+  "id": "q4",
+  "t": "How the Kitchen Board starts",
+  "a": "Because the iPhone can't tell that the phone is standing, something has to start the board.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "A \"Kitchen Board\" button, on the video controls and in Race Weekend."
+   },
+   {
+    "k": "b",
+    "l": "It starts by itself when the phone sits still, half-open, for a few seconds."
+   },
+   {
+    "k": "c",
+    "l": "Both."
+   }
+  ],
+  "rec": "a",
+  "r": "Starting by itself is a guess that can go wrong, so it becomes a beta 7 experiment on the real Duo."
+ },
+ {
+  "id": "q5",
+  "t": "The Kitchen Board's clock",
+  "a": "The board can follow a video playing in the app. Or it can sit beside your TV, with no video, following F1's live timing. Live timing is ahead of TV, so the board has to wait a little to avoid spoilers.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Only with a video playing in the app."
+   },
+   {
+    "k": "b",
+    "l": "Only live timing, with a \"match my TV\" delay you adjust."
+   },
+   {
+    "k": "c",
+    "l": "Both: it follows the app's video, and without one it follows live timing held back to match your TV."
+   }
+  ],
+  "rec": "c",
+  "r": "It starts 30 seconds behind live, and you nudge it until it matches your TV."
+ },
+ {
+  "id": "q6",
+  "t": "The Kitchen Board's layout",
+  "m": "board",
+  "a": "Big type you can read across the room. On a yellow flag or safety car the screen turns yellow; on a red flag, red.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "One big board across both halves."
+   },
+   {
+    "k": "b",
+    "l": "The timing tower on the left half; the lap, the flag and your driver in huge type on the right."
+   },
+   {
+    "k": "c",
+    "l": "One half only; the other stays dark."
+   }
+  ],
+  "rec": "b",
+  "r": "Nothing crosses the fold, so no number is broken by the crease. On a flag, both halves change colour."
+ },
+ {
+  "id": "q7",
+  "t": "Countdown Lamp",
+  "m": "lamp",
+  "a": "Between races the standing phone shows the next session and a countdown. In the last five minutes, five red lights come on, one a minute, like a race start.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Next session (practice too), in the app only."
+   },
+   {
+    "k": "b",
+    "l": "Next session, plus the same countdown as a widget on your Lock Screen and in StandBy (the iPhone's clock while charging)."
+   },
+   {
+    "k": "c",
+    "l": "Next race only, in the app only."
+   }
+  ],
+  "rec": "b",
+  "r": "The widget comes almost free with the Dynamic Island work."
+ },
+ {
+  "t": "Race history back to 1981",
+  "a": "Then and Now (beta 5) and the Archive Atlas (beta 6) need to know every race held at each circuit, and which ones F1 TV has. F1 TV can't tell us that by itself: races change names (the Brazilian GP is now the São Paulo GP), and F1 TV has only some old races.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "F1 TV only. Match races by their name. Renamed races, and races F1 TV doesn't have, are missed."
+   },
+   {
+    "k": "b",
+    "l": "Use F1DB: a free, open record of every F1 race since 1950, kept by volunteers. We copy the part we need into the app when we build it, and credit it in About. The app never contacts anyone new."
+   },
+   {
+    "k": "c",
+    "l": "A list we write by hand, for the circuits on this year's calendar only."
+   }
+  ],
+  "rec": "b",
+  "r": "It is the only way to get \"every race since 1981\" right. It costs nothing and adds no new website. Its terms only ask for the credit line in About.",
+  "id": "q8"
+ },
+ {
+  "id": "q9",
+  "t": "Archive Atlas: picking a circuit",
+  "m": "atlas",
+  "a": "Pick a circuit, then see every race held there since 1981, and watch the ones F1 TV has.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "A list, grouped by country."
+   },
+   {
+    "k": "b",
+    "l": "A grid of track drawings, grouped by country, with search."
+   },
+   {
+    "k": "c",
+    "l": "A world map with pins. It uses Apple Maps, which loads from the internet."
+   }
+  ],
+  "rec": "b",
+  "r": "It looks like the rest of the app, needs no internet to draw, and shows each track's shape."
+ },
+ {
+  "id": "q10",
+  "t": "The recap after the flag",
+  "m": "recap",
+  "a": "When you close the phone after the chequered flag, the outer screen plays a one-minute recap: the podium, your driver's race, the fastest lap, who gained most, and the race's story in one line.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "It plays by itself, once per session, with no sound."
+   },
+   {
+    "k": "b",
+    "l": "A small \"Recap\" card. It plays only if you tap it."
+   },
+   {
+    "k": "c",
+    "l": "Off."
+   }
+  ],
+  "rec": "a",
+  "r": "Swipe to skip a card. It ends on the picture, which keeps playing."
+ },
+ {
+  "id": "q11",
+  "t": "Dynamic Island and Lock Screen",
+  "m": "island",
+  "a": "When you leave the app while watching, a small display shows the flag as a coloured ring, the lap and your driver's position. It only updates while the app is running, because the app has no server. We still have to check if the Duo has a Dynamic Island; the Lock Screen version works either way.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "It starts by itself, and a red flag or a safety car lights up your Lock Screen."
+   },
+   {
+    "k": "b",
+    "l": "It starts by itself, with no alerts."
+   },
+   {
+    "k": "c",
+    "l": "Only when you tap \"Show on Lock Screen\"."
+   }
+  ],
+  "rec": "a",
+  "r": "Those two are worth waking the screen for. It also gives you the lock-screen alerts promised in beta 4."
+ },
+ {
+  "id": "q12",
+  "t": "Two Android extras",
+  "a": "Two Android features aren't in yet. Driver of the Day: with 6 laps to go in a live Grand Prix, a note offers F1's vote page. \"Up next\": a row at the top of Race Weekend with the best things to watch now, each with its reason (\"In case you missed it\", \"Last year in Las Vegas\").",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Both, as on Android. The vote page opens in a sheet beside the race. It is F1's own website, new to the app."
+   },
+   {
+    "k": "b",
+    "l": "Only \"Up next\"."
+   },
+   {
+    "k": "c",
+    "l": "Only Driver of the Day."
+   },
+   {
+    "k": "d",
+    "l": "Neither."
+   }
+  ],
+  "rec": "a",
+  "r": "The app sends nothing to the vote page and reads nothing from it; it only opens it for you."
+ }
+];
+const KEY = "b6q";
+const WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen"];
+const state = {}; let db = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {} }
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function tally() {
+  const v = QS.map(q => state[q.id] || {});
+  document.getElementById("n-done").textContent = v.filter(x => x.s).length;
+  document.getElementById("n-agree").textContent = v.filter(x => x.s === "agree").length;
+  document.getElementById("n-other").textContent = v.filter(x => x.s === "other").length;
+}
+function mock(q) {
+  if (!q.m) return "";
+  const t = document.getElementById("m-" + q.m);
+  return t ? `<figure class="mock">${t.innerHTML}</figure>` : "";
+}
+function render() {
+  document.getElementById("n-all").textContent = QS.length;
+  document.getElementById("n-all1").textContent = WORDS[QS.length] || String(QS.length);
+  document.getElementById("list").innerHTML = QS.map((q, i) => {
+    const v = state[q.id] || {};
+    const rec = q.opts.find(o => o.k === q.rec);
+    const opts = q.opts.map(o => `<li class="${o.k === q.rec ? "is-rec" : ""}"><span class="k">${o.k.toUpperCase()}</span><span class="l">${esc(o.l)}</span>${o.k === q.rec ? '<span class="tag">Recommended</span>' : ""}</li>`).join("");
+    const buttons = q.opts.map(o => {
+      const val = o.k === q.rec ? "agree" : "other";
+      return `<button type="button" data-id="${q.id}" data-v="${val}" data-o="${o.k}" aria-pressed="${v.o === o.k}">${o.k.toUpperCase()}${o.k === q.rec ? " (recommended)" : ""}</button>`;
+    }).join("") + `<button type="button" data-id="${q.id}" data-v="other" data-o="" aria-pressed="${v.s === "other" && !v.o}">Something else</button>`;
+    return `<section class="q" data-s="${v.s || ""}" aria-labelledby="h-${q.id}">
+      <div class="qhead"><span class="num">${String(i + 1).padStart(2, "0")}</span><h2 id="h-${q.id}">${esc(q.t)}</h2></div>
+      <p class="ask">${esc(q.a)}</p>
+      ${mock(q)}
+      <ol class="opts" aria-label="Options">${opts}</ol>
+      <p class="rec"><b>Recommended: ${rec.k.toUpperCase()}.</b> ${esc(q.r)}</p>
+      <div class="seg" role="group" aria-label="Your answer to ${esc(q.t)}">${buttons}</div>
+      <label for="n-${q.id}">${v.s === "other" ? "What you'd like instead (or why)" : "Note (optional)"}</label>
+      <textarea id="n-${q.id}" data-id="${q.id}" placeholder="${v.s === "other" ? "Tell Claude what you'd prefer" : "Anything to add"}">${esc(v.n || "")}</textarea>
+    </section>`;
+  }).join("");
+  tally();
+}
+async function put(id) {
+  const v = state[id]; saveLocal(); tally();
+  if (!db) return;
+  try { await db.collection("answers").doc(id).set({ s: v.s || "", o: v.o || "", n: v.n || "", at: new Date().toISOString() }); document.getElementById("save").textContent = "Saved for Claude"; }
+  catch (e) { document.getElementById("save").textContent = "Couldn't save online; kept on this device"; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  const id = b.dataset.id; const cur = state[id] || {};
+  const same = cur.s === b.dataset.v && (cur.o || "") === b.dataset.o;
+  state[id] = { ...cur, s: same ? "" : b.dataset.v, o: same ? "" : b.dataset.o };
+  const y = window.scrollY; render(); window.scrollTo(0, y); put(id);
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const id = t.dataset.id; state[id] = { ...(state[id] || {}), n: t.value };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => put(id), 600);
+});
+loadLocal(); render();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) return;
+    document.getElementById("save").textContent = "Saved for Claude";
+    const snap = await db.collection("answers").get();
+    (snap.docs || snap).forEach(d => { const data = d.data ? d.data() : d; const id = d.id; if (QS.some(q => q.id === id)) state[id] = { s: data.s || "", o: data.o || "", n: data.n || "" }; });
+    const y = window.scrollY; saveLocal(); render(); window.scrollTo(0, y);
+  } catch (e) { db = null; }
+})();
+</script>

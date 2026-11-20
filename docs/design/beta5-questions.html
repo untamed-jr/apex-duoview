@@ -1,0 +1,388 @@
+<title>Beta 5 Decisions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one reading column of decision cards, a sticky tally on top; same family as the beta 3 test checklist. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4; --ok: #138a4b; --ok-bg: #e3f5ea; --alt: #b45309; --alt-bg: #fdf0dc;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --alt: #fbbf24; --alt-bg: #33270d; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { padding-top: 24px; display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+  border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar b { color: var(--fg); }
+.save { margin-left: auto; font-family: var(--f-mono); font-size: 12px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.q[data-s="agree"] { border-color: var(--ok); }
+.q[data-s="other"] { border-color: var(--alt); }
+.qhead { display: flex; gap: 10px; align-items: baseline; }
+.num { font-family: var(--f-mono); color: var(--accent); font-size: 13px; flex: none; }
+h2 { font-size: 19px; line-height: 1.25; }
+.ask { margin: 0; }
+.rec { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+.rec b { font-family: var(--f-display); letter-spacing: .02em; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"][data-v="agree"] { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="other"] { background: var(--alt-bg); border-color: var(--alt); color: var(--alt); font-weight: 600; }
+.seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+label { font-size: 13px; color: var(--muted); }
+textarea { font: inherit; width: 100%; box-sizing: border-box; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+.foot { color: var(--muted); font-size: 13px; }
+/* Added for beta 5 and 6: options, and mockups drawn in the app's own (always dark) colours. */
+.opts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.opts li { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.opts li.is-rec { border-color: var(--ok); }
+.opts .k { font-family: var(--f-mono); font-size: 13px; color: var(--accent); flex: none; }
+.opts .tag { font-size: 12px; font-weight: 600; color: var(--ok); white-space: nowrap; }
+.opts span.l { flex: 1; min-width: 0; }
+.mock { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mock .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.mock .cell { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mock .cell.narrow { flex: 0 1 180px; }
+.mock svg { display: block; width: 100%; height: auto; border-radius: 10px; box-shadow: 0 0 0 3px #050506, 0 0 0 4px #2c2c30; background: #0a0a0b; }
+.mock svg.plain { box-shadow: none; background: transparent; border-radius: 0; }
+.mock .cap { font-size: 12px; color: var(--muted); }
+.mock figcaption { font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · v1.0-beta.5 · Showpieces</div>
+    <h1><span id="n-all1">Eleven</span> decisions before beta 5 is built</h1>
+    <p class="lede">Mirror Lap, Strategy Lab, Then and Now and Prediction Pad. Each question has my recommendation. Tap the option you want, or "Something else" and say what you'd like instead. Your answers save here and Claude reads them. The full draft is docs/superpowers/specs/2026-11-20-beta5-showpieces-design.md.</p>
+  </header>
+  <div class="bar" role="status"><span><b id="n-done">0</b> of <b id="n-all">11</b> answered</span><span><b id="n-agree">0</b> agree</span><span><b id="n-other">0</b> something else</span><span class="save" id="save">Saved on this device only</span></div>
+  <main id="list" class="wrap" style="gap:14px"></main>
+  <p class="foot">Nothing in beta 5 is built until these are settled; beta 4 is being built first. The drawings are stand-ins in the app's colours, never F1's pictures. Question 7 is also on the beta 6 page: one answer covers both.</p>
+</div>
+
+<template id="m-gap"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option A: two onboards, the gap in a pill at the top of the hinge"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="12" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR · P3 · Lap 23</text><text x="508" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA · P4 · Lap 23</text><g><rect x="6" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="6" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M28.2 450 L222.0 315.0 L234.0 315.0 L427.8 450 Z" fill="#2b2e34"/><rect x="41.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="63.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="85.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="108.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="130.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="152.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M59.3 290.0 Q228.0 205.0 396.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="157.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="16" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="24" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="36" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text></g><g><rect x="502" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="502" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M524.2 450 L718.0 315.0 L730.0 315.0 L923.8 450 Z" fill="#2b2e34"/><rect x="537.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="559.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="581.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="604.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="626.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="648.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M555.3 290.0 Q724.0 205.0 892.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="653.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="512" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="520" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="532" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text></g><rect x="391.0" y="46.0" width="170" height="48" rx="24.0" fill="#1e1e21" stroke="#2a2a2e"/><text x="476" y="79.36" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+0.84 ▼</text></svg><span class="cap">A · pill at the top of the hinge</span></div><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option B: a coloured strip down the hinge, with the pill at its top"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="12" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR · P3 · Lap 23</text><text x="508" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA · P4 · Lap 23</text><g><rect x="6" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="6" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M28.2 450 L222.0 315.0 L234.0 315.0 L427.8 450 Z" fill="#2b2e34"/><rect x="41.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="63.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="85.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="108.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="130.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="152.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M59.3 290.0 Q228.0 205.0 396.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="157.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="16" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="24" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="36" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text></g><g><rect x="502" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="502" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M524.2 450 L718.0 315.0 L730.0 315.0 L923.8 450 Z" fill="#2b2e34"/><rect x="537.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="559.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="581.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="604.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="626.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="648.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M555.3 290.0 Q724.0 205.0 892.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="653.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="512" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="520" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="532" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text></g><defs><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4c8dff"/><stop offset=".55" stop-color="#ff9f0a"/><stop offset="1" stop-color="#ec0014"/></linearGradient></defs><rect x="466" y="110" width="20" height="520" rx="10" fill="#1e1e21"/><rect x="466" y="330" width="20" height="300" rx="10" fill="url(#gs)"/><rect x="391.0" y="46.0" width="170" height="48" rx="24.0" fill="#1e1e21" stroke="#2a2a2e"/><text x="476" y="79.36" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+0.84 ▼</text></svg><span class="cap">B · strip down the hinge, with the pill (recommended)</span></div><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option C: the gap under the right-hand picture, nothing on the hinge"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="12" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR · P3 · Lap 23</text><text x="508" y="182" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA · P4 · Lap 23</text><g><rect x="6" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="6" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M28.2 450 L222.0 315.0 L234.0 315.0 L427.8 450 Z" fill="#2b2e34"/><rect x="41.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="63.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="85.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="108.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="130.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="152.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M59.3 290.0 Q228.0 205.0 396.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="157.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="16" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="24" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="36" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text></g><g><rect x="502" y="200" width="444" height="250" rx="6" fill="#1b2230"/><rect x="502" y="315.0" width="444" height="135.0" fill="#16181c"/><path d="M524.2 450 L718.0 315.0 L730.0 315.0 L923.8 450 Z" fill="#2b2e34"/><rect x="537.5" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="559.7" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="581.9" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="604.1" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="626.3" y="395.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="648.5" y="395.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M555.3 290.0 Q724.0 205.0 892.7 290.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="653.0" y="400.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="512" y="210" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="520" y="217" width="5" height="18" rx="2" fill="#ff8000"/><text x="532" y="233" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text></g><text x="228" y="500" font-size="24" font-weight="600" fill="#9a9aa2" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Ahead</text><text x="724" y="500" font-size="30" font-weight="700" fill="#ff9f0a" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >+0.84 behind ▼</text></svg><span class="cap">C · under the pictures, hinge left empty</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. The strip turns amber, then red, as the gap closes.</figcaption></template>
+<template id="m-strategy"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option A: open flat, the race on the left half, Strategy Lab on the right half"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><text x="12" y="40" font-size="22" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Lap 23/71 · GREEN</text><g><rect x="6" y="60" width="444" height="250" rx="6" fill="#1b2230"/><path d="M6 235.0 Q228.0 172.5 450 215.0 L450 310 L6 310 Z" fill="#20252c"/><rect x="16" y="70" width="134" height="28" rx="14" fill="rgba(0,0,0,.55)"/><text x="28" y="90" font-size="16" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >World feed</text></g><g><rect x="6" y="318" width="444" height="250" rx="6" fill="#1b2230"/><rect x="6" y="433.0" width="444" height="135.0" fill="#16181c"/><path d="M28.2 568 L222.0 433.0 L234.0 433.0 L427.8 568 Z" fill="#2b2e34"/><rect x="41.5" y="513.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="63.7" y="513.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="85.9" y="513.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="108.1" y="513.0" width="11.1" height="7.5" fill="#ec0014"/><rect x="130.3" y="513.0" width="11.1" height="7.5" fill="#e9e9ec"/><rect x="152.5" y="513.0" width="11.1" height="7.5" fill="#ec0014"/><path d="M59.3 408.0 Q228.0 323.0 396.7 408.0" stroke="#0b0b0c" stroke-width="17.5" fill="none"/><rect x="157.0" y="518.0" width="142.1" height="50.0" rx="10" fill="#0d0d0f"/><rect x="16" y="328" width="85" height="32" rx="16" fill="rgba(0,0,0,.55)"/><rect x="24" y="335" width="5" height="18" rx="2" fill="#ff8000"/><text x="36" y="351" font-size="18" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text></g><text x="508" y="40" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Stints</text><text x="940" y="40" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Lap 23/71</text><rect x="737.2" y="56" width="202.8" height="404" fill="rgba(255,255,255,.04)"/><line x1="737.2" y1="56" x2="737.2" y2="460" stroke="#66666d" stroke-dasharray="4 4"/><text x="512" y="88" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >1</text><rect x="548" y="70" width="5" height="20" rx="2" fill="#27f4d2"/><text x="560" y="88" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><rect x="641.0" y="70" width="74.1" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><rect x="717.1" y="70" width="19.1" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="128" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2</text><rect x="548" y="110" width="5" height="20" rx="2" fill="#ff8000"/><text x="560" y="128" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><rect x="641.0" y="110" width="69.8" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><rect x="712.8" y="110" width="23.4" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="168" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >3</text><rect x="548" y="150" width="5" height="20" rx="2" fill="#27f4d2"/><text x="560" y="168" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><rect x="641.0" y="150" width="95.2" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><text x="512" y="208" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >4</text><rect x="548" y="190" width="5" height="20" rx="2" fill="#3671c6"/><text x="560" y="208" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >VER</text><rect x="641.0" y="190" width="57.2" height="20" rx="4" fill="#ec0014" opacity="0.9"/><rect x="700.2" y="190" width="36.0" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="248" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >5</text><rect x="548" y="230" width="5" height="20" rx="2" fill="#e8002d"/><text x="560" y="248" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >LEC</text><rect x="641.0" y="230" width="95.2" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><text x="512" y="288" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >6</text><rect x="548" y="270" width="5" height="20" rx="2" fill="#ff8000"/><text x="560" y="288" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >PIA</text><rect x="641.0" y="270" width="78.3" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><rect x="721.3" y="270" width="14.9" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="328" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >7</text><rect x="548" y="310" width="5" height="20" rx="2" fill="#229971"/><text x="560" y="328" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ALO</text><rect x="641.0" y="310" width="95.2" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="368" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >8</text><rect x="548" y="350" width="5" height="20" rx="2" fill="#0093cc"/><text x="560" y="368" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >GAS</text><rect x="641.0" y="350" width="65.6" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><rect x="708.6" y="350" width="27.6" height="20" rx="4" fill="#ffd60a" opacity="0.55"/><text x="512" y="408" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >9</text><rect x="548" y="390" width="5" height="20" rx="2" fill="#e8002d"/><text x="560" y="408" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM</text><rect x="641.0" y="390" width="48.7" height="20" rx="4" fill="#ec0014" opacity="0.9"/><rect x="691.7" y="390" width="44.5" height="20" rx="4" fill="#e9e9ec" opacity="0.9"/><text x="512" y="448" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >10</text><rect x="548" y="430" width="5" height="20" rx="2" fill="#6692ff"/><text x="560" y="448" font-size="23" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAD</text><rect x="641.0" y="430" width="95.2" height="20" rx="4" fill="#ffd60a" opacity="0.9"/><rect x="506" y="478" width="436" height="180" rx="12" fill="#151517" stroke="#2a2a2e"/><text x="524" y="520" font-size="32" font-weight="800" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Pit now? · NOR</text><text x="524" y="566" font-size="27" font-weight="600" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Out P7 · 1.4 s behind ALO</text><text x="524" y="606" font-size="25" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >In 1 lap P7 · 2 P6 · 3 P6</text><text x="524" y="642" font-size="22" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >estimate</text></svg><span class="cap">A · open flat: race left, Lab right (recommended)</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. Bars are tyre stints in the compound's colour (red soft, yellow medium, white hard); the grey area is the race still to come, kept hidden. Cars, stints and numbers are examples.</figcaption></template>
+<template id="m-then"><div class="row"><div class="cell"><svg viewBox="0 0 951 669" role="img" aria-label="Option A: today's race on the left, the classic race as a card on the right"><rect width="951" height="669" fill="#0a0a0b"/><rect x="456" y="0" width="40" height="669" fill="#111114"/><g><rect x="6" y="160" width="444" height="250" rx="6" fill="#1b2230"/><path d="M6 335.0 Q228.0 272.5 450 315.0 L450 410 L6 410 Z" fill="#20252c"/><rect x="16" y="170" width="134" height="28" rx="14" fill="rgba(0,0,0,.55)"/><text x="28" y="190" font-size="16" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >World feed</text></g><text x="12" y="140" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Now</text><text x="12" y="452" font-size="28" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >2026 · Lap 23/71</text><text x="508" y="140" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Then</text><rect x="502" y="160" width="443" height="420" rx="12" fill="#151517" stroke="#2a2a2e"/><text x="524" y="206" font-size="30" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >A classic race here</text><text x="524" y="244" font-size="24" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >its year and name</text><path d="M15 30 L70 15 L115 30 L118 70 L85 72 L80 95 L30 100 L12 70 Z" transform="translate(624 262) scale(1.8)" fill="none" stroke="#9a9aa2" stroke-width="2.78" stroke-linejoin="round"/><text x="524" y="498" font-size="24" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Circuit as it was then</text><rect x="609.0" y="515.0" width="230" height="50" rx="25.0" fill="#1e1e21" stroke="#2a2a2e"/><text x="724" y="549.36" font-size="26" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Show result</text><text x="724" y="622" font-size="24" font-weight="600" fill="#66666d" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >One race plays at a time</text></svg><span class="cap">A · the classic becomes a card (recommended)</span></div></div><figcaption>Drawn at the Duo simulator's inner screen, 951 × 669 pt, with the fold down the middle. The circuit drawing here is invented; the real one would come from the race history (question 7).</figcaption></template>
+<template id="m-pad"><div class="row"><div class="cell"><svg viewBox="0 0 669 951" role="img" aria-label="Laptop pose: the video on the upright half, the calls on the flat half" style="max-width:320px"><rect width="669" height="951" fill="#0a0a0b"/><rect x="0" y="456" width="669" height="40" fill="#111114"/><g><rect x="6" y="60" width="657" height="369" rx="6" fill="#1b2230"/><path d="M6 318.3 Q334.5 226.1 663 288.8 L663 429 L6 429 Z" fill="#20252c"/><rect x="16" y="70" width="134" height="28" rx="14" fill="rgba(0,0,0,.55)"/><text x="28" y="90" font-size="16" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >World feed</text></g><text x="12" y="446" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Formation lap · calls lock at lights out</text><text x="20" y="540" font-size="28" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Your calls</text><text x="649" y="540" font-size="18" font-weight="500" fill="#66666d" text-anchor="end" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Locks at lights out</text><text x="20" y="591" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Winner</text><rect x="220" y="562" width="86" height="44" rx="10" fill="#24342a" stroke="#30d158"/><rect x="230" y="574" width="5" height="20" rx="2" fill="#27f4d2"/><text x="242" y="591" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><text x="20" y="649" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Podium</text><rect x="220" y="620" width="86" height="44" rx="10" fill="#24342a" stroke="#30d158"/><rect x="230" y="632" width="5" height="20" rx="2" fill="#27f4d2"/><text x="242" y="649" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >ANT</text><rect x="316" y="620" width="86" height="44" rx="10" fill="#24342a" stroke="#30d158"/><rect x="326" y="632" width="5" height="20" rx="2" fill="#ff8000"/><text x="338" y="649" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >NOR</text><rect x="412" y="620" width="86" height="44" rx="10" fill="#24342a" stroke="#30d158"/><rect x="422" y="632" width="5" height="20" rx="2" fill="#27f4d2"/><text x="434" y="649" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >RUS</text><text x="20" y="707" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Fastest lap</text><rect x="220" y="678" width="86" height="44" rx="10" fill="#24342a" stroke="#30d158"/><rect x="230" y="690" width="5" height="20" rx="2" fill="#3671c6"/><text x="242" y="707" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >VER</text><text x="20" y="765" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Safety car?</text><rect x="220.0" y="736.0" width="84" height="44" rx="22.0" fill="#1e1e21" stroke="#2a2a2e"/><text x="262" y="764.84" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >Yes</text><rect x="314.0" y="736.0" width="84" height="44" rx="22.0" fill="#24342a" stroke="#2a2a2e"/><text x="356" y="764.84" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >No</text><text x="20" y="823" font-size="20" font-weight="600" fill="#9a9aa2" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >HAM finishes</text><rect x="220.0" y="794.0" width="84" height="44" rx="22.0" fill="#24342a" stroke="#2a2a2e"/><text x="262" y="822.84" font-size="19" font-weight="700" fill="#e9e9ec" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >P4</text><line x1="20" y1="854" x2="649" y2="854" stroke="#2a2a2e"/><text x="20" y="886" font-size="18" font-weight="600" fill="#66666d" text-anchor="start" font-family="-apple-system, Helvetica Neue, Arial, sans-serif" >During the race: Next to pit · Safety car in 10 laps?</text></svg><span class="cap">Laptop pose: video up, your calls below</span></div></div><figcaption>Drawn at the simulator's inner screen turned for laptop pose, 669 × 951 pt, hinge across the middle.</figcaption></template>
+
+<script>
+const QS = [
+ {
+  "id": "q1",
+  "t": "Mirror Lap: which two laps",
+  "a": "Mirror Lap puts two onboards side by side, one on each half of the open phone. It keeps them level on the track, so both cars reach every corner together.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Two cars racing each other right now."
+   },
+   {
+    "k": "b",
+    "l": "Any two laps you pick, such as both drivers' fastest laps, or one driver early and late in the race."
+   },
+   {
+    "k": "c",
+    "l": "Both. You choose each time."
+   }
+  ],
+  "rec": "c",
+  "r": "It is the same work inside the app. Two fastest laps side by side is the showpiece in qualifying."
+ },
+ {
+  "id": "q2",
+  "t": "Mirror Lap: which car shows the real moment",
+  "a": "To keep two cars level, one picture has to run a little behind the other, by the gap between them. The map and timing follow the picture that isn't moved.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "The car behind shows the real moment. The car ahead is replayed a moment late."
+   },
+   {
+    "k": "b",
+    "l": "The car ahead shows the real moment. The car behind is shown a moment early."
+   }
+  ],
+  "rec": "a",
+  "r": "Nothing then shows anything before it happens, so there are no spoilers. It also means Mirror Lap can work in a live race later."
+ },
+ {
+  "id": "q3",
+  "t": "Mirror Lap: where the gap shows",
+  "a": "The roadmap says \"gap on the hinge\". The hinge is the fold down the middle. We normally keep it empty, because the crease can make things hard to read.",
+  "m": "gap",
+  "opts": [
+   {
+    "k": "a",
+    "l": "A small pill at the top of the hinge, with the time (+0.84)."
+   },
+   {
+    "k": "b",
+    "l": "A thin coloured strip down the whole hinge (blue, then amber, then red as the gap closes), with the pill at its top."
+   },
+   {
+    "k": "c",
+    "l": "Under the pictures instead. Nothing on the hinge."
+   }
+  ],
+  "rec": "b",
+  "r": "It is the idea as you wrote it. We check on the real Duo in beta 7 that the crease doesn't spoil it. If it does, it becomes A."
+ },
+ {
+  "id": "q4",
+  "t": "Strategy Lab: where it goes",
+  "a": "Strategy Lab shows every car's tyres through the race, and answers \"what if they stop now?\". The roadmap puts it on the phone opened flat.",
+  "m": "strategy",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Opened flat: the race on the left half, the Lab on the right half."
+   },
+   {
+    "k": "b",
+    "l": "The Lab fills the screen, with a small picture in a corner."
+   },
+   {
+    "k": "c",
+    "l": "A floating panel you can open in any position, like the map."
+   }
+  ],
+  "rec": "a",
+  "r": "Half and half keeps the race big. On iPhones without a fold, the Lab is a floating panel (C)."
+ },
+ {
+  "id": "q5",
+  "t": "Strategy Lab: how much guessing",
+  "a": "Some things are facts from F1's timing: which tyres, how many laps, when a car stopped. Others are estimates the app works out, like how fast a car's tyres are wearing.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Facts only, plus \"Pit now?\"."
+   },
+   {
+    "k": "b",
+    "l": "Also each car's pace on its tyres, as a trend clearly marked \"estimate\"."
+   },
+   {
+    "k": "c",
+    "l": "Also a guess at the best lap to stop."
+   }
+  ],
+  "rec": "b",
+  "r": "A best lap to stop would need tyre data F1 doesn't send. It would be a guess dressed up as a fact."
+ },
+ {
+  "id": "q6",
+  "t": "\"Pit now?\": what it tells you",
+  "a": "Tap a car. The app already works out where it would come out if it stopped now (the pit circle does this today). The question is how far ahead to look.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Only now: \"Out P7, 1.4 s behind ALO\"."
+   },
+   {
+    "k": "b",
+    "l": "Now, and if it waits 1, 2 or 3 laps."
+   },
+   {
+    "k": "c",
+    "l": "B, plus what a stop under the safety car would cost."
+   }
+  ],
+  "rec": "b",
+  "r": "Under a safety car it says \"a stop now costs less\" without a number, because the app can't measure that well yet."
+ },
+ {
+  "t": "Race history back to 1981",
+  "a": "Then and Now (beta 5) and the Archive Atlas (beta 6) need to know every race held at each circuit, and which ones F1 TV has. F1 TV can't tell us that by itself: races change names (the Brazilian GP is now the São Paulo GP), and F1 TV has only some old races.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "F1 TV only. Match races by their name. Renamed races, and races F1 TV doesn't have, are missed."
+   },
+   {
+    "k": "b",
+    "l": "Use F1DB: a free, open record of every F1 race since 1950, kept by volunteers. We copy the part we need into the app when we build it, and credit it in About. The app never contacts anyone new."
+   },
+   {
+    "k": "c",
+    "l": "A list we write by hand, for the circuits on this year's calendar only."
+   }
+  ],
+  "rec": "b",
+  "r": "It is the only way to get \"every race since 1981\" right. It costs nothing and adds no new website. Its terms only ask for the credit line in About.",
+  "id": "q7"
+ },
+ {
+  "id": "q8",
+  "t": "Then and Now: lining up the two races",
+  "a": "Today's race plays on one half, a classic race at the same circuit on the other. Old videos have no timing, so the app can't follow their laps.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Both just play. You line them up yourself."
+   },
+   {
+    "k": "b",
+    "l": "Line up the starts: the first time, you mark lights out on the old race. After that, one tap starts both together."
+   },
+   {
+    "k": "c",
+    "l": "Keep both on the same lap, by jumping the old race forward or back every lap."
+   }
+  ],
+  "rec": "b",
+  "r": "The jumping in C is jarring. After the start, a small line says roughly which lap the old race is on."
+ },
+ {
+  "id": "q9",
+  "t": "If F1 TV plays only one video at a time",
+  "a": "We don't know yet if your F1 TV account allows two different videos at once. A short test on your Mac will tell us.",
+  "m": "then",
+  "opts": [
+   {
+    "k": "a",
+    "l": "The old race becomes a card: its year, its circuit drawing, and its result if you tap."
+   },
+   {
+    "k": "b",
+    "l": "The two take turns: one pauses while the other plays."
+   },
+   {
+    "k": "c",
+    "l": "Leave Then and Now out until it can play both."
+   }
+  ],
+  "rec": "a",
+  "r": "You still get then beside now, and it never stops your race."
+ },
+ {
+  "id": "q10",
+  "t": "Prediction Pad: which calls",
+  "a": "In laptop pose, before the start, you tap your calls. They lock at lights out. As the race plays, each one turns right or wrong.",
+  "m": "pad",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Five calls before the start: winner, podium, fastest lap, safety car yes or no, where your driver finishes."
+   },
+   {
+    "k": "b",
+    "l": "A, plus two quick calls during the race: who pits next, and a safety car in the next 10 laps."
+   },
+   {
+    "k": "c",
+    "l": "B, plus calls for qualifying (pole, who is knocked out)."
+   }
+  ],
+  "rec": "b",
+  "r": "For races and sprints. Qualifying can come later."
+ },
+ {
+  "id": "q11",
+  "t": "Prediction Pad: scores",
+  "a": "The roadmap says \"scored privately\". Nothing would ever leave your phone.",
+  "opts": [
+   {
+    "k": "a",
+    "l": "Points for each call, and a season total, on your phone only."
+   },
+   {
+    "k": "b",
+    "l": "A, plus a picture of your card that you can share."
+   },
+   {
+    "k": "c",
+    "l": "No points, just a tick or a cross."
+   }
+  ],
+  "rec": "a",
+  "r": "Simple, and private. Sharing can come after launch if you want it."
+ }
+];
+const KEY = "b5q";
+const WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen"];
+const state = {}; let db = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function loadLocal() { try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {} }
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function tally() {
+  const v = QS.map(q => state[q.id] || {});
+  document.getElementById("n-done").textContent = v.filter(x => x.s).length;
+  document.getElementById("n-agree").textContent = v.filter(x => x.s === "agree").length;
+  document.getElementById("n-other").textContent = v.filter(x => x.s === "other").length;
+}
+function mock(q) {
+  if (!q.m) return "";
+  const t = document.getElementById("m-" + q.m);
+  return t ? `<figure class="mock">${t.innerHTML}</figure>` : "";
+}
+function render() {
+  document.getElementById("n-all").textContent = QS.length;
+  document.getElementById("n-all1").textContent = WORDS[QS.length] || String(QS.length);
+  document.getElementById("list").innerHTML = QS.map((q, i) => {
+    const v = state[q.id] || {};
+    const rec = q.opts.find(o => o.k === q.rec);
+    const opts = q.opts.map(o => `<li class="${o.k === q.rec ? "is-rec" : ""}"><span class="k">${o.k.toUpperCase()}</span><span class="l">${esc(o.l)}</span>${o.k === q.rec ? '<span class="tag">Recommended</span>' : ""}</li>`).join("");
+    const buttons = q.opts.map(o => {
+      const val = o.k === q.rec ? "agree" : "other";
+      return `<button type="button" data-id="${q.id}" data-v="${val}" data-o="${o.k}" aria-pressed="${v.o === o.k}">${o.k.toUpperCase()}${o.k === q.rec ? " (recommended)" : ""}</button>`;
+    }).join("") + `<button type="button" data-id="${q.id}" data-v="other" data-o="" aria-pressed="${v.s === "other" && !v.o}">Something else</button>`;
+    return `<section class="q" data-s="${v.s || ""}" aria-labelledby="h-${q.id}">
+      <div class="qhead"><span class="num">${String(i + 1).padStart(2, "0")}</span><h2 id="h-${q.id}">${esc(q.t)}</h2></div>
+      <p class="ask">${esc(q.a)}</p>
+      ${mock(q)}
+      <ol class="opts" aria-label="Options">${opts}</ol>
+      <p class="rec"><b>Recommended: ${rec.k.toUpperCase()}.</b> ${esc(q.r)}</p>
+      <div class="seg" role="group" aria-label="Your answer to ${esc(q.t)}">${buttons}</div>
+      <label for="n-${q.id}">${v.s === "other" ? "What you'd like instead (or why)" : "Note (optional)"}</label>
+      <textarea id="n-${q.id}" data-id="${q.id}" placeholder="${v.s === "other" ? "Tell Claude what you'd prefer" : "Anything to add"}">${esc(v.n || "")}</textarea>
+    </section>`;
+  }).join("");
+  tally();
+}
+async function put(id) {
+  const v = state[id]; saveLocal(); tally();
+  if (!db) return;
+  try { await db.collection("answers").doc(id).set({ s: v.s || "", o: v.o || "", n: v.n || "", at: new Date().toISOString() }); document.getElementById("save").textContent = "Saved for Claude"; }
+  catch (e) { document.getElementById("save").textContent = "Couldn't save online; kept on this device"; }
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  const id = b.dataset.id; const cur = state[id] || {};
+  const same = cur.s === b.dataset.v && (cur.o || "") === b.dataset.o;
+  state[id] = { ...cur, s: same ? "" : b.dataset.v, o: same ? "" : b.dataset.o };
+  const y = window.scrollY; render(); window.scrollTo(0, y); put(id);
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const t = e.target; if (t.tagName !== "TEXTAREA") return;
+  const id = t.dataset.id; state[id] = { ...(state[id] || {}), n: t.value };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => put(id), 600);
+});
+loadLocal(); render();
+(async () => {
+  try {
+    db = await window.claude?.use?.("db");
+    if (!db) return;
+    document.getElementById("save").textContent = "Saved for Claude";
+    const snap = await db.collection("answers").get();
+    (snap.docs || snap).forEach(d => { const data = d.data ? d.data() : d; const id = d.id; if (QS.some(q => q.id === id)) state[id] = { s: data.s || "", o: data.o || "", n: data.n || "" }; });
+    const y = window.scrollY; saveLocal(); render(); window.scrollTo(0, y);
+  } catch (e) { db = null; }
+})();
+</script>
