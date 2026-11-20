@@ -130,7 +130,7 @@ task's work, and live keeps the single-feed fallback it has now.
   - no change to `TimingArchive.topics(for:)`, `LiveFeed`, `LayoutEngine.optionIDs` or anything else the app reads;
   - every existing test passes unmodified;
   - the build 16 harness's pure app files (see Checking app code) still typecheck against the branch.
-- **Tasks 8–14 merge only after the race (Sun 22 Nov).** They change `DuoApp/`, `Config/`, `project.yml`, `DuoApp/Info.plist`, the README's app claims, the app's loading or its layout options. They may be written and reviewed on branches before then.
+- **Tasks 8–14 (and 11b) may merge to `main` now (owner, 2026-11-20).** The phone isn't rebuilt from `main` until after the race, so they can't touch the race build. They change `DuoApp/`, `Config/`, `project.yml`, `DuoApp/Info.plist`, the README's app claims, the app's loading or its layout options. They may be written and reviewed on branches before then.
 - If a hotfix to build 16 is needed during the weekend, it goes first. Any beta.4 branch is then rebased onto it.
 
 **Platform and language**
