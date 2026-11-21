@@ -118,7 +118,7 @@ struct RivalsStrip: View {
                             .textCase(.uppercase)
                             .foregroundStyle(Theme.textTertiary)
                     }
-                    Text(TranscriptState.rowText(last.transcript) ?? last.label ?? last.tla)
+                    Text(TranscriptState.rowText(last.transcript) ?? last.tla)
                         .font(.footnote)
                         .foregroundStyle(playing ? Theme.textPrimary : Theme.textSecondary)
                         .lineLimit(4)

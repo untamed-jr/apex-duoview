@@ -209,10 +209,10 @@ struct RadioScannerView: View {
         }
     }
 
-    /// The words, or "Transcribing…" / "(no words recognised)"; the lap label when there are none
-    /// yet (Transcripts off, or not reached).
+    /// The words, or "Transcribing…" / "(no words recognised)"; the driver's code when there are
+    /// none yet (Transcripts off, or not reached), never the lap label again under its header.
     private func words(_ row: RadioRowModel) -> String {
-        TranscriptState.rowText(row.transcript) ?? row.label ?? row.tla
+        TranscriptState.rowText(row.transcript) ?? row.tla
     }
 
     /// ■ while one of this driver's clips plays; ▶ plays the one waiting, else the newest.
