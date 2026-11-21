@@ -60,6 +60,11 @@ final class CompanionController {
     @ObservationIgnored private var sessionID: String?
     /// The multiview's closed layout shows: cards are made.
     @ObservationIgnored private(set) var cardsShown = false
+    /// The fold's postures, to tell an unfold through unknown readings.
+    @ObservationIgnored private var unfold = UnfoldWatch()
+    /// The top card, kept while the fold may be opening after the closed layout went (the window
+    /// reached the wide screen before the posture was known); any known posture drops it.
+    @ObservationIgnored private var unfoldCard: CompanionEvent?
     @ObservationIgnored private var hapticListeners: [UUID: AsyncStream<CompanionEvent>.Continuation] = [:]
     /// One haptic at most every 2 s, the strongest waiting (`now` in seconds, wall clock).
     @ObservationIgnored private var hapticSchedule = HapticSchedule()
@@ -100,11 +105,16 @@ final class CompanionController {
         forget()
     }
 
-    /// The multiview's closed layout came on screen or went. Gone, its cards go too.
+    /// The multiview's closed layout came on screen or went. Gone, its cards go too; while the
+    /// fold may be opening (closed, then an unknown reading), the top card is kept aside for the
+    /// open posture's jump.
     func setCardsShown(_ shown: Bool) {
         guard cardsShown != shown else { return }
         cardsShown = shown
-        if !shown { setStack { $0.removeAll() } }
+        if !shown {
+            if unfold.mayBeOpening, let top = stack.top { unfoldCard = top }
+            setStack { $0.removeAll() }
+        }
     }
 
     // MARK: Cards
@@ -114,12 +124,22 @@ final class CompanionController {
         setStack { $0.dismissTop() }
     }
 
-    /// The fold moved. Closed → open with a card showing jumps to it. Call it before the closed
-    /// layout is reported gone (`setCardsShown(false)`), which clears the cards.
+    /// The fold moved. Closed → open with a card showing jumps to it, also when unknown readings
+    /// come between (`UnfoldWatch`: the last posture that wasn't unknown was closed). Call it
+    /// before the closed layout is reported gone (`setCardsShown(false)`), which clears the cards.
     func postureChanged(from old: Posture, to new: Posture) {
-        // Only a real opening: an unknown reading is not an unfold, and must not move the video.
-        guard old == .closed, [.flat, .book, .laptop].contains(new), let card = stack.top else { return }
+        // Only a real opening: an unknown reading on its own is not an unfold, and must not move
+        // the video.
+        let unfolded = unfold.change(from: Self.corePosture(old), to: Self.corePosture(new))
+        let held = unfoldCard
+        if !unfold.mayBeOpening { unfoldCard = nil }
+        guard unfolded, let card = stack.top ?? held else { return }
         jump(to: card)
+    }
+
+    /// The app's posture as DuoCore's (the same cases).
+    private static func corePosture(_ posture: Posture) -> Multiview.Posture {
+        Multiview.Posture(rawValue: posture.rawValue) ?? .unknown
     }
 
     /// A tap on the top card: the jump (a phone without a fold, or the Duo while closed).
@@ -244,6 +264,7 @@ final class CompanionController {
     /// No session: no cards, no chip, no haptic waiting, a fresh detector.
     private func forgetSession() {
         hapticSchedule.reset()
+        unfoldCard = nil
         guard sessionID != nil || !stack.cards.isEmpty || backChip != nil else { return }
         sessionID = nil
         detector = EventDetector()
