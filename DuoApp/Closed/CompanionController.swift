@@ -227,6 +227,7 @@ final class CompanionController {
             detector = EventDetector()
             hapticSchedule.reset()
             setStack { $0.removeAll() }
+            unfoldCard = nil
             backChip = nil
         }
         let mine = timing.favouriteDriverName.flatMap { Tower.carNumber(forDriver: $0, in: session) }
