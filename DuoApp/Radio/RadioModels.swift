@@ -134,10 +134,13 @@ enum RadioModels {
     }
 
     /// "My driver" with no driver chosen lists every clip. A remembered driver this session
-    /// doesn't have (`drivers`, the session's racing numbers, when known) lists every clip too.
+    /// doesn't have (`drivers`, the session's racing numbers, when known: nil or empty is not
+    /// known) lists every clip too.
     static func effective(_ filter: RadioFilter, favourite: String?, drivers: [String]? = nil) -> RadioFilter {
         if case .myDriver = filter, favourite == nil { return .all }
-        if case .driver(let number) = filter, let drivers, !drivers.contains(number) { return .all }
+        if case .driver(let number) = filter, let drivers, !drivers.isEmpty, !drivers.contains(number) {
+            return .all
+        }
         return filter
     }
 
