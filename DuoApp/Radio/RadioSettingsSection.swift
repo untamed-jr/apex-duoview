@@ -1,9 +1,10 @@
 import Multiview
 import SwiftUI
 
-/// Settings › Team radio: "Transcripts" (on) and "Play radio as it happens" (on; the Radio Scanner
+/// Settings › Team radio: "Transcripts" (on: clips are turned into text on the phone while a radio
+/// view shows; off: none made, none shown) and "Play radio as it happens" (on; the Radio Scanner
 /// and Rivals only). The values live in `CompanionSettings`, which isn't observed, so the switches
-/// keep their own copy.
+/// keep their own copy; the radio reads "Transcripts" on every tick.
 struct RadioSettingsSection: View {
     let settings: CompanionSettings
 
@@ -36,7 +37,8 @@ struct RadioSettingsSection: View {
             Text("Team radio").sectionLabel()
         } footer: {
             Text("Clips show only once the picture reaches them. Transcripts are made on this iPhone; the "
-                + "audio is never sent anywhere. Play radio as it happens is for the Radio Scanner and Rivals.")
+                + "audio is never sent anywhere. The first time, iOS may download its English speech model "
+                + "from Apple. Play radio as it happens is for the Radio Scanner and Rivals.")
         }
     }
 }

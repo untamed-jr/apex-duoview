@@ -30,7 +30,9 @@ struct RadioButton: View {
 /// The Radio panel's content (spec: "Team radio by lap"): the chips (All · My driver · a driver),
 /// then the clips oldest at the top, newest at the bottom, under a small header per lap; the
 /// list follows new clips. A tap plays a clip while the feeds go quiet; a tap again stops it.
-/// Everything comes from `RadioController` at picture time.
+/// Rows carry their transcripts; while transcripts can't run, a line under the list says why
+/// ("Getting the speech model ready…" and the like). Everything comes from `RadioController` at
+/// picture time.
 struct RadioPanelContent: View {
     let radio: RadioController
 
@@ -40,6 +42,14 @@ struct RadioPanelContent: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
             RadioList(radio: radio)
+            if let note = radio.transcriptNote {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
             if let notice = radio.notice {
                 Text(notice)
                     .font(.caption)

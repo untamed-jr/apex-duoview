@@ -33,6 +33,18 @@ protocol RadioPlayback: AnyObject {
     var isPlaying: Bool { get }
 }
 
+/// How one clip's transcription ended, as the controller hears it.
+enum TranscriptOutcome: Sendable, Equatable {
+    case text(String)
+    /// The download or the transcriber failed.
+    case failed
+    /// Not done in 45 s.
+    case timedOut
+    case cancelled
+    case permissionDenied
+    case unavailable
+}
+
 /// A driver for the Radio panel's chips.
 struct RadioDriver: Equatable, Sendable, Identifiable {
     var number: String
@@ -57,6 +69,21 @@ struct RadioDriver: Equatable, Sendable, Identifiable {
 ///   the feeds' speed while the feeds' volume is 0. Every way a clip ends (its end, `stop()`, a
 ///   failure, a rewind past it, a new session, another host, `detach()`) goes through `finish`,
 ///   which puts the volume back to 1.
+/// - Transcripts (build 18), on the phone only, while a radio view shows (the panel, or one
+///   named in `setSurface`) and Settings' "Transcripts" is on:
+///   - the session's kept transcripts (`TranscriptStore`) seed `TranscriptionQueue(results:)`
+///     before the first clip is handed out, and each new one is saved (the saves in order);
+///   - `prepare()` until it's `.ready`; its line ("Getting the speech model ready…" and the
+///     like) is `transcriptNote`, shown whatever the clips, so it never hints that radio is
+///     coming;
+///   - then `next(from:at:now:)` at the cut, `now` the monotonic clock in ms: one clip at a time,
+///     downloaded if needed, transcribed in a race with 45 s (`timedOut`, not `failed`); a
+///     transcriber error is `failed(path:at:)`;
+///   - a radio view closing, Transcripts switched off, a new session or the host going is
+///     `cancelled(path:)`; when `next` replaces the running job, the old task is cancelled; a
+///     cancelled task's late report is dropped (a token, as for playing);
+///   - rows read transcripts only through the queue's gated accessors, so text shows only once
+///     its clip does. With Transcripts off, rows show none.
 /// - Never logs; the token only goes to `RadioFetch`.
 @MainActor
 @Observable
@@ -90,6 +117,10 @@ final class RadioController {
     private(set) var favourite: String?
     /// The session's drivers, by code, for the chips.
     private(set) var drivers: [RadioDriver] = []
+    /// The Radio panel's line about transcripts ("Getting the speech model ready…", "Transcripts
+    /// aren't available on this iPhone — clips still play", "Allow speech recognition in Settings
+    /// to see transcripts"); nil while they work, or with no radio view or Transcripts off.
+    private(set) var transcriptNote: String?
 
     @ObservationIgnored let settings: CompanionSettings
     @ObservationIgnored private let timing: TimingController
@@ -109,9 +140,27 @@ final class RadioController {
     @ObservationIgnored private var listeners: [UUID: AsyncStream<RadioClip>.Continuation] = [:]
     /// The session the rows are for (its key and folder).
     @ObservationIgnored private var sessionID: String?
-    /// Transcripts arrive with build 18; until then the queue is empty and rows read it only at
-    /// the cut.
+    /// What to transcribe next and what came of it. Rows read it only at the cut.
     @ObservationIgnored private var queue = TranscriptionQueue()
+    @ObservationIgnored private let transcriber: any RadioTranscribing
+    /// The monotonic clock in ms (the queue's `now`; never picture time).
+    @ObservationIgnored private let clock: @MainActor () -> Int64
+    /// How long one clip may take (`TranscriptionQueue.timeoutMs`).
+    @ObservationIgnored private let transcribeTimeout: Duration
+    /// Radio views on screen besides the panel, by name.
+    @ObservationIgnored private var surfaces: Set<String> = []
+    /// What the transcriber last said; nil until it's been asked.
+    @ObservationIgnored private var readiness: TranscriberReadiness?
+    @ObservationIgnored private var preparing = false
+    @ObservationIgnored private var lastPrepare: Int64?
+    @ObservationIgnored private var transcribeTask: Task<Void, Never>?
+    /// Bumped whenever a transcription starts or is dropped: a late report is ignored.
+    @ObservationIgnored private var transcribeToken = 0
+    /// The session's kept transcripts; nil with no cache folder.
+    @ObservationIgnored private var store: TranscriptStore?
+    /// The kept transcripts are in the queue: clips may be handed out.
+    @ObservationIgnored private var storeLoaded = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var playTask: Task<Void, Never>?
     /// Bumped by every play and finish: a late download or a late end for an older clip is dropped.
     @ObservationIgnored private var playToken = 0
@@ -120,19 +169,30 @@ final class RadioController {
 
     init(settings: CompanionSettings, timing: TimingController, http: any HTTPClient,
          token: @escaping @Sendable () async -> String?,
-         audio: (any RadioPlayback)? = nil, cacheBase: URL? = RadioFetch.defaultBase) {
+         audio: (any RadioPlayback)? = nil, cacheBase: URL? = RadioFetch.defaultBase,
+         transcriber: (any RadioTranscribing)? = nil, clock: (@MainActor () -> Int64)? = nil,
+         transcribeTimeout: Duration = .milliseconds(TranscriptionQueue.timeoutMs)) {
         self.settings = settings
         self.timing = timing
         self.http = http
         self.token = token
         self.audio = audio ?? Self.defaultAudio()
         self.cacheBase = cacheBase
+        self.transcriber = transcriber ?? Self.defaultTranscriber()
+        self.clock = clock ?? { RadioController.uptimeMs() }
+        self.transcribeTimeout = transcribeTimeout
         filter = settings.radioFilter
+    }
+
+    /// System uptime in ms: monotonic, and it runs while the picture is paused.
+    static func uptimeMs() -> Int64 {
+        Int64(ProcessInfo.processInfo.systemUptime * 1000)
     }
 
     isolated deinit {
         tickTask?.cancel()
         playTask?.cancel()
+        transcribeTask?.cancel()
         for continuation in listeners.values { continuation.finish() }
     }
 
@@ -176,11 +236,21 @@ final class RadioController {
     func togglePanel() {
         panelShown.toggle()
         if !panelShown, notice != nil { notice = nil }
+        driveTranscription()
     }
 
     func hidePanel() {
         if panelShown { panelShown = false }
         if notice != nil { notice = nil }
+        driveTranscription()
+    }
+
+    /// A radio view besides the panel came on screen or went (the closed phone's pages and the
+    /// book's Radio, as they arrive). Transcription runs only while one of them, or the panel,
+    /// shows.
+    func setSurface(_ name: String, shown: Bool) {
+        if shown { surfaces.insert(name) } else { surfaces.remove(name) }
+        driveTranscription()
     }
 
     // MARK: Listening
@@ -318,6 +388,191 @@ final class RadioController {
         return nil
     }
 
+    // MARK: Transcripts
+
+    /// How often the transcriber is asked again while it isn't ready.
+    static let prepareEveryMs: Int64 = 2_000
+
+    /// One step: stops transcribing when no radio view shows (or Transcripts is off, or there is
+    /// no session or host); else asks the transcriber until it's ready, then hands it the next
+    /// clip. On every tick, and whenever a view, a result or the readiness changes.
+    private func driveTranscription() {
+        guard let session = timing.loadedSession, host != nil, sessionID != nil, settings.transcripts,
+              panelShown || !surfaces.isEmpty
+        else {
+            stopTranscribing()
+            if transcriptNote != nil { transcriptNote = nil }
+            return
+        }
+        let note = readiness.flatMap { TranscriptState.line(for: $0) }
+        if transcriptNote != note { transcriptNote = note }
+        guard readiness == .ready else {
+            prepareIfDue()
+            return
+        }
+        guard storeLoaded else { return }
+        // The cut: picture time, or nil only for the whole race. No picture time: nothing is due.
+        let cut: UTCms?
+        if timing.showWholeRace {
+            cut = nil
+        } else if let pictureTime = timing.pictureTime {
+            cut = pictureTime
+        } else {
+            return
+        }
+        let wasRunning = queue.transcribing
+        let clip = queue.next(from: session.radio.all, at: cut, now: clock())
+        // `next` skipped the running clip (its 45 s are up): that task goes, its report with it.
+        if wasRunning != nil, queue.transcribing != wasRunning || clip != nil { dropTask() }
+        if let clip { startTranscribing(clip, session: session) }
+    }
+
+    private func prepareIfDue() {
+        let now = clock()
+        guard !preparing, lastPrepare.map({ now - $0 >= Self.prepareEveryMs }) ?? true else { return }
+        preparing = true
+        lastPrepare = now
+        let transcriber = transcriber
+        Task { [weak self] in
+            let state = await transcriber.prepare()
+            guard let self else { return }
+            self.preparing = false
+            self.readiness = state
+            self.driveTranscription()
+        }
+    }
+
+    /// Downloads the clip if it isn't cached, then transcribes it against the 45 s.
+    private func startTranscribing(_ clip: RadioClip, session: LoadedSession) {
+        dropTask()
+        let mine = transcribeToken
+        let path = clip.path
+        let key = session.info.key.map { String($0) } ?? session.info.path
+        guard let base = cacheBase, !key.isEmpty,
+              let url = RadioClips.audioURL(sessionPath: session.info.path, clipPath: path)
+        else {
+            queue.failed(path: path, at: clock())
+            return
+        }
+        let file = RadioFetch.cacheURL(base: base, sessionKey: key, clipPath: path)
+        let hints = TranscriptState.hints(drivers: session.drivers)
+        let http = http, token = token, transcriber = transcriber, timeout = transcribeTimeout
+        let report: @Sendable @MainActor (TranscriptOutcome) -> Void = { [weak self] outcome in
+            self?.transcribed(path: path, outcome: outcome, token: mine)
+        }
+        transcribeTask = Task {
+            await RadioController.transcribe(url, file: file, hints: hints, http: http, token: token,
+                                             transcriber: transcriber, timeout: timeout, report: report)
+        }
+    }
+
+    private func transcribed(path: String, outcome: TranscriptOutcome, token mine: Int) {
+        // Cancelled, replaced or skipped meanwhile: dropped.
+        guard transcribeToken == mine, queue.transcribing == path else { return }
+        transcribeTask = nil
+        transcribeToken &+= 1
+        switch outcome {
+        case .text(let words):
+            queue.finished(path: path, result: words)
+            saveTranscripts()
+        case .failed, .unavailable:
+            // An engine that went away mid-session counts as a failure (three wait 2 minutes),
+            // so it can't spin.
+            queue.failed(path: path, at: clock())
+        case .timedOut:
+            queue.timedOut(path: path)
+        case .cancelled:
+            queue.cancelled(path: path)
+        case .permissionDenied:
+            // Not the clip's fault: it comes back once speech recognition is allowed.
+            queue.cancelled(path: path)
+            readiness = .permissionDenied
+        }
+        if let session = timing.loadedSession { refreshRows(session) }
+        driveTranscription()
+    }
+
+    /// The running clip stops without counting against it (`cancelled`), and its task goes.
+    private func stopTranscribing() {
+        if let path = queue.transcribing { queue.cancelled(path: path) }
+        dropTask()
+    }
+
+    /// Cancels the transcription task; whatever it reports later is dropped.
+    private func dropTask() {
+        transcribeTask?.cancel()
+        transcribeTask = nil
+        transcribeToken &+= 1
+    }
+
+    /// The session's kept transcripts, read off the main actor; until they are in the queue, no
+    /// clip is handed out.
+    private func loadTranscripts(for session: LoadedSession, id: String) {
+        let key = session.info.key.map { String($0) } ?? session.info.path
+        queue = TranscriptionQueue()
+        store = cacheBase.flatMap { key.isEmpty ? nil : TranscriptStore(base: $0, sessionKey: key) }
+        storeLoaded = store == nil
+        guard let store else { return }
+        Task { [weak self] in
+            let kept = await RadioController.readTranscripts(store)
+            guard let self, self.sessionID == id, self.store == store, !self.storeLoaded else { return }
+            // Nothing was handed out while loading, so the queue is still empty.
+            self.queue = TranscriptionQueue(results: kept)
+            self.storeLoaded = true
+            if let session = self.timing.loadedSession { self.refreshRows(session) }
+            self.driveTranscription()
+        }
+    }
+
+    /// Saves every transcript so far, after the save before it (an older one never lands last).
+    private func saveTranscripts() {
+        guard let store else { return }
+        let snapshot = queue.results
+        let previous = saveTask
+        saveTask = Task.detached(priority: .utility) {
+            await previous?.value
+            store.save(snapshot)
+        }
+    }
+
+    @concurrent
+    nonisolated static func readTranscripts(_ store: TranscriptStore) async -> [String: String] {
+        store.load()
+    }
+
+    /// Downloads the clip if needed and transcribes it, racing `timeout`. `report` hears the first
+    /// to finish at once, on the main actor, before the loser has wound down (a transcriber slow to
+    /// stop can't hold up the skip). Off the main actor.
+    @concurrent
+    nonisolated static func transcribe(_ url: URL, file: URL, hints: [String], http: any HTTPClient,
+                                       token: @escaping @Sendable () async -> String?,
+                                       transcriber: any RadioTranscribing, timeout: Duration,
+                                       report: @escaping @Sendable @MainActor (TranscriptOutcome) -> Void) async {
+        await withTaskGroup(of: TranscriptOutcome.self) { group in
+            group.addTask {
+                if await RadioController.load(url, to: file, http: http, token: token) != nil { return .failed }
+                do {
+                    return .text(try await transcriber.transcribe(fileURL: file, hints: hints))
+                } catch let error as TranscriberError {
+                    return error == .permissionDenied ? .permissionDenied : .unavailable
+                } catch {
+                    return Task.isCancelled ? .cancelled : .failed
+                }
+            }
+            group.addTask {
+                do {
+                    try await Task.sleep(for: timeout)
+                    return .timedOut
+                } catch {
+                    return .cancelled
+                }
+            }
+            let first = await group.next() ?? .cancelled
+            await report(first)
+            group.cancelAll()
+        }
+    }
+
     // MARK: The tick
 
     private func startTicking() {
@@ -343,10 +598,11 @@ final class RadioController {
         let id = "\(session.info.key.map { String($0) } ?? "")|\(session.info.path)"
         if id != sessionID {
             finish()
+            stopTranscribing()
             sessionID = id
             detector = EventDetector()
             flashes = [:]
-            queue = TranscriptionQueue()
+            loadTranscripts(for: session, id: id)
             let list = session.drivers.values
                 .map { RadioDriver(number: $0.number, tla: $0.tla.isEmpty ? $0.number : $0.tla, teamColour: $0.teamColour) }
                 .sorted { ($0.tla, $0.number) < ($1.tla, $1.number) }
@@ -388,25 +644,39 @@ final class RadioController {
         if playing != nil, audioStarted, !audio.isPlaying { finish() }
         if playing != nil { audio.setRate(Float(host.playbackRate)) }
 
+        driveTranscription()
+        refreshRows(session)
+    }
+
+    /// The rows at the cut, from the clips, the flashes and the queue (no transcripts with
+    /// Transcripts off).
+    private func refreshRows(_ session: LoadedSession) {
+        let pictureTime = timing.pictureTime
+        let whole = timing.showWholeRace
         let visible = RadioModels.visible(session.radio, pictureTime: pictureTime, wholeRace: whole)
         let cut = RadioModels.cut(pictureTime: pictureTime, wholeRace: whole)
         let new = Set(flashes.keys)
-        let every = RadioModels.rows(clips: visible, session: session, queue: queue, at: cut, new: new)
+        let texts = settings.transcripts ? queue : TranscriptionQueue()
+        let every = RadioModels.rows(clips: visible, session: session, queue: texts, at: cut, new: new)
         if allRows != every { allRows = every }
-        let kept = RadioModels.filtered(visible, filter: filter, favourite: mine)
+        let kept = RadioModels.filtered(visible, filter: filter, favourite: favourite)
         let shown = kept.count == visible.count
             ? every
-            : RadioModels.rows(clips: kept, session: session, queue: queue, at: cut, new: new)
+            : RadioModels.rows(clips: kept, session: session, queue: texts, at: cut, new: new)
         if rows != shown { rows = shown }
     }
 
-    /// No session (or a new host): nothing playing, nothing listed.
+    /// No session (or a new host): nothing playing, nothing listed, nothing transcribed.
     private func forgetSession() {
         if playing != nil || playTask != nil { finish() }
+        stopTranscribing()
         sessionID = nil
         detector = EventDetector()
         flashes = [:]
         queue = TranscriptionQueue()
+        store = nil
+        storeLoaded = false
+        if transcriptNote != nil { transcriptNote = nil }
         if !rows.isEmpty { rows = [] }
         if !allRows.isEmpty { allRows = [] }
         if favourite != nil { favourite = nil }

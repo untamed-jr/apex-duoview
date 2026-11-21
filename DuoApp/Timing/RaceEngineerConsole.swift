@@ -83,7 +83,7 @@ private struct ConsoleRadio: View {
                         .padding(.leading, 6)
                 } else {
                     ForEach(clips) { row in
-                        RadioRow(row: row, playing: radio.playing == row.path, showsLabel: true) {
+                        RadioRow(row: row, playing: radio.playing == row.path, showsLabel: true, showsTranscript: false) {
                             if radio.playing == row.path {
                                 radio.stop()
                             } else {

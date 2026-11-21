@@ -55,6 +55,56 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 18 — team radio transcripts
+
+Not on the phone yet. Checked on a computer only (syntax of every changed file, and the
+transcripts' logic and the radio controller against the São Paulo race data with a stand-in
+transcriber); the first real compile is the owner's Mac build.
+
+- **Transcripts on the phone.** Each clip is turned into text by iOS's own speech recognition,
+  on the phone only: never a server, never the microphone (the app reads the clip files). Up to
+  two lines show under the clip, in quotes; "Transcribing…" while it's being done; "(no words
+  recognised)" when nothing was. Only once the picture has reached the clip: transcription may
+  run up to 2 minutes ahead so the text is ready, but it never shows early.
+- **One clip at a time, and only while the Radio panel is open** with Settings › Team radio ›
+  "Transcripts" on: nearest the picture first; a clip not done in 45 s is skipped; three failures
+  in a row wait 2 minutes. Closing the panel stops the clip being transcribed (it is picked up
+  again next time). With "Transcripts" off, none are made and none are shown.
+- **Kept per session** beside the clips (`transcripts.json` in Caches, deleted with them after 7
+  days), so a replay isn't transcribed twice.
+- **The engine:** `SpeechTranscriber` (British English, else American), its model downloaded by
+  iOS if missing; if it isn't available, `DictationTranscriber`; then `SFSpeechRecognizer` only
+  where it runs on the phone. It leans toward the session's driver names, teams and common radio
+  words ("box box", "copy", "lift and coast", …).
+- **The panel's line** while transcripts can't run: "Getting the speech model ready…",
+  "Transcripts aren't available on this iPhone — clips still play", or "Allow speech recognition
+  in Settings to see transcripts". Clips play either way.
+- **Speech recognition reason** in Info.plist: "Team radio clips are turned into text on this
+  iPhone. The app never listens to you."
+- Race Engineer's spot keeps its three clips without their words (no room).
+- Settings › Debug › "Transcribe a test clip" now goes through the same transcriber, and also
+  shows the engine it picked.
+- README: the Privacy section says how clips become text, and that iOS may download its speech
+  model the first time.
+- Version: 1.0-beta.4 (build 18).
+
+### Untested — check later (build 18)
+
+- The zero-warnings build (`xcodegen generate` first: three new files in `DuoApp/Radio`). The
+  Speech calls are checked against Apple's documentation, not compiled; Swift 6 isolation in
+  `Transcriber` (the `@concurrent` engine functions, the `SFSpeechRecognizer` callbacks) is
+  checked by eye only.
+- Transcripts in the simulator, if the build 17 probe showed it can transcribe (O4).
+- On the Duo: seconds per clip over 10 clips; the "Getting the speech model ready…" line the
+  first time; whether a speech-recognition prompt appears (O1: the app asks only if the first
+  transcription fails without ever having asked); which engine ran (O7: the probe's "Engine").
+- Text appears only once the picture reaches its clip, also after rewinding and with "Show the
+  whole race".
+- Closing the panel mid-clip, then opening it: the same clip is done again, nothing is skipped.
+- "Transcripts" off: no line, no text; on again: they come back.
+- Speech recognition denied in Settings: the line; allowed again: transcripts carry on.
+- Warmth over 20 minutes of radio on screen.
+
 ### v1.0-beta.4, build 17 — team radio on replays
 
 Not on the phone yet: the phone keeps the race build until after the Las Vegas race. Checked on a

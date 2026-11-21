@@ -1,15 +1,15 @@
-import AVFoundation
 import Foundation
 import LiveTiming
 import Speech
 import SwiftUI
 
-/// What "Transcribe a test clip" found (owner check O4): whether iOS's on-device transcriber is
-/// available, the locale, whether its model was installed or had to download, how long the clip
-/// took, and the text.
+/// What "Transcribe a test clip" found (owner checks O4 and O7): whether `SpeechTranscriber` is
+/// available, the engine the transcriber chose and its locale, whether the speech model was ready
+/// or had to download, how long the clip took, and the text.
 struct TranscribeProbeReport: Sendable, Equatable {
     var clip: String
     var available: Bool
+    var engine: String
     var locale: String
     var model: String
     var seconds: Double?
@@ -17,13 +17,13 @@ struct TranscribeProbeReport: Sendable, Equatable {
 }
 
 /// Settings › Debug › "Transcribe a test clip" (build 17's probe; removed before release): turns
-/// the first cached team radio clip into text on the phone with `SpeechTranscriber`. Every Speech
-/// call is in `probe(fileURL:)`, the calls build 18's transcriber will make. Nothing leaves the
-/// phone (iOS may download its English model from Apple: a system download).
+/// the first cached team radio clip into text on the phone through the app's own `Transcriber`,
+/// the same engine, model download and fallbacks the Radio panel uses. Nothing leaves the phone
+/// (iOS may download its English model from Apple: a system download).
 enum TranscribeProbe {
-    /// Asked for in this order.
-    static let locales = ["en-GB", "en-US"]
     static let noClip = "No clip cached yet \u{2014} play a team radio clip first."
+    /// How long it waits for the model to download.
+    static let downloadWait: Duration = .seconds(600)
 
     /// The first clip in `Caches/radio`, by folder and name; nil when there is none.
     static func firstCachedClip() -> URL? {
@@ -44,76 +44,55 @@ enum TranscribeProbe {
     @concurrent
     static func run() async -> TranscribeProbeReport {
         guard let file = firstCachedClip() else {
-            return TranscribeProbeReport(clip: "", available: SpeechTranscriber.isAvailable, locale: "", model: "",
-                                         seconds: nil, text: noClip)
+            return TranscribeProbeReport(clip: "", available: SpeechTranscriber.isAvailable, engine: "", locale: "",
+                                         model: "", seconds: nil, text: noClip)
         }
         return await probe(fileURL: file)
     }
 
-    /// The one function with the Speech calls: availability, the locale (en-GB, then en-US, through
-    /// `supportedLocale(equivalentTo:)`), the model (installed, or downloaded now through
-    /// `AssetInventory`), then `SpeechTranscriber` in a `SpeechAnalyzer` fed the file with
-    /// `analyzeSequence(from:)`, timed.
+    /// A fresh `Transcriber`: `prepare()` (waiting out a model download), then the clip, timed,
+    /// with the radio words as hints.
     @concurrent
     static func probe(fileURL: URL) async -> TranscribeProbeReport {
         var report = TranscribeProbeReport(clip: fileURL.lastPathComponent, available: SpeechTranscriber.isAvailable,
-                                           locale: "", model: "", seconds: nil, text: "")
-        guard report.available else {
-            report.text = "SpeechTranscriber isn't available on this device."
+                                           engine: "", locale: "", model: "", seconds: nil, text: "")
+        let transcriber = Transcriber()
+        var readiness = await transcriber.prepare()
+        report.model = describe(readiness)
+        let deadline = ContinuousClock.now + downloadWait
+        while readiness == .downloadingModel, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .seconds(1))
+            readiness = await transcriber.prepare()
+        }
+        if describe(readiness) != report.model { report.model += " \u{2192} " + describe(readiness) }
+        if let engine = await transcriber.engine {
+            report.engine = engine.name
+            report.locale = engine.locale.identifier(.bcp47)
+        }
+        guard readiness == .ready else {
+            report.text = TranscriptState.line(for: readiness) ?? ""
             return report
         }
-        var found: Locale?
-        for identifier in locales {
-            if let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier)) {
-                found = locale
-                break
-            }
-        }
-        guard let locale = found else {
-            report.text = "No English locale is supported."
-            return report
-        }
-        report.locale = locale.identifier(.bcp47)
-        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [],
-                                            attributeOptions: [])
-        let status = await AssetInventory.status(forModules: [transcriber])
-        report.model = describe(status)
+        let started = ContinuousClock.now
         do {
-            if status != .installed {
-                if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                    try await request.downloadAndInstall()
-                }
-                let after = await AssetInventory.status(forModules: [transcriber])
-                report.model += " \u{2192} " + describe(after)
-            }
-            let started = ContinuousClock.now
-            async let words = transcriber.results.reduce(into: "") { text, result in
-                text += String(result.text.characters)
-            }
-            let analyzer = SpeechAnalyzer(modules: [transcriber])
-            let file = try AVAudioFile(forReading: fileURL)
-            if let last = try await analyzer.analyzeSequence(from: file) {
-                try await analyzer.finalizeAndFinish(through: last)
-            } else {
-                await analyzer.cancelAndFinishNow()
-            }
-            let text = (try await words).trimmingCharacters(in: .whitespacesAndNewlines)
-            let elapsed = ContinuousClock.now - started
-            report.seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+            let text = try await transcriber.transcribe(fileURL: fileURL, hints: TranscriptState.radioWords)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             report.text = text.isEmpty ? TranscriptionQueue.noWords : text
         } catch {
             report.text = "Failed: \(error.localizedDescription)"
         }
+        let elapsed = ContinuousClock.now - started
+        report.seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
         return report
     }
 
-    /// Compared, not switched, so a status added later needs no `@unknown default`.
-    private static func describe(_ status: AssetInventory.Status) -> String {
-        if status == .installed { return "Installed" }
-        if status == .downloading { return "Downloading" }
-        if status == .supported { return "Not installed" }
-        if status == .unsupported { return "Not supported" }
-        return "Unknown"
+    private static func describe(_ readiness: TranscriberReadiness) -> String {
+        switch readiness {
+        case .ready: return "Ready"
+        case .downloadingModel: return "Downloading"
+        case .unavailable: return "Not available"
+        case .permissionDenied: return "Speech recognition not allowed"
+        }
     }
 }
 
@@ -140,7 +119,10 @@ struct TranscribeProbeRows: View {
             if !report.clip.isEmpty {
                 LabeledContent("Clip", value: report.clip)
             }
-            LabeledContent("Available", value: report.available ? "Yes" : "No")
+            LabeledContent("SpeechTranscriber available", value: report.available ? "Yes" : "No")
+            if !report.engine.isEmpty {
+                LabeledContent("Engine", value: report.engine)
+            }
             if !report.locale.isEmpty {
                 LabeledContent("Locale", value: report.locale)
             }

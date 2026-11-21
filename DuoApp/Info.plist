@@ -6,6 +6,8 @@
 	<string>$(BETA_LABEL)</string>
 	<key>DuoSourceCode</key>
 	<string>$(DUO_COMMIT)</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Team radio clips are turned into text on this iPhone. The app never listens to you.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

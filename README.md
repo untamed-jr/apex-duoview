@@ -17,8 +17,9 @@ at once, a live track map, timing and team radio, all kept in sync with the pict
 **v1.0-beta.4 — Radio and the closed phone** is being built (from build 17; see the
 [changelog](CHANGELOG.md)). Build 17 brings team radio to replays: a Radio panel beside the map
 that lists each clip under its lap only once the picture has reached it, plays it while the
-feeds go quiet, and marks it on the Scrub Deck and in Race Engineer's console. Not on the phone
-yet; transcripts and the closed phone's pages come in the next builds.
+feeds go quiet, and marks it on the Scrub Deck and in Race Engineer's console. Build 18 adds
+transcripts: each clip turned into text on the phone, shown in quotes under it once the picture
+reaches it. Not on the phone yet; the closed phone's pages come in the next builds.
 
 **v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
 [changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race
@@ -104,13 +105,19 @@ your phone.
 - **F1's live timing** (`livetiming.formula1.com`) for the track map and the rest of the race
   data, from beta.3. It takes the same F1 TV sign-in as the video; besides F1 TV, the sign-in
   is sent only to that host, never to anyone else, and is never written into a file or a log.
+  Team radio clips come from the same host. They are turned into text on your phone by iOS's own
+  speech recognition; the audio is never sent anywhere. The first time, iOS may download its
+  English speech model from Apple: a system download shared by all apps, not a request from this
+  app.
 - **MultiViewer's circuit data** (`api.multiviewer.app`) for each track's outline, corners and
   marshal sectors, from beta.3. Those requests carry nothing about you or your sign-in.
 
 Circuit outlines are kept in the app's caches on your phone, so each track is fetched once. The
 timing is loaded when you watch and holds timing only. The live timing the app records (so you
 can rewind a live session) and the car data it loads for speed readouts are kept in the same
-caches and deleted after 7 days; they hold F1's timing messages only, nothing about you.
+caches and deleted after 7 days; they hold F1's timing messages only, nothing about you. Team
+radio clips and their transcripts (so a replay isn't transcribed twice) are kept there too and
+deleted after 7 days.
 
 ## Credits
 
