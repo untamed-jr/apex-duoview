@@ -140,6 +140,14 @@ final class MultiviewController {
     @ObservationIgnored private(set) var seekGeneration = 0
     /// The main feed's last place, for telling a real time jump from one in normal play.
     @ObservationIgnored private var jumpSample: PlaybackSample?
+    /// Where Unfold to See's jump left from, for "Back to where you were"; nil once used, and on
+    /// every open and close.
+    @ObservationIgnored private var jumpReturn: JumpReturn?
+
+    private enum JumpReturn {
+        case liveEdge
+        case seconds(Double)
+    }
 
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var defaultChannelId: Int?
@@ -347,6 +355,7 @@ final class MultiviewController {
         generation += 1
         let mine = generation
         mainFeedFallback = nil
+        jumpReturn = nil
         // Keep the place in the session being left, then drop it.
         save()
         teardownAll()
@@ -445,6 +454,7 @@ final class MultiviewController {
     func close() {
         save()
         generation += 1
+        jumpReturn = nil
         // The radio's clip stops (the feeds get their volume back) before the audio session goes.
         radio.detach(host: self)
         feedVolume = 1
@@ -1067,6 +1077,31 @@ final class MultiviewController {
         // The scrubber stays where it was let go, not where the main feed was a moment ago.
         position = target
         refreshLiveDistance()
+    }
+
+    /// Unfold to See: every feed to picture time `t`, through the Scrub Deck's seek (the main
+    /// feed's seconds from one clock reading, kept inside the scrubber's span), remembering where
+    /// the feeds were for `jumpBack()`: the live edge when they were there, else that place.
+    /// False when nothing moved (no picture time, the main feed not in place, a refresh).
+    func jump(toPictureTime t: UTCms) -> Bool {
+        guard !refreshing, let main = mainFeed, main.positioned, let reading = timing.clockReading,
+              let seconds = CompanionModels.seekSeconds(
+                  to: t, pictureTime: reading.t, playerSeconds: reading.playerSeconds, timeline: timeline)
+        else { return false }
+        jumpReturn = isAtLiveEdge ? .liveEdge : .seconds(position)
+        seek(toSeconds: seconds)
+        return true
+    }
+
+    /// "Back to where you were": the place the last jump left from, or the live point (LIVE) if
+    /// it was there. Once.
+    func jumpBack() {
+        guard let back = jumpReturn else { return }
+        jumpReturn = nil
+        switch back {
+        case .liveEdge: goLive()
+        case .seconds(let seconds): seek(toSeconds: seconds)
+        }
     }
 
     /// The red LIVE button: every feed back to the live point together (by the main feed's
@@ -2677,3 +2712,7 @@ extension MultiviewController: PlaybackHost {
         if feed.player.volume != volume { feed.player.volume = volume }
     }
 }
+
+// MARK: - Unfold to See's host
+
+extension MultiviewController: CompanionJumpHost {}

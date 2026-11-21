@@ -62,7 +62,8 @@ import Foundation
         #expect(LayoutEngine.optionIDs(posture: .book, feedCount: 1).first == "book.across")
         #expect(LayoutEngine.optionIDs(posture: .flat, feedCount: 4).first == "flat.mainBelow")
         #expect(LayoutEngine.optionIDs(posture: .laptop, feedCount: 4) == ["laptop.pyramid"])
-        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 3) == ["closed.main"])
+        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 3) == ["closed.stack"])
+        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 1) == ["closed.main"])
         #expect(LayoutEngine.optionIDs(posture: .unknown, feedCount: 2) == LayoutEngine.optionIDs(posture: .flat, feedCount: 2))
     }
 
@@ -142,13 +143,50 @@ import Foundation
 
     @Test func closedFillsScreen() {
         let screen = CGSize(width: 844, height: 390)
-        let frames = LayoutEngine.frames(screen: screen, foldFrame: nil, posture: .closed, feedCount: 3, optionID: nil)
+        // One tile asked by name; with two or more feeds the default is the stack (below).
+        let frames = LayoutEngine.frames(screen: screen, foldFrame: nil, posture: .closed, feedCount: 3, optionID: "closed.main")
         #expect(frames.count == 3)
         #expect(frames[0].visible)
         #expect(abs(frames[0].rect.width - 693.3) < 0.1)
         #expect(abs(frames[0].rect.height - 390) < 0.01)
         #expect(abs(frames[0].rect.midX - 422) < 0.01)
         #expect(frames.dropFirst().allSatisfy { !$0.visible && $0.rect == frames[0].rect })
+    }
+
+    /// The outer screen the owner measured (466 × 678 pt), and the same less some safe-area height.
+    @Test func closedStackTwoFullWidthMainOnTop() {
+        for screen in [CGSize(width: 466, height: 678), CGSize(width: 466, height: 610)] {
+            for n in 2...4 {
+                for id in [nil, "closed.stack", "nope"] as [String?] {
+                    let frames = LayoutEngine.frames(screen: screen, foldFrame: nil, posture: .closed, feedCount: n, optionID: id)
+                    let tag = "\(screen) n=\(n) \(id ?? "nil")"
+                    #expect(frames.count == n, "\(tag)")
+                    let top = frames[0].rect, bottom = frames[1].rect
+                    #expect(frames[0].visible && frames[1].visible, "\(tag)")
+                    // Both tiles the full width, 16:9.
+                    #expect(abs(top.width - 466) < 0.01 && abs(bottom.width - 466) < 0.01, "\(tag)")
+                    #expect(top.minX == 0 && bottom.minX == 0, "\(tag)")
+                    #expect(abs(top.height - 466 * 9 / 16) < 0.01, "\(tag)")
+                    // The main one on top, one gap between, both within the height, centred.
+                    #expect(top.maxY < bottom.minY, "\(tag)")
+                    #expect(abs(bottom.minY - top.maxY - 6) < 0.01, "\(tag)")
+                    #expect(top.minY >= 0 && bottom.maxY <= screen.height, "\(tag)")
+                    #expect(abs(top.minY - (screen.height - bottom.maxY)) < 0.01, "\(tag)")
+                    // Any others hidden under the main tile.
+                    #expect(frames.dropFirst(2).allSatisfy { !$0.visible && $0.rect == top }, "\(tag)")
+                }
+            }
+        }
+        // One feed keeps the one tile; so does a screen too short for two full-width tiles,
+        // where the pair shrinks to fit the height instead.
+        let one = LayoutEngine.frames(screen: CGSize(width: 466, height: 678), foldFrame: nil, posture: .closed,
+                                      feedCount: 1, optionID: "closed.stack")
+        #expect(one.count == 1 && abs(one[0].rect.width - 466) < 0.01)
+        let short = CGSize(width: 466, height: 400)
+        let pair = LayoutEngine.frames(screen: short, foldFrame: nil, posture: .closed, feedCount: 2, optionID: nil)
+        #expect(pair[1].rect.maxY <= 400 + 0.01 && pair[0].rect.width < 466)
+        #expect(abs(pair[0].rect.height * 2 + 6 - 400) < 0.01)
+        #expect(LayoutEngine.usableOptionIDs(screen: short, foldFrame: nil, posture: .closed, feedCount: 2) == ["closed.stack"])
     }
 
     @Test func reservedAreaOnlyForLaptopOneFeed() {
@@ -722,7 +760,7 @@ import Foundation
                 #expect(LayoutEngine.optionIDs(posture: posture, feedCount: n, hasTiming: false) == ids)
             }
         }
-        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 3) == ["closed.main"])
+        #expect(LayoutEngine.optionIDs(posture: .closed, feedCount: 3) == ["closed.stack"])
         // Unknown posture lists as flat.
         #expect(LayoutEngine.optionIDs(posture: .unknown, feedCount: 2) == ["flat.mainBelow", "flat.twoStacked"])
     }

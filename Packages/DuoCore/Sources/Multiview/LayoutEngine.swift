@@ -87,7 +87,8 @@ public enum LayoutEngine {
         let n = min(max(feedCount, 1), 4)
         switch posture {
         case .closed:
-            return ["closed.main"]
+            // Two or more feeds: two of them stacked, full width (owner, 2026-11-18).
+            return n >= 2 ? ["closed.stack"] : ["closed.main"]
         case .flat, .unknown:
             switch n {
             case 1: return ["flat.full"]
@@ -228,7 +229,11 @@ public enum LayoutEngine {
     /// main tile (the 200 pt minimum is relaxed only for it) with the rest hidden.
     private static func compute(screen: CGSize, foldFrame: CGRect?, posture: Posture,
                                 n: Int, optionID: String?) -> Layout {
-        if posture == .closed { return Layout(tiles: closed(screen: screen, n: n)) }
+        if posture == .closed {
+            // "closed.main" asked by name keeps one tile; anything else is the count's default.
+            if n >= 2, optionID != "closed.main" { return Layout(tiles: closedStack(screen: screen, n: n)) }
+            return Layout(tiles: closed(screen: screen, n: n))
+        }
         let (effective, fold) = resolve(screen: screen, foldFrame: foldFrame, posture: posture)
         let options = candidates(posture: effective, n: n, optionID: optionID)
         let chosen = optionID.flatMap { options.contains($0) ? $0 : nil } ?? options[0]
@@ -246,6 +251,18 @@ public enum LayoutEngine {
     private static func closed(screen: CGSize, n: Int) -> [TileFrame] {
         let main = one(Region(x: 0, y: 0, w: screen.width, h: screen.height))
         return (0..<n).map { TileFrame(rect: main, visible: $0 == 0) }
+    }
+
+    /// The closed phone's Picture page with two or more feeds: the main feed and the next one,
+    /// each the full width (no side margin, as the one closed tile), the main one on top, one gap
+    /// between them, the pair centred in the height. On a screen too short for two full-width
+    /// tiles both shrink to fit it. The other feeds are hidden under the main tile.
+    private static func closedStack(screen: CGSize, n: Int) -> [TileFrame] {
+        let s = fit(screen.width, max((screen.height - gap) / 2, 0))
+        let x = (screen.width - s.width) / 2
+        let y = (screen.height - (2 * s.height + gap)) / 2
+        let pair = [tile(x, y, s.width), tile(x, y + s.height + gap, s.width)]
+        return (0..<n).map { $0 < 2 ? TileFrame(rect: pair[$0]) : TileFrame(rect: pair[0], visible: false) }
     }
 
     // MARK: Shapes

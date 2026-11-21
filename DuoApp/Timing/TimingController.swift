@@ -402,6 +402,12 @@ final class TimingController {
         reading()?.t
     }
 
+    /// Picture time and the main feed's seconds read with it, from one clock reading: a jump to a
+    /// moment converts with both (Unfold to See), never with a separately read position.
+    var clockReading: (t: UTCms, playerSeconds: Double)? {
+        reading().map { (t: $0.t, playerSeconds: $0.playerSeconds) }
+    }
+
     /// Picture time and the player seconds it was read with, from one clock reading.
     private func reading() -> (t: UTCms, estimated: Bool, playerSeconds: Double)? {
         guard let loaded, let clock else { return nil }

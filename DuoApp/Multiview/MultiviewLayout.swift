@@ -83,6 +83,21 @@ enum MultiviewLayout {
         return clipped.width > clipped.height ? clipped : nil
     }
 
+    /// The closed phone's Picture page with one feed and timing: the timing tower fills the space
+    /// below the feed (owner, 2026-11-18). The feed moves to the top of the layout area (`screen`,
+    /// the area's own space) and the tower takes the area's width from one gap under it to the
+    /// bottom. nil when less than `minimumTowerHeight` would be left.
+    static func closedTower(main: CGRect, screen: CGSize) -> (main: CGRect, tower: CGRect)? {
+        let gap: CGFloat = 6
+        let top = CGRect(x: main.minX, y: 0, width: main.width, height: main.height)
+        let tower = CGRect(x: 0, y: top.maxY + gap, width: screen.width, height: screen.height - top.maxY - gap)
+        guard main.width > 0, tower.width > 0, tower.height >= minimumTowerHeight else { return nil }
+        return (top, tower)
+    }
+
+    /// Less room than this under the one closed feed leaves the feed centred, with no tower.
+    static let minimumTowerHeight: CGFloat = 120
+
     /// The slot whose feed a swipe on the closed layout makes the main one, or nil.
     ///
     /// Taking the main spot trades places with slot 0, so "the next slot" would only ever trade
