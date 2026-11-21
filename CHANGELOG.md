@@ -107,8 +107,7 @@ stand-in player); the first real compile is the owner's Mac build.
     screen's driver (picking the other screen's driver swaps the two). The pair is kept for the
     session.
   - The two onboards go in the first two spots. A feed makes way for them only if it doesn't
-    have the sound; the feed with the commentary keeps playing out of sight. Leaving Rivals keeps
-    the feeds as they are.
+    have the sound; the feed with the commentary keeps playing out of sight.
   - With "Play radio as it happens" on, a clip plays by itself as the picture reaches it (never on
     a seek or a scrub), in the ear of the screen its driver is on. Headphones going in or out
     while it plays move it to its ear or to the middle at once.
