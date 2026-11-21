@@ -40,8 +40,9 @@ final class RadioAudio: RadioPlayback {
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main
         ) { @Sendable [weak self] note in
-            let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
-            let began = raw.flatMap(AVAudioSession.InterruptionType.init(rawValue:)) == .began
+            // The raw value is read directly, as in the multiview: iOS 27 deprecates the
+            // InterruptionType enum, but the notification and its key still arrive. 1 is "began".
+            let began = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == 1
             MainActor.assumeIsolated {
                 if began { self?.stoppedBySystem() }
             }
@@ -70,9 +71,10 @@ final class RadioAudio: RadioPlayback {
             engine.disconnectNodeOutput(node)
             engine.disconnectNodeOutput(submixer)
             engine.disconnectNodeOutput(pitch)
-            engine.connect(node, to: submixer, format: format)
-            engine.connect(submixer, to: pitch, format: stereo)
-            engine.connect(pitch, to: engine.mainMixerNode, format: stereo)
+            // iOS 27's throwing forms (the old `connect(_:to:format:)` is deprecated).
+            try engine.connectNode(node, to: submixer, format: format)
+            try engine.connectNode(submixer, to: pitch, format: stereo)
+            try engine.connectNode(pitch, to: engine.mainMixerNode, format: stereo)
             connected = format
         }
         pitch.rate = Self.clamped(rate)
@@ -88,7 +90,14 @@ final class RadioAudio: RadioPlayback {
         node.scheduleFile(file, at: nil, completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
             Task { @MainActor [weak self] in self?.finished(token: mine) }
         }
-        node.play()
+        // iOS 27's throwing form (the old `play()` is deprecated). If it refuses, nothing is left
+        // waiting for a clip that never started.
+        do {
+            try node.playAudio()
+        } catch {
+            stop()
+            throw error
+        }
     }
 
     func setRate(_ rate: Float) {
