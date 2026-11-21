@@ -100,7 +100,7 @@ final class AppModel {
         self.multiviewStore = multiviewStore
         self.multiview = MultiviewController(
             coordinator: player, store: multiviewStore, recents: recents, history: history, timing: timing,
-            radio: radio)
+            radio: radio, f1: session)
         favouriteDriver = multiviewStore.favouriteDriver
         // Your driver's battles glow in the tower.
         timing.setFavouriteDriver(favouriteDriver)

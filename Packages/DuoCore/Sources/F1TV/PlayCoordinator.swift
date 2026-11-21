@@ -21,11 +21,26 @@ public actor PlayCoordinator {
         var task: Task<Played, Error>
     }
 
+    /// One feed's PLAY of a live multiview, in flight. `id` tells a newer request for the same
+    /// feed from this one.
+    private struct LiveRequest {
+        var id: Int
+        var task: Task<PlayInfo, Error>
+    }
+
     private let session: F1TVSession
     private var playing: (key: Key, info: Played)?
     private var pending: Pending?
     /// Bumped by every new request and by `stop()`, so a result that arrives after either is dropped.
     private var generation = 0
+    /// Live multiview: each feed's own PLAY (several play side by side), by channel id, for
+    /// `liveContentId`. Cleared by `play`, `playMultiview` and `stop()`.
+    private var liveContentId: Int?
+    private var liveFeeds: [Int: PlayInfo] = [:]
+    private var livePending: [Int: LiveRequest] = [:]
+    private var liveRequestCount = 0
+    /// Bumped whenever the live feeds are cleared, so an answer that arrives after is dropped.
+    private var liveGeneration = 0
 
     public init(session: F1TVSession) {
         self.session = session
@@ -55,7 +70,80 @@ public actor PlayCoordinator {
         return info
     }
 
+    /// One feed of a live multiview, asked on its own and Safari-style (as `play` asks): asked as
+    /// one multiview PLAY, F1 TV sends live as Widevine, which no iPhone plays; asked per feed it
+    /// sends FairPlay, and several such feeds play side by side. Each feed's answer is kept by
+    /// `channelId` until `play`, `playMultiview` or `stop()`: asking again returns it without a
+    /// request, and asking for another feed never ends this one. `refresh` asks F1 TV again (the
+    /// links went stale); a request already in flight for the feed is waited for instead.
+    /// `playChannelId` is the channelId PLAY takes: nil for a feed F1 TV links without one.
+    /// A DRM stream other than FairPlay throws `.protectedContent` and is not kept.
+    public func playLiveFeed(
+        contentId: Int, channelId: Int, playChannelId: Int?, refresh: Bool = false
+    ) async throws -> PlayInfo {
+        // Another session's feeds go; the live feeds replace a single or multiview session.
+        if liveContentId != contentId {
+            clearLiveFeeds()
+            liveContentId = contentId
+        }
+        if playing != nil || pending != nil {
+            pending?.task.cancel()
+            pending = nil
+            playing = nil
+            generation += 1
+        }
+        if !refresh, let info = liveFeeds[channelId] { return info }
+        let mine = liveGeneration
+        // This feed is already being asked for: wait for that one request.
+        if let request = livePending[channelId] {
+            let info: PlayInfo
+            do {
+                info = try await request.task.value
+            } catch {
+                if liveGeneration != mine { throw CancellationError() }
+                throw error
+            }
+            guard liveGeneration == mine else { throw CancellationError() }
+            return info
+        }
+
+        liveFeeds[channelId] = nil
+        liveRequestCount += 1
+        let id = liveRequestCount
+        let session = self.session
+        let key = Key(contentId: contentId, channelId: playChannelId)
+        let task = Task { () throws -> PlayInfo in
+            guard case .single(let info) = try await Self.request(session: session, key: key) else {
+                throw F1TVError.badResponse("Unexpected PLAY result")
+            }
+            return info
+        }
+        livePending[channelId] = LiveRequest(id: id, task: task)
+        do {
+            let info = try await task.value
+            // Cleared meanwhile (stop, another play): a cancellation, never kept.
+            guard liveGeneration == mine else { throw CancellationError() }
+            if livePending[channelId]?.id == id { livePending[channelId] = nil }
+            liveFeeds[channelId] = info
+            return info
+        } catch {
+            guard liveGeneration == mine else { throw CancellationError() }
+            if livePending[channelId]?.id == id { livePending[channelId] = nil }
+            throw error
+        }
+    }
+
+    private func clearLiveFeeds() {
+        for request in livePending.values { request.task.cancel() }
+        livePending = [:]
+        liveFeeds = [:]
+        liveContentId = nil
+        liveGeneration += 1
+    }
+
     private func start(key: Key, refresh: Bool) async throws -> Played {
+        // A single or multiview session replaces the live feeds, as it replaces any other session.
+        clearLiveFeeds()
         if !refresh, let playing, playing.key == key { return playing.info }
         // The same item is already being requested: wait for that one request.
         if let pending, pending.key == key {
@@ -100,6 +188,7 @@ public actor PlayCoordinator {
         pending = nil
         playing = nil
         generation += 1
+        clearLiveFeeds()
     }
 
     private static func request(session: F1TVSession, key: Key) async throws -> Played {

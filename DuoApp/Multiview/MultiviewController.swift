@@ -8,16 +8,17 @@ import Multiview
 import Observation
 import UIKit
 
-/// Plays up to four feeds of one session together, from one multiview PLAY: one `AVPlayer` per
-/// filled slot, every feed kept in step with slot 0 (the main feed). The sound is on one feed of
-/// the viewer's choice (`audioChannelId`), the main one when the multiview opens.
+/// Plays up to four feeds of one session together, from one multiview PLAY (a live session: one
+/// PLAY per feed, each with its own FairPlay keys): one `AVPlayer` per filled slot, every feed
+/// kept in step with slot 0 (the main feed). The sound is on one feed of the viewer's choice
+/// (`audioChannelId`), the main one when the multiview opens.
 /// Owned by the app model, not by a view, so a layout or fold change never stops or recreates a
 /// player; tiles only show a player's picture.
 /// Picture in picture shows the feed with the sound (from its tile's layer, so what is heard plays
 /// on without a break); the other feeds pause until it ends, then line up with it again.
 /// It attaches the session's timing (shared with the single-feed player) once the PLAY is
 /// answered, with a clock reading the main feed, and detaches it on close.
-/// Never logs or prints a stream URL, token or `MultiPlayInfo`.
+/// Never logs or prints a stream URL, licence URL, token, `MultiPlayInfo` or `PlayInfo`.
 @MainActor
 @Observable
 final class MultiviewController {
@@ -122,6 +123,8 @@ final class MultiviewController {
     private(set) var mainFeedFallback: MainFeedFallback?
 
     @ObservationIgnored private let coordinator: PlayCoordinator
+    /// For the live feeds' FairPlay keys.
+    @ObservationIgnored private let f1: F1TVSession
     @ObservationIgnored private let store: MultiviewStore
     @ObservationIgnored private let recents: RecentsStore
     @ObservationIgnored private let history: WatchHistory
@@ -141,6 +144,18 @@ final class MultiviewController {
     @ObservationIgnored private var currentItem: CatalogItem?
     @ObservationIgnored private var defaultChannelId: Int?
     @ObservationIgnored private var feedURLs: [Int: URL] = [:]
+    /// Live multiview: asked as one PLAY, F1 TV sends a live multiview as Widevine (no iPhone
+    /// plays it), so each feed is asked on its own, Safari-style, and comes as FairPlay. Its PLAY
+    /// goes out when the feed is attached.
+    @ObservationIgnored private var playsFeedsAlone = false
+    /// Each live feed's licence URL, by channel id (signed: never logged or shown).
+    @ObservationIgnored private var feedLicenses: [Int: URL] = [:]
+    /// Live feeds whose PLAY is out, by channel id: the request's number, so a late answer for a
+    /// feed that left, or for stopped feeds, is dropped.
+    @ObservationIgnored private var feedRequests: [Int: Int] = [:]
+    @ObservationIgnored private var feedRequestCount = 0
+    /// When each live feed's links last came from a PLAY, for one refresh a minute per feed.
+    @ObservationIgnored private var feedRefreshedAt: [Int: Date] = [:]
     /// Every feed the session lists, whether or not the PLAY returned a stream for it.
     @ObservationIgnored private var sessionChannels: [Channel] = []
     /// What each slot asks for, parallel to `slots` (moved with them). A pick whose feed this
@@ -228,8 +243,9 @@ final class MultiviewController {
     @ObservationIgnored private let pictureInPictureDelegate: MultiviewPictureInPictureDelegate
 
     init(coordinator: PlayCoordinator, store: MultiviewStore, recents: RecentsStore, history: WatchHistory,
-         timing: TimingController, radio: RadioController) {
+         timing: TimingController, radio: RadioController, f1: F1TVSession) {
         self.coordinator = coordinator
+        self.f1 = f1
         self.store = store
         self.recents = recents
         self.history = history
@@ -360,13 +376,17 @@ final class MultiviewController {
         if let stopTask { await stopTask.value }
         guard generation == mine else { return }
 
-        let info: MultiPlayInfo
+        let info: MultiPlayInfo?
         do {
             info = try await coordinator.playMultiview(contentId: item.contentId, defaultChannelId: defaultChannelId)
         } catch is CancellationError {
             // Superseded (silent), or cancelled from outside with nothing newer: leave.
             if generation == mine { dismiss() }
             return
+        } catch let error as F1TVError where error == .protectedContent && showing.isLive {
+            // Live multiview comes as Widevine when asked as one PLAY. Asked one by one,
+            // Safari-style, each feed comes as FairPlay: every slot's feed gets its own PLAY.
+            info = nil
         } catch {
             guard generation == mine else { return }
             isLoading = false
@@ -389,12 +409,15 @@ final class MultiviewController {
         sendRaceViews()
         radio.attach(host: self)
 
-        feedURLs = info.feeds
+        playsFeedsAlone = info == nil
+        feedURLs = info?.feeds ?? [:]
         // Links can't have expired seconds after this PLAY: a failure in the first minute is an
         // ordinary failure with its real message, never a second PLAY.
         lastRefreshAt = Date()
         sessionChannels = detail.channels
-        channels = Self.playable(sessionChannels, in: info.feeds)
+        // Live feeds are asked for one by one as they are attached: each feed the session lists
+        // is taken to be playable.
+        channels = info.map { Self.playable(sessionChannels, in: $0.feeds) } ?? sessionChannels.filter { $0.id != nil }
         // A remembered feed this session lacks leaves its slot empty; nothing else fills it.
         var remembered = Array(store.lastUsed.prefix(Self.slotCount))
         while remembered.count < Self.slotCount { remembered.append(nil) }
@@ -414,7 +437,7 @@ final class MultiviewController {
         for channel in slots.compactMap({ $0 }) { attach(channel) }
         applyRoles()
         // Nothing to start: four empty slots wait for a pick.
-        if feeds.isEmpty { isLoading = false }
+        if feeds.isEmpty, feedRequests.isEmpty { isLoading = false }
     }
 
     // MARK: Closing
@@ -477,6 +500,10 @@ final class MultiviewController {
         channels = []
         feedProblems = [:]
         audioChannelId = nil
+        // A live multiview's own PLAYs go with the session (every caller drops `feedURLs` too).
+        playsFeedsAlone = false
+        feedLicenses = [:]
+        feedRefreshedAt = [:]
     }
 
     // MARK: Slots
@@ -696,7 +723,7 @@ final class MultiviewController {
         guard slots.indices.contains(slot), currentItem != nil, !refreshing, errorText == nil else { return }
         if othersFrozen { bringBackFrozen() }
         if let channel {
-            guard let id = channel.id, feedURLs[id] != nil,
+            guard let id = channel.id, feedURLs[id] != nil || playsFeedsAlone,
                   let chosen = channels.first(where: { $0.id == id }) else { return }
             if let other = slots.firstIndex(where: { $0?.id == id }) {
                 if other == slot {
@@ -1147,17 +1174,36 @@ final class MultiviewController {
         isFrozen(channelId: feed.channelId)
     }
 
-    private func attach(_ channel: Channel) {
-        guard let id = channel.id, feeds[id] == nil, let url = feedURLs[id] else { return }
-        // These URLs come from a PLAY that identified as Android Chrome (F1 TV only sends every
-        // feed to that header). They play with AVPlayer's default settings, as beta.1's single
-        // feeds do. If a build shows HTTP 403 on them, the fix is an AVURLAsset with
-        // `AVURLAssetHTTPUserAgentKey` set to `Endpoints.androidUserAgent`.
-        let item = AVPlayerItem(url: url)
+    private func attach(_ channel: Channel, refresh: Bool = false) {
+        guard let id = channel.id, feeds[id] == nil else { return }
+        guard let url = feedURLs[id] else {
+            // A live feed: its own PLAY first; it attaches once answered.
+            if playsFeedsAlone { requestFeed(channel, refresh: refresh) }
+            return
+        }
+        let item: AVPlayerItem
+        let keys: FairPlayKeys?
+        if let license = feedLicenses[id] {
+            // A live feed (FairPlay): as in the single-feed player, its key session takes the asset
+            // before the item exists, so the first key request goes to it. The keys live as long
+            // as the feed.
+            let asset = AVURLAsset(url: url)
+            let feedKeys = FairPlayKeys(f1: f1, licenseURL: license)
+            feedKeys.attach(asset)
+            keys = feedKeys
+            item = AVPlayerItem(asset: asset)
+        } else {
+            // These URLs come from a PLAY that identified as Android Chrome (F1 TV only sends every
+            // feed to that header). They play with AVPlayer's default settings, as beta.1's single
+            // feeds do. If a build shows HTTP 403 on them, the fix is an AVURLAsset with
+            // `AVURLAssetHTTPUserAgentKey` set to `Endpoints.androidUserAgent`.
+            keys = nil
+            item = AVPlayerItem(url: url)
+        }
         let player = AVPlayer(playerItem: item)
         player.defaultRate = Float(rate)
         player.isMuted = true
-        let feed = MultiviewFeed(channelId: id, player: player, item: item)
+        let feed = MultiviewFeed(channelId: id, player: player, item: item, keys: keys)
         feeds[id] = feed
         players[id] = player
         feedProblems[id] = nil
@@ -1170,12 +1216,112 @@ final class MultiviewController {
         feeds[channelId] = nil
         players[channelId] = nil
         feedProblems[channelId] = nil
+        // A live feed's PLAY still out is no longer wanted here (the coordinator keeps its answer).
+        feedRequests[channelId] = nil
     }
 
     private func stopPlayer(_ feed: MultiviewFeed) {
         feed.removeObservers()
         feed.player.pause()
         feed.player.replaceCurrentItem(with: nil)
+        feed.keys?.stop()
+    }
+
+    // MARK: Live feeds
+
+    /// A live feed's own PLAY (Safari-style, FairPlay), then the feed is attached. Up to four go
+    /// out side by side; a feed already asked for waits for that answer (the coordinator sends
+    /// nothing new).
+    private func requestFeed(_ channel: Channel, refresh: Bool) {
+        guard let id = channel.id, feedRequests[id] == nil, let item = currentItem else { return }
+        feedRequestCount += 1
+        let token = feedRequestCount
+        feedRequests[id] = token
+        feedProblems[id] = nil
+        let coordinator = coordinator
+        let contentId = item.contentId
+        let playChannelId = channel.playChannelId
+        Task { [weak self] in
+            let result: Result<PlayInfo, Error>
+            do {
+                result = .success(try await coordinator.playLiveFeed(
+                    contentId: contentId, channelId: id, playChannelId: playChannelId, refresh: refresh))
+            } catch {
+                result = .failure(error)
+            }
+            self?.feedAnswered(channelId: id, token: token, result: result)
+        }
+    }
+
+    private func feedAnswered(channelId: Int, token: Int, result: Result<PlayInfo, Error>) {
+        // Dropped when superseded: the feed left its slot, the feeds stopped, or the multiview
+        // closed or opened again.
+        guard feedRequests[channelId] == token else { return }
+        feedRequests[channelId] = nil
+        guard let channel = slots.compactMap({ $0 }).first(where: { $0.id == channelId }) else { return }
+        switch result {
+        case .success(let info):
+            feedURLs[channelId] = info.url
+            feedLicenses[channelId] = info.isFairPlay ? info.licenseURL : nil
+            feedRefreshedAt[channelId] = Date()
+            attach(channel)
+            applyRoles()
+        case .failure(let error):
+            // The play session was replaced from elsewhere: nothing to show here.
+            if error is CancellationError { return }
+            let text = Self.message(for: error)
+            if slots[0]?.id == channelId {
+                // As when the main feed stops: the multiview ends with the reason.
+                save()
+                teardownAll()
+                isLoading = false
+                errorText = text
+                offerMainFeedIfLive()
+            } else {
+                // Only this feed: its tile says why, the others play on.
+                feedProblems[channelId] = text
+                keepAudioOnAFeed()
+                applyRoles()
+                maybeStart()
+            }
+        }
+    }
+
+    /// A live multiview that ended with an error offers "Watch the main feed" (the session's main
+    /// feed in the single-feed player), as a multiview F1 TV won't play does.
+    private func offerMainFeedIfLive() {
+        guard playsFeedsAlone, let item = currentItem,
+              let main = sessionChannels.first(where: \.isDefault) ?? sessionChannels.first else { return }
+        mainFeedFallback = MainFeedFallback(item: item, channel: main, start: pendingStart)
+    }
+
+    private func canRefreshFeed(_ channelId: Int) -> Bool {
+        guard currentItem != nil, feedRequests[channelId] == nil else { return false }
+        guard let last = feedRefreshedAt[channelId] else { return true }
+        return Date().timeIntervalSince(last) >= Self.refreshSpacing
+    }
+
+    /// A live feed's link expired: that one feed is asked again (`refresh`), not the whole
+    /// multiview. For the main feed every feed starts again together at its place, as a refresh
+    /// does; the others keep their links. Another feed rejoins the main one once it is ready.
+    private func refreshFeed(_ channelId: Int) {
+        guard let channel = slots.compactMap({ $0 }).first(where: { $0.id == channelId }) else { return }
+        feedURLs[channelId] = nil
+        feedLicenses[channelId] = nil
+        if slots[0]?.id == channelId {
+            if let start = mainStart() { pendingStart = start }
+            // The window's feed stops with the others; its stop is not a close.
+            leavePictureInPicture()
+            teardownFeeds()
+            isLoading = true
+            for slotChannel in slots.compactMap({ $0 }) {
+                attach(slotChannel, refresh: slotChannel.id == channelId)
+            }
+        } else {
+            detach(channelId)
+            attach(channel, refresh: true)
+        }
+        applyRoles()
     }
 
     /// Sound follows `audioChannelId`: that feed alone is heard. Quality follows the slot: the
@@ -1296,17 +1442,26 @@ final class MultiviewController {
 
     private func feedFailed(channelId: Int, itemID: ObjectIdentifier, expired: Bool, reason: String) {
         guard let feed = liveFeed(channelId, itemID) else { return }
-        if expired, canRefresh {
+        if expired, playsFeedsAlone {
+            // A live feed: only that one is asked again.
+            if canRefreshFeed(channelId) {
+                refreshFeed(channelId)
+                return
+            }
+        } else if expired, canRefresh {
             refreshLinks()
             return
         }
-        let text = PlayerController.stoppedMessage(reason)
+        // A live feed whose key couldn't be had says so, as the single-feed player does.
+        let keyReason = feed.keys?.lastFailure.map { "couldn't unlock this live stream: \($0)" }
+        let text = PlayerController.stoppedMessage(keyReason ?? reason)
         if isMain(feed) {
             // As beta.1: the main feed stopping ends the multiview, with the reason.
             save()
             teardownAll()
             isLoading = false
             errorText = text
+            offerMainFeedIfLive()
         } else {
             // Like Android's tiles: only this feed stops, and its tile says why.
             detach(channelId)
@@ -1407,7 +1562,9 @@ final class MultiviewController {
     /// deadline after the main feed passes (the late ones join when ready).
     private func maybeStart() {
         guard !started, !refreshing, let main = mainFeed, main.positioned else { return }
+        // A live feed whose PLAY is still out is waited for too.
         let waiting = slotFeeds.contains { !$0.positioned }
+            || slots.contains { slot in slot?.id.map { feedRequests[$0] != nil } ?? false }
         let overdue = mainPlacedAt.map { Date().timeIntervalSince($0) >= Self.startDeadline } ?? false
         guard !waiting || overdue else { return }
         started = true
@@ -2314,6 +2471,8 @@ final class MultiviewController {
         for feed in feeds.values { stopPlayer(feed) }
         feeds = [:]
         players = [:]
+        // Answers to live feed PLAYs still out are dropped; the coordinator keeps them.
+        feedRequests = [:]
         started = false
         mainPlacedAt = nil
         steadySince = nil
@@ -2411,6 +2570,8 @@ private final class MultiviewFeed {
     let player: AVPlayer
     let item: AVPlayerItem
     let itemID: ObjectIdentifier
+    /// A live feed's FairPlay keys: they stop with the feed.
+    let keys: FairPlayKeys?
     /// The item reported ready to play.
     var ready = false
     /// In place: at the start position (the main feed) or lined up with the others.
@@ -2434,10 +2595,11 @@ private final class MultiviewFeed {
     var statusObservation: NSKeyValueObservation?
     var tokens: [NSObjectProtocol] = []
 
-    init(channelId: Int, player: AVPlayer, item: AVPlayerItem) {
+    init(channelId: Int, player: AVPlayer, item: AVPlayerItem, keys: FairPlayKeys?) {
         self.channelId = channelId
         self.player = player
         self.item = item
+        self.keys = keys
         self.itemID = ObjectIdentifier(item)
         self.lead = MultiviewController.initialLead
     }

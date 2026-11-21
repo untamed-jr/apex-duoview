@@ -4,6 +4,31 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
+### Live multiview (not on the phone yet)
+
+Asked as one multiview PLAY, F1 TV sends a live session's multiview as Widevine, which no iPhone
+plays ("Multiview can't play this live session yet"). Asked one feed at a time, the way Safari
+asks, each feed comes as FairPlay, and several play side by side (owner's probes and FP1). So a
+live multiview now plays each feed on its own FairPlay session.
+
+- Opening a live multiview: when the one multiview PLAY comes back protected, each slot's feed
+  is asked for on its own (the remembered four at once); a feed picked later in Feeds is asked
+  for when it is picked. Every feed the session lists can be picked. The main INTERNATIONAL
+  feed is asked without a channel, as F1 TV's own link is.
+- Each feed has its own FairPlay keys, for as long as the feed plays.
+- A feed that F1 TV won't play shows the reason on its tile; the others play on. If the main
+  feed can't play, the multiview ends with the reason and offers "Watch the main feed".
+- An expired link asks for that one feed again, not every feed (at most once a minute per feed).
+- Replays are unchanged: one multiview PLAY, unprotected streams.
+- DuoCore: `PlayCoordinator.playLiveFeed(contentId:channelId:playChannelId:refresh:)` (tested):
+  one Safari-style PLAY per feed, kept by channel; asking again sends nothing; a single or
+  multiview PLAY, or a stop, clears them.
+
+Untested — check later (on the phone, during a live session: the simulator can't play FairPlay):
+- everything above: four feeds play; the onboards are the right drivers; swapping a feed in
+  Feeds plays it; 10 minutes without a stall; "Watch the main feed" still shows if F1 TV refuses;
+- the first build on the Mac (only the syntax of the app files was checked here).
+
 ### Polish — the opening screen and the Apple design pass (in progress, not on the phone yet)
 
 Moved forward from after beta.4 (owner, 2026-11-19), built while waiting for the race weekend.
