@@ -192,7 +192,10 @@ final class CompanionController {
                 hapticSchedule.offer(kind, now: seconds)
             }
         }
-        if let kind = hapticSchedule.due(now: seconds) { playHaptic?(kind) }
+        // Checked again when due: its switch may have gone off while it waited.
+        if let kind = hapticSchedule.due(now: seconds), HapticPatterns.wanted(kind, settings: settings) {
+            playHaptic?(kind)
+        }
     }
 
     // MARK: The tick
