@@ -209,7 +209,9 @@ final class RadioController {
         self.audio.onRouteChange = { [weak self] phones in
             guard let self, self.headphones != phones else { return }
             self.headphones = phones
-            // A clip playing in one ear moves to the middle without headphones, and back.
+            // A clip still playing in one ear moves to the middle without headphones, and back.
+            // Usually there is none: the route's format change has already ended it (RadioAudio),
+            // and the next clip plays in its ear.
             if let ear = self.playingEar, self.audioStarted, self.playing != nil {
                 self.audio.setPan(BookModels.pan(left: ear, headphones: phones))
             }
@@ -386,7 +388,9 @@ final class RadioController {
     /// (or, with the hinge mixer on, at its levels). `pan` is −1 (left ear) … 1 (right ear); Rivals
     /// pans each driver to their screen's ear. A clip not visible at the cut (after picture time)
     /// is ignored. `ear` (Rivals: true for the left screen's driver) overrides `pan`: the clip goes
-    /// to that ear with headphones, centred without, and follows route changes while it plays.
+    /// to that ear with headphones, centred without, and follows a route change while it plays if
+    /// the engine keeps running (headphones in or out usually end the clip instead; the next one
+    /// plays in its ear).
     func play(path: String, pan: Float = 0, ear: Bool? = nil) {
         guard host != nil, let session = timing.loadedSession,
               let clip = session.radio.all.first(where: { $0.path == path }),

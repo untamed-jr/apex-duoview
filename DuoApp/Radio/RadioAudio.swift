@@ -11,7 +11,11 @@ import Foundation
 ///
 /// It plays in the app's audio session (`.playback`, set by the players), alongside the feeds.
 /// Headphones are read from the session's current route and followed on its route changes, for
-/// Rivals' one-driver-per-ear (a clip is panned only with them; build 21).
+/// Rivals' one-driver-per-ear (a clip is panned only with them; build 21). Headphones going in or
+/// out almost always change the output format too, and that configuration change (observed
+/// synchronously) ends the clip playing before the route change reaches the main actor: the clip
+/// ends, and the next clip plays in its ear (or centred). The re-pan of a playing clip in
+/// `RadioController` covers only a route change that leaves the engine running.
 @MainActor
 final class RadioAudio: RadioPlayback {
     private let engine = AVAudioEngine()

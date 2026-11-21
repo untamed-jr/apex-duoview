@@ -110,7 +110,8 @@ stand-in player); the first real compile is the owner's Mac build.
     have the sound; the feed with the commentary keeps playing out of sight.
   - With "Play radio as it happens" on, a clip plays by itself as the picture reaches it (never on
     a seek or a scrub), in the ear of the screen its driver is on. Headphones going in or out
-    while it plays move it to its ear or to the middle at once.
+    while it plays end that clip (corrected in build 22); the next clip plays in its ear, or in
+    the middle without headphones.
   - **Leaving Rivals keeps its two onboards** at the front of the feeds (and remembered as the
     last used); the main feed from before isn't put back.
 - **The hinge mixer** (Settings › Team radio › "Hinge mixer — fold to hear more radio, open for
