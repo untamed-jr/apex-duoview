@@ -22,6 +22,9 @@ struct DuoApp: App {
                 .foregroundStyle(Theme.textPrimary)
                 .task { await model.restore() }
                 .onChange(of: scenePhase) { _, phase in
+                    // Transcripts only while radio is on screen: not in the background (picture in
+                    // picture, audio).
+                    model.radio.setAppActive(phase != .background)
                     guard phase == .active else { return }
                     Task { await model.revalidate() }
                 }

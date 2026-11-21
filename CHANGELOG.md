@@ -68,8 +68,9 @@ transcriber); the first real compile is the owner's Mac build.
   run up to 2 minutes ahead so the text is ready, but it never shows early.
 - **One clip at a time, and only while the Radio panel is open** with Settings › Team radio ›
   "Transcripts" on: nearest the picture first; a clip not done in 45 s is skipped; three failures
-  in a row wait 2 minutes. Closing the panel stops the clip being transcribed (it is picked up
-  again next time). With "Transcripts" off, none are made and none are shown.
+  in a row wait 2 minutes. Closing the panel, or the app going to the background (picture in
+  picture, audio only), stops the clip being transcribed (it is picked up again next time). With
+  "Transcripts" off, none are made and none are shown.
 - **Kept per session** beside the clips (`transcripts.json` in Caches, deleted with them after 7
   days), so a replay isn't transcribed twice.
 - **The engine:** `SpeechTranscriber` (British English, else American), its model downloaded by
@@ -96,14 +97,17 @@ transcriber); the first real compile is the owner's Mac build.
   checked by eye only.
 - Transcripts in the simulator, if the build 17 probe showed it can transcribe (O4).
 - On the Duo: seconds per clip over 10 clips; the "Getting the speech model ready…" line the
-  first time; whether a speech-recognition prompt appears (O1: the app asks only if the first
-  transcription fails without ever having asked); which engine ran (O7: the probe's "Engine").
+  first time; whether a speech-recognition prompt appears (O1: the app asks only if a
+  transcription fails without ever having asked, then tries that clip again if allowed; "Don't
+  Allow" turns transcripts off until it's allowed in Settings); which engine ran (O7: the probe's
+  "Engine").
 - Text appears only once the picture reaches its clip, also after rewinding and with "Show the
   whole race".
 - Closing the panel mid-clip, then opening it: the same clip is done again, nothing is skipped.
 - "Transcripts" off: no line, no text; on again: they come back.
 - Speech recognition denied in Settings: the line; allowed again: transcripts carry on.
-- Warmth over 20 minutes of radio on screen.
+- Warmth over 20 minutes of radio on screen; and that nothing is transcribed with the app in the
+  background (picture in picture, or the screen off with sound).
 
 ### v1.0-beta.4, build 17 — team radio on replays
 

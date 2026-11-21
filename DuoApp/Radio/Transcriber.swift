@@ -108,7 +108,10 @@ actor Transcriber: RadioTranscribing {
             if Task.isCancelled { throw CancellationError() }
             if engine.usesAnalyzer, !askedPermission, SFSpeechRecognizer.authorizationStatus() == .notDetermined {
                 askedPermission = true
-                _ = await Self.askPermission()
+                if await Self.askPermission() == .authorized {
+                    // Allowed just now: the clip once more, so asking doesn't cost it its turn.
+                    return try await Self.run(engine, fileURL: fileURL, hints: hints)
+                }
             }
             let permission = SFSpeechRecognizer.authorizationStatus()
             if permission == .denied || permission == .restricted { throw TranscriberError.permissionDenied }

@@ -149,6 +149,8 @@ final class RadioController {
     @ObservationIgnored private let transcribeTimeout: Duration
     /// Radio views on screen besides the panel, by name.
     @ObservationIgnored private var surfaces: Set<String> = []
+    /// The app isn't in the background.
+    @ObservationIgnored private var appActive = true
     /// What the transcriber last said; nil until it's been asked.
     @ObservationIgnored private var readiness: TranscriberReadiness?
     @ObservationIgnored private var preparing = false
@@ -250,6 +252,14 @@ final class RadioController {
     /// shows.
     func setSurface(_ name: String, shown: Bool) {
         if shown { surfaces.insert(name) } else { surfaces.remove(name) }
+        driveTranscription()
+    }
+
+    /// The app went to the background (picture in picture, audio only) or came back: no radio
+    /// view is on screen meanwhile, so nothing is transcribed.
+    func setAppActive(_ active: Bool) {
+        guard appActive != active else { return }
+        appActive = active
         driveTranscription()
     }
 
@@ -397,8 +407,9 @@ final class RadioController {
     /// no session or host); else asks the transcriber until it's ready, then hands it the next
     /// clip. On every tick, and whenever a view, a result or the readiness changes.
     private func driveTranscription() {
-        guard let session = timing.loadedSession, host != nil, sessionID != nil, settings.transcripts,
-              panelShown || !surfaces.isEmpty
+        // The panel is drawn only while the timing shows data; nothing is on screen in the background.
+        guard let session = timing.loadedSession, host != nil, sessionID != nil, settings.transcripts, appActive,
+              (panelShown && timing.showsData) || !surfaces.isEmpty
         else {
             stopTranscribing()
             if transcriptNote != nil { transcriptNote = nil }
