@@ -26,7 +26,10 @@ import SwiftUI
 /// (`RaceEngineerConsole`) and the Scrub Deck (`ScrubDeck`) fill the laptop's bottom screen: the
 /// controller hears which shows (`setRaceViews`), puts an onboard on the top screen for Race
 /// Engineer (or "Tap a car to pick an onboard" shows over the main feed), and in Race Engineer a
-/// tapped car becomes the top onboard. Regions glide with the tiles (the
+/// tapped car becomes the top onboard. In the book (build 21), Onboard and Logbook draws the
+/// main onboard's logbook (`LogbookView`) on the right screen and follows the same top-onboard
+/// rules; Rivals draws a strip under each screen's onboard (`RivalsStrip`) and its listener
+/// (`RivalsListener`). Regions glide with the tiles (the
 /// same views, frames animated); a region the layout doesn't have is not drawn at all. Without
 /// timing a remembered data layout shows the posture's default, and on the laptop with one feed
 /// the bottom half says why ("Loading timing…", "No timing for this session"). Regions and that
@@ -238,7 +241,8 @@ struct MultiviewView: View {
                 // Race Engineer's console and the Scrub Deck: the controller puts an onboard on
                 // top for the console, and the timing builds what they show.
                 .onChange(of: RaceViews(layout.regions), initial: true) { _, shown in
-                    controller.setRaceViews(console: shown.console, deck: shown.deck)
+                    controller.setRaceViews(console: shown.console, deck: shown.deck, logbook: shown.logbook,
+                                            rivals: shown.rivals)
                 }
                 // Unfold to See: the posture's change first (a card showing jumps), then whether
                 // the closed layout shows (cards are made only then; gone, they go).
@@ -292,6 +296,12 @@ struct MultiviewView: View {
         .overlay(alignment: .top) {
             HapticDebugLabel(haptics: model.haptics, settings: model.companion)
                 .padding(.top, 110)
+        }
+        // The hinge mixer (book and laptop, Settings' "Hinge mixer" on): its own view follows the
+        // hinge, so a reading never redraws this body; its bar shows for 2 s on a change.
+        .overlay(alignment: .bottom) {
+            HingeMixerOverlay(fold: fold, radio: controller.radio, settings: model.companion)
+                .padding(.bottom, 28)
         }
         // An editor reopened while the last one was still closing keeps the question waiting.
         .sheet(item: $editor, onDismiss: { editorShowing = editor != nil }) { request in
@@ -349,6 +359,30 @@ struct MultiviewView: View {
                 .position(x: rect.midX, y: rect.midY)
                 .transition(.opacity)
         }
+        if let rect = regions.logbook {
+            LogbookView(controller: controller, timing: controller.timing, radio: controller.radio,
+                        onCar: { number in carTapped(number) })
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        // Rivals: a strip under each screen's onboard (slot 0 left, slot 1 right), and one listener
+        // for the pair (auto-play, each clip in its screen's ear).
+        if let rect = regions.leftStrip {
+            RivalsStrip(controller: controller, radio: controller.radio, timing: controller.timing, side: 0)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        if let rect = regions.rightStrip {
+            RivalsStrip(controller: controller, radio: controller.radio, timing: controller.timing, side: 1)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .transition(.opacity)
+        }
+        if regions.leftStrip != nil || regions.rightStrip != nil {
+            RivalsListener(controller: controller, radio: controller.radio, settings: model.companion)
+        }
     }
 
     /// What Unfold to See follows: the fold's posture, and whether the closed layout shows.
@@ -382,10 +416,14 @@ struct MultiviewView: View {
     private struct RaceViews: Equatable {
         var console: Bool
         var deck: Bool
+        var logbook: Bool
+        var rivals: Bool
 
         init(_ regions: DataRegions) {
             console = regions.console != nil
             deck = regions.deck != nil
+            logbook = regions.logbook != nil
+            rivals = regions.leftStrip != nil || regions.rightStrip != nil
         }
     }
 
@@ -404,7 +442,7 @@ struct MultiviewView: View {
         noteInteraction()
         // Racing numbers are whole numbers; anything else has no onboard.
         guard let racingNumber = Int(number) else { return }
-        if controller.raceEngineerShown {
+        if controller.onboardOnTop {
             controller.showOnboardOnTop(racingNumber: racingNumber)
         } else {
             controller.showOnboard(racingNumber: racingNumber)
@@ -495,7 +533,10 @@ struct MultiviewView: View {
                 map: regions.map.map { input.onScreen($0) },
                 tower: towerRect,
                 console: regions.console.map { input.onScreen($0) },
-                deck: regions.deck.map { input.onScreen($0) }),
+                deck: regions.deck.map { input.onScreen($0) },
+                logbook: regions.logbook.map { input.onScreen($0) },
+                leftStrip: regions.leftStrip.map { input.onScreen($0) },
+                rightStrip: regions.rightStrip.map { input.onScreen($0) }),
             timingNoteArea: noteArea)
     }
 

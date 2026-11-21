@@ -80,6 +80,67 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 21 — Onboard and Logbook, Ear-Matched Rivals, the hinge mixer
+
+Not on the phone yet. Checked on a computer only (syntax of every changed file; the book's words,
+the Rivals slot rules and the mixer's levels in the radio against the São Paulo race data with a
+stand-in player); the first real compile is the owner's Mac build.
+
+- **Onboard and Logbook** (book, ⟳ with timing): one onboard on the left screen, chosen as Race
+  Engineer chooses (the main feed if it's an onboard, else your driver's, else the first); that
+  driver's logbook on the right, in one column:
+  - a header: position, the tyre and its laps, the last lap, and the cars ahead and behind;
+    tapping one switches both screens to that car (tap-a-car's rules);
+  - **Radio**: their clips so far with transcripts, tap to play ("No radio from {CODE} yet.");
+  - **Laps**: newest first, with sector colours;
+  - **Stops**: lap, pit-lane time, tyres off and on ("No stops yet.");
+  - **Race control**: penalties, investigations and track limits naming the car, each with its
+    lap; blue flags are left out ("Nothing from race control about {CODE}.").
+  - Everything stops at the picture; with no onboard on the left, "Tap a car to pick an onboard".
+- **Ear-Matched Rivals** (book, ⟳ with timing and two feeds or more): the two rivals' onboards,
+  one per screen, each with a strip under it: "Left ear · {CODE}" / "Right ear · {CODE}", their
+  last clip's words and ▶. With headphones the left screen's driver is in the left ear and the
+  right's in the right; commentary stays in both. Without headphones clips play centred and the
+  left strip says "Put on headphones to hear each driver in one ear".
+  - The first pair: in a race your driver and the nearer rival; elsewhere your driver and the car
+    next to them in the running order (or the first two). Tap a strip's header to change that
+    screen's driver (picking the other screen's driver swaps the two). The pair is kept for the
+    session.
+  - The two onboards go in the first two spots. A feed makes way for them only if it doesn't
+    have the sound; the feed with the commentary keeps playing out of sight. Leaving Rivals keeps
+    the feeds as they are.
+  - With "Play radio as it happens" on, a clip plays by itself as the picture reaches it (never on
+    a seek or a scrub), in the ear of the screen its driver is on.
+- **The hinge mixer** (Settings › Team radio › "Hinge mixer — fold to hear more radio, open for
+  more commentary", off): in book and laptop, while a clip plays, the hinge sets the balance:
+  70° all radio, 160° all commentary, in between a straight line; smoothed, with a 5° dead zone.
+  A bar shows for 2 s when the mix changes, "Commentary ◀━━●━━▶ Radio", or "No radio to mix yet"
+  before the first clip. With it off (or in other postures) a clip silences the feeds, as before.
+  Without a clip the feeds are at full level. Multiview only: the single-feed player keeps
+  silencing the feeds under a clip.
+- A tap in the Logbook (or a rival put in) that adds a feed keeps the book layout, as the laptop's
+  data layouts are kept.
+- Version: 1.0-beta.4 (build 21).
+
+### Untested — check later (build 21)
+
+- The zero-warnings build (`xcodegen generate` first: a new folder, `DuoApp/Book`). New audio
+  calls not compiled here: the route-change notification, `currentRoute.outputs` and the
+  headphone port types, the player node's volume.
+- In the simulator: both book options with a replay (⟳ in book with timing loaded); the Logbook
+  follows a tap on the car ahead or behind; Rivals' header menu; the mixer with Simulate fold's
+  angle slider (the bar, the levels, 70° and 160°).
+- Panning with headphones on the Mac running the simulator; centred without.
+- On the Duo: the real book halves (the strips are as wide as their onboard, which in book is the
+  whole half); AirPods panning; the hinge mixer's feel (angle noise, how often the angle comes,
+  whether the 5° dead zone feels steppy).
+- **T-R1** (an onboard's team-radio audio track: continuous radio, clips only, or onboard sound)
+  is still open. The mixer is built for clips only; T-R1 decides whether a continuous-radio
+  crossfade is added later.
+- A live multiview in Rivals: a live feed starts only once its own PLAY answers, so the left
+  rival may take a moment (or the next change of the feeds) to reach the left screen.
+- A live programme: Rivals' auto-play lands with the picture, not the timing (T-C4).
+
 ### v1.0-beta.4, build 20 — haptics
 
 Not on the phone yet. Checked on a computer only (syntax of every changed file; the haptic

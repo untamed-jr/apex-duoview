@@ -257,4 +257,67 @@ extension LayoutChoice {
         if deck { return "laptop.scrubDeck" }
         return nil
     }
+
+    /// A feed added while a book data layout shows (Onboard and Logbook, or Rivals): that layout,
+    /// to keep for the new feed count, as `keptDataLayout` keeps the laptop's. Nil when neither
+    /// shows, or the count didn't change.
+    static func keptBookLayout(logbook: Bool, rivals: Bool, oldCount: Int, newCount: Int) -> String? {
+        guard oldCount != newCount else { return nil }
+        if logbook { return "book.logbook" }
+        if rivals { return "book.rivals" }
+        return nil
+    }
+}
+
+/// Ear-Matched Rivals: each rival's onboard in its own screen's slot (0 is the left screen, 1 the
+/// right), so the driver on a screen is the one heard in that ear.
+enum RivalsSlots {
+    /// What to do to put a car's onboard in `side`'s slot.
+    enum Step: Equatable, Sendable {
+        /// It is there already.
+        case none
+        /// It shows in another slot: trade the two (from the other side's slot, the rivals change
+        /// screens).
+        case swap(from: Int)
+        /// Put it in `slot` (empty, or in place of the feed there), then trade it into `side` when
+        /// that is another slot.
+        case put(slot: Int, channel: Channel)
+        /// No onboard for that car in this session, or nowhere to put it (`Placement.message`).
+        case refused(Placement)
+    }
+
+    /// Where `racingNumber`'s onboard goes for `side` (0 or 1), never in place of the other side's
+    /// feed or the feed with the sound (`audioChannelId`):
+    /// 1. no onboard for the car: refused, `.noOnboard`;
+    /// 2. already in `side`'s slot: nothing; in another slot: a swap;
+    /// 3. else into `side`'s slot when it is empty or its feed isn't the sound (the rival it
+    ///    replaces, or a feed that isn't the sound);
+    /// 4. else into an empty slot after the two, else in place of a feed there that isn't the
+    ///    sound (onboards first, the last slot first), then swapped into `side`;
+    /// 5. nowhere: refused, `.noFreeSpot`.
+    static func step(racingNumber: Int, side: Int, slots: [Channel?], channels: [Channel], audioChannelId: Int?) -> Step {
+        guard let onboard = channels.first(where: { $0.isOnboard && $0.racingNumber == racingNumber && $0.id != nil }) else {
+            return .refused(.noOnboard(racingNumber))
+        }
+        guard side == 0 || side == 1, slots.count >= 2 else { return .refused(.noFreeSpot) }
+        let other = 1 - side
+        func shows(_ channel: Channel?) -> Bool {
+            guard let channel else { return false }
+            return channel.id == onboard.id || (channel.isOnboard && channel.racingNumber == racingNumber)
+        }
+        if shows(slots[side]) { return .none }
+        if let at = slots.indices.first(where: { shows(slots[$0]) }) { return .swap(from: at) }
+        func free(_ index: Int) -> Bool {
+            guard index != other, slots.indices.contains(index) else { return false }
+            guard let channel = slots[index] else { return true }
+            return audioChannelId == nil || channel.id != audioChannelId
+        }
+        if free(side) { return .put(slot: side, channel: onboard) }
+        let rest = Array(slots.indices.dropFirst(2))
+        if let empty = rest.first(where: { slots[$0] == nil }) { return .put(slot: empty, channel: onboard) }
+        let onboards = rest.reversed().filter { free($0) && slots[$0]?.isOnboard == true }
+        let others = rest.reversed().filter { free($0) && slots[$0]?.isOnboard != true }
+        if let slot = onboards.first ?? others.first { return .put(slot: slot, channel: onboard) }
+        return .refused(.noFreeSpot)
+    }
 }

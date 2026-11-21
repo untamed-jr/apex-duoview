@@ -187,6 +187,22 @@ final class MultiviewController {
     @ObservationIgnored private(set) var raceEngineerShown = false
     /// The layout shows the Scrub Deck (its region is drawn), as the view reports.
     @ObservationIgnored private var deckShown = false
+    /// The layout shows Onboard and Logbook's logbook (book), as the view reports: like Race
+    /// Engineer, the left screen then shows an onboard (`RaceEngineerTop`) and a tapped car becomes
+    /// that onboard. Kept apart from `raceEngineerShown`, which also builds the console.
+    @ObservationIgnored private(set) var logbookShown = false
+    /// The layout shows Ear-Matched Rivals' strips (book), as the view reports: the two rivals'
+    /// onboards go in slots 0 (left screen, left ear) and 1 (right screen, right ear).
+    @ObservationIgnored private(set) var rivalsShown = false
+    /// The rivals, ahead first when chosen by default, by racing number: chosen once a session
+    /// (`BookModels.defaultRivals`) and changed by a strip's header, so leaving Rivals and coming
+    /// back puts the same two up again.
+    @ObservationIgnored private var rivals: (left: String, right: String)?
+    /// Rivals came up but its onboards couldn't all be put in place yet (a feed still starting, a
+    /// refresh): tried again on the next change of the slots.
+    @ObservationIgnored private var rivalsPending = false
+    /// Rivals' own placing is under way: the slot changes it makes don't start it again.
+    @ObservationIgnored private var placingRivals = false
     /// The swap Race Engineer made by itself to bring an onboard up to the top screen: that
     /// onboard and the feed that was the main one. Undone when the console goes, unless the slots
     /// changed since (a tap, the editor); forgotten then.
@@ -500,6 +516,10 @@ final class MultiviewController {
         // layout) is in.
         raceEngineerShown = false
         deckShown = false
+        logbookShown = false
+        rivalsShown = false
+        rivals = nil
+        rivalsPending = false
         topSwap = nil
         formerMain = nil
         placedAt = [:]
@@ -619,12 +639,20 @@ final class MultiviewController {
     /// main feed if it's an onboard, else your driver's, else the first onboard among the feeds),
     /// by making it the main feed: the sound stays where it is. Leaving Race Engineer undoes that
     /// swap if nothing changed the slots since. The timing hears both, and the top onboard's car.
-    func setRaceViews(console: Bool, deck: Bool) {
-        let wasConsole = raceEngineerShown
+    /// Onboard and Logbook (`logbook`) follows the same top-onboard rules on the book's left screen;
+    /// Rivals (`rivals`) coming up puts the two rivals' onboards in slots 0 and 1 (`placeRivals`).
+    /// Leaving Rivals keeps the feeds as they are (the two onboards stay at the front).
+    func setRaceViews(console: Bool, deck: Bool, logbook: Bool = false, rivals showsRivals: Bool = false) {
+        let wasTop = onboardOnTop
+        let wasRivals = rivalsShown
         raceEngineerShown = console
         deckShown = deck
-        if console, !wasConsole { chooseTopOnboard() }
-        if !console, wasConsole {
+        logbookShown = logbook
+        rivalsShown = showsRivals
+        if showsRivals, !wasRivals { placeRivals() }
+        if !showsRivals { rivalsPending = false }
+        if onboardOnTop, !wasTop { chooseTopOnboard() }
+        if !onboardOnTop, wasTop {
             undoTopSwap()
             // Left with the viewer's own arrangement (or after the undo): remembered as it is.
             if topSwap == nil, formerMain != nil {
@@ -638,8 +666,90 @@ final class MultiviewController {
     /// The racing number of the onboard on the main spot (Race Engineer's top screen); nil when
     /// the main feed isn't an onboard.
     var topOnboardNumber: String? {
-        guard let main = slots[0], main.isOnboard, let number = main.racingNumber else { return nil }
+        onboardNumber(inSlot: 0)
+    }
+
+    /// The racing number of the onboard in a slot; nil when the slot's feed isn't an onboard.
+    func onboardNumber(inSlot slot: Int) -> String? {
+        guard slots.indices.contains(slot), let feed = slots[slot], feed.isOnboard, let number = feed.racingNumber
+        else { return nil }
         return String(number)
+    }
+
+    /// Race Engineer's console or the Logbook shows: the main feed is kept an onboard, and a car
+    /// tapped becomes it (`showOnboardOnTop`).
+    var onboardOnTop: Bool {
+        raceEngineerShown || logbookShown
+    }
+
+    // MARK: Rivals
+
+    /// Rivals coming up (or tried again): the rivals (the session's chosen pair, else
+    /// `BookModels.defaultRivals` at picture time) go in slots 0 and 1. Pending while a step
+    /// can't be done yet (a feed with no player for the main spot, a refresh).
+    private func placeRivals() {
+        rivalsPending = false
+        placingRivals = true
+        defer { placingRivals = false }
+        guard rivalsShown, currentItem != nil, !refreshing, errorText == nil, !channels.isEmpty else {
+            rivalsPending = rivalsShown
+            return
+        }
+        if rivals == nil, let session = timing.loadedSession {
+            let favourite = store.favouriteDriver.flatMap { Tower.carNumber(forDriver: $0, in: session) }
+            if let pair = BookModels.defaultRivals(favourite: favourite, at: timing.pictureTime ?? .min, session: session) {
+                rivals = (left: pair.0, right: pair.1)
+            }
+        }
+        guard let rivals else { return }
+        for (side, car) in [(0, rivals.left), (1, rivals.right)] {
+            guard let number = Int(car) else { continue }
+            if !putRival(number, side: side) { rivalsPending = true }
+        }
+    }
+
+    /// A strip's header: that screen's driver becomes `racingNumber` (its onboard in the screen's
+    /// slot). Returns the notice when nothing changes ("No onboard for car 44 in this session.").
+    @discardableResult
+    func setRival(side: Int, racingNumber: Int) -> String? {
+        guard side == 0 || side == 1, currentItem != nil, !refreshing, errorText == nil else { return nil }
+        let step = RivalsSlots.step(racingNumber: racingNumber, side: side, slots: slots, channels: channels,
+                                    audioChannelId: audioChannelId)
+        if case .refused(let placement) = step, let message = placement.message {
+            showNotice(message)
+            return message
+        }
+        placingRivals = true
+        defer { placingRivals = false }
+        let car = String(racingNumber)
+        // The other screen keeps its driver; picking the other screen's driver trades the two.
+        let left = side == 0 ? car : (onboardNumber(inSlot: 0) == car ? onboardNumber(inSlot: 1) : onboardNumber(inSlot: 0))
+        let right = side == 1 ? car : (onboardNumber(inSlot: 1) == car ? onboardNumber(inSlot: 0) : onboardNumber(inSlot: 1))
+        if !putRival(racingNumber, side: side), rivalsShown { rivalsPending = true }
+        // Remembered for coming back to Rivals (the session's pair from now on).
+        if let left, let right, left != right { rivals = (left: left, right: right) }
+        return nil
+    }
+
+    /// One rival into its screen's slot (`RivalsSlots.step`). False when it isn't there afterwards
+    /// (no onboard, no spot, or a feed not ready to be the main one).
+    private func putRival(_ racingNumber: Int, side: Int) -> Bool {
+        let step = RivalsSlots.step(racingNumber: racingNumber, side: side, slots: slots, channels: channels,
+                                    audioChannelId: audioChannelId)
+        switch step {
+        case .none:
+            return true
+        case .swap(let from):
+            moveFeed(from: from, to: side)
+        case .put(let slot, let channel):
+            let before = effectiveFeedCount
+            setFeed(channel, at: slot)
+            keepDataLayout(fromCount: before)
+            if slot != side { moveFeed(from: slot, to: side) }
+        case .refused:
+            return false
+        }
+        return onboardNumber(inSlot: side) == String(racingNumber)
     }
 
     /// Race Engineer: a car tapped (ahead or behind on the console, its mini map, the map or the
@@ -649,7 +759,7 @@ final class MultiviewController {
     /// Returns the notice, as `showOnboard` does.
     @discardableResult
     func showOnboardOnTop(racingNumber: Int) -> String? {
-        guard raceEngineerShown else { return showOnboard(racingNumber: racingNumber) }
+        guard onboardOnTop else { return showOnboard(racingNumber: racingNumber) }
         guard currentItem != nil, !refreshing, errorText == nil else { return nil }
         // The viewer's own choice: nothing to undo on leaving, and Race Engineer doesn't swap by
         // itself while the tap is placed.
@@ -683,7 +793,7 @@ final class MultiviewController {
     /// isn't one (noting the swap, to undo on leaving). Nothing when no onboard is available: the
     /// view then shows "Tap a car to pick an onboard" over the main feed.
     private func chooseTopOnboard() {
-        guard raceEngineerShown, !placingTap, currentItem != nil, !refreshing, errorText == nil else { return }
+        guard onboardOnTop, !placingTap, currentItem != nil, !refreshing, errorText == nil else { return }
         let playable = Set(slots.compactMap { $0?.id }.filter { canBeMain(channelId: $0) })
         guard let slot = RaceEngineerTop.slot(slots: slots, favourite: store.favouriteDriver, playable: playable),
               slot > 0, let onboard = slots[slot]?.id, let main = slots[0]?.id else { return }
@@ -917,13 +1027,15 @@ final class MultiviewController {
         if let swap = topSwap, slots[0]?.id != swap.onboard || !slots.contains(where: { $0?.id == swap.main }) {
             topSwap = nil
         }
-        if !raceEngineerShown, topSwap != nil { undoTopSwap() }
+        if !onboardOnTop, topSwap != nil { undoTopSwap() }
         if !slots.contains(where: { $0?.id == formerMain }) { formerMain = nil }
         store.lastUsed = rememberedPicks()
         notePlacements()
         updateCards()
         // The top screen gets an onboard again if the main feed stopped being one.
         chooseTopOnboard()
+        // Rivals still waiting for a step (not from inside its own placing).
+        if rivalsPending, !placingRivals { placeRivals() }
         sendRaceViews()
     }
 
@@ -973,10 +1085,17 @@ final class MultiviewController {
     /// as a ⟳ choice would be. The layout engine still falls back if it doesn't fit the screen.
     private func keepDataLayout(fromCount before: Int) {
         let after = effectiveFeedCount
+        let old = Self.layoutCount(before), new = Self.layoutCount(after)
+        // The book's two keep themselves the same way (a tap in the Logbook that fills an empty
+        // spot, a rival put in one), so the layout doesn't change under the tap.
+        if let option = LayoutChoice.keptBookLayout(logbook: logbookShown, rivals: rivalsShown, oldCount: old, newCount: new) {
+            store.setLayoutChoice(option, for: LayoutKey(posture: .book, feedCount: new))
+            layoutRevision += 1
+        }
         guard let option = LayoutChoice.keptDataLayout(
-            console: raceEngineerShown, deck: deckShown, oldCount: Self.layoutCount(before), newCount: Self.layoutCount(after))
+            console: raceEngineerShown, deck: deckShown, oldCount: old, newCount: new)
         else { return }
-        store.setLayoutChoice(option, for: LayoutKey(posture: .laptop, feedCount: Self.layoutCount(after)))
+        store.setLayoutChoice(option, for: LayoutKey(posture: .laptop, feedCount: new))
         layoutRevision += 1
     }
 

@@ -10,6 +10,8 @@ import Foundation
 /// Siri); the clip playing then ends, so the feeds get their sound back.
 ///
 /// It plays in the app's audio session (`.playback`, set by the players), alongside the feeds.
+/// Headphones are read from the session's current route and followed on its route changes, for
+/// Rivals' one-driver-per-ear (a clip is panned only with them; build 21).
 @MainActor
 final class RadioAudio: RadioPlayback {
     private let engine = AVAudioEngine()
@@ -26,8 +28,12 @@ final class RadioAudio: RadioPlayback {
     private var onEnd: (@MainActor () -> Void)?
     private var observer: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
+    private(set) var headphones: Bool
+    var onRouteChange: (@MainActor (Bool) -> Void)?
 
     init() {
+        headphones = RadioAudio.headphonesNow()
         engine.attach(node)
         engine.attach(submixer)
         engine.attach(pitch)
@@ -47,11 +53,33 @@ final class RadioAudio: RadioPlayback {
                 if began { self?.stoppedBySystem() }
             }
         }
+        // Headphones in or out (AirPods connecting, a cable pulled): read here, then handed to the
+        // main actor as a plain value.
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: AVAudioSession.sharedInstance(), queue: .main
+        ) { @Sendable [weak self] _ in
+            let phones = RadioAudio.headphonesNow()
+            Task { @MainActor [weak self] in self?.routeChanged(headphones: phones) }
+        }
+    }
+
+    /// Whether the current route plays through headphones: wired, or Bluetooth (AirPods and
+    /// other headsets). The speaker, AirPlay, a car or HDMI count as no headphones (no ear to pan to).
+    nonisolated static func headphonesNow() -> Bool {
+        let ears: Set<AVAudioSession.Port> = [.headphones, .bluetoothA2DP, .bluetoothLE, .bluetoothHFP]
+        return AVAudioSession.sharedInstance().currentRoute.outputs.contains { ears.contains($0.portType) }
+    }
+
+    private func routeChanged(headphones phones: Bool) {
+        guard headphones != phones else { return }
+        headphones = phones
+        onRouteChange?(phones)
     }
 
     isolated deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
         if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) }
         node.stop()
         engine.stop()
     }
@@ -98,6 +126,11 @@ final class RadioAudio: RadioPlayback {
             stop()
             throw error
         }
+    }
+
+    func setVolume(_ volume: Float) {
+        let value = volume.isFinite ? min(max(volume, 0), 1) : 1
+        if node.volume != value { node.volume = value }
     }
 
     func setRate(_ rate: Float) {

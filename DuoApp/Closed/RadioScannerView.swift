@@ -58,7 +58,8 @@ struct RadioScannerView: View {
             radio.setSurface(Self.surface, shown: true)
         }
         .onDisappear {
-            radio.listen([])
+            // Only its own driver: Rivals may already be listening as the phone opens.
+            radio.stopListening(by: Self.surface)
             radio.setSurface(Self.surface, shown: false)
         }
         .onChange(of: order.first, initial: true) { _, first in
@@ -67,7 +68,7 @@ struct RadioScannerView: View {
         // One stream per driver: auto-play (or the prompt) only from clips crossed in normal play.
         .task(id: driverNow) {
             pending = nil
-            radio.listen(driverNow.map { [$0] } ?? [])
+            radio.listen(driverNow.map { [$0] } ?? [], by: Self.surface)
             guard driverNow != nil else { return }
             for await clip in radio.crossed {
                 if settings.autoPlayRadio {

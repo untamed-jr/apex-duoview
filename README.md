@@ -25,7 +25,11 @@ driver's radio and plays it as it happens, and a Gap Thermometer for any two car
 (a flag, your driver's stop, radio or pass) slides in when the picture reaches it, and opening
 the phone jumps every feed to just before it. Build 20 adds haptics: one feel per flag, safety
 car, red flag and chequered flag, and for your driver's stop and purple sector, felt as the
-picture reaches them. Not on the phone yet.
+picture reaches them. Build 21 adds two book layouts and the hinge mixer: Onboard and Logbook
+(one onboard, and that driver's radio, laps, stops and race control on the other screen), and
+Ear-Matched Rivals (two onboards, one per screen, each driver's radio in that ear with
+headphones); with "Hinge mixer" on, folding gives more radio and opening more commentary while a
+clip plays. Not on the phone yet.
 
 **v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
 [changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race

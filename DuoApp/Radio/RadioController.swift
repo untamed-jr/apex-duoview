@@ -31,6 +31,14 @@ protocol RadioPlayback: AnyObject {
     func stop()
     /// A clip is playing now (false once it ended or the system stopped the audio).
     var isPlaying: Bool { get }
+    /// The clip's own level, 0...1 (the hinge mixer's radio share; 1 otherwise). A new clip starts
+    /// at 1 until set.
+    func setVolume(_ volume: Float)
+    /// Headphones are the output now (wired, AirPods or another Bluetooth headset), from the audio
+    /// session's current route: a clip can then go to one ear.
+    var headphones: Bool { get }
+    /// Called on the main actor, with `headphones`, after each route change.
+    var onRouteChange: (@MainActor (Bool) -> Void)? { get set }
 }
 
 /// How one clip's transcription ended, as the controller hears it.
@@ -121,6 +129,12 @@ final class RadioController {
     /// aren't available on this iPhone — clips still play", "Allow speech recognition in Settings
     /// to see transcripts"); nil while they work, or with no radio view or Transcripts off.
     private(set) var transcriptNote: String?
+    /// Headphones are the output (Rivals pans clips only then; its hint shows without them).
+    /// Followed on every route change.
+    private(set) var headphones = false
+    /// The hinge mixer's levels; nil while it is off. While on, a clip doesn't silence the feeds:
+    /// they play at `commentary` under it and the clip at `radio`.
+    private(set) var mixer: MixLevels?
 
     @ObservationIgnored let settings: CompanionSettings
     @ObservationIgnored private let timing: TimingController
@@ -137,6 +151,8 @@ final class RadioController {
     /// Paths flashing, until when.
     @ObservationIgnored private var flashes: [String: ContinuousClock.Instant] = [:]
     @ObservationIgnored private var listening: Set<String> = []
+    /// Who set `listening` (a view's name), so a view going away clears only its own cars.
+    @ObservationIgnored private var listenOwner: String?
     @ObservationIgnored private var listeners: [UUID: AsyncStream<RadioClip>.Continuation] = [:]
     /// The session the rows are for (its key and folder).
     @ObservationIgnored private var sessionID: String?
@@ -184,6 +200,11 @@ final class RadioController {
         self.clock = clock ?? { RadioController.uptimeMs() }
         self.transcribeTimeout = transcribeTimeout
         filter = settings.radioFilter
+        headphones = self.audio.headphones
+        self.audio.onRouteChange = { [weak self] phones in
+            guard let self, self.headphones != phones else { return }
+            self.headphones = phones
+        }
     }
 
     /// System uptime in ms: monotonic, and it runs while the picture is paused.
@@ -268,6 +289,55 @@ final class RadioController {
     /// The cars whose clips go to `crossed` when normal play crosses them (Scanner, Rivals).
     func listen(_ cars: Set<String>) {
         listening = cars
+        listenOwner = nil
+    }
+
+    /// The cars listened to now.
+    var listeningNow: Set<String> { listening }
+
+    /// `listen` for a view by name (the Radio Scanner, Rivals): `stopListening(by:)` from it later
+    /// clears the cars only if no other view has set its own since.
+    func listen(_ cars: Set<String>, by owner: String) {
+        listening = cars
+        listenOwner = owner
+    }
+
+    /// The view `owner` went away: its cars stop being listened to, unless another view's are in
+    /// place by now (the Scanner's page leaving as Rivals comes up, in either order).
+    func stopListening(by owner: String) {
+        guard listenOwner == owner else { return }
+        listening = []
+        listenOwner = nil
+    }
+
+    // MARK: The hinge mixer
+
+    /// The hinge mixer's levels, or nil for off (`HingeMixer`'s, in book and laptop with the
+    /// setting on). Off, a clip silences the feeds (Android's `RADIO_DUCK = 0`). On, the feeds
+    /// play at `levels.commentary` under a clip and the clip at `levels.radio`. Without a clip the
+    /// feeds are at 1 either way. A clip playing takes the new levels at once.
+    func setMixer(_ levels: MixLevels?) {
+        guard mixer != levels else { return }
+        mixer = levels
+        applyLevels()
+    }
+
+    /// The clip's level and the feeds' under it, while a clip plays (not while it downloads: the
+    /// feeds stay at 1 until it starts).
+    private func applyLevels() {
+        guard let host, playing != nil, audioStarted else { return }
+        audio.setVolume(Self.clipLevel(mixer))
+        host.setFeedVolume(Self.feedLevelUnderClip(mixer))
+    }
+
+    /// The clip's own level: the mixer's radio share, else 1.
+    nonisolated static func clipLevel(_ mixer: MixLevels?) -> Float {
+        mixer.map { min(max($0.radio, 0), 1) } ?? 1
+    }
+
+    /// The feeds' level while a clip plays: the mixer's commentary share, else 0 (silent).
+    nonisolated static func feedLevelUnderClip(_ mixer: MixLevels?) -> Float {
+        mixer.map { min(max($0.commentary, 0), 1) } ?? 0
     }
 
     /// Clips of the listened cars crossed in normal play, from now on (each call is its own
@@ -303,8 +373,10 @@ final class RadioController {
 
     // MARK: Playing
 
-    /// Plays a visible clip: downloads it the first time, then plays it while the feeds are quiet.
-    /// A clip not visible at the cut (after picture time) is ignored.
+    /// Plays a visible clip: downloads it the first time, then plays it while the feeds are quiet
+    /// (or, with the hinge mixer on, at its levels). `pan` is −1 (left ear) … 1 (right ear); Rivals
+    /// pans each driver to their screen's ear. A clip not visible at the cut (after picture time)
+    /// is ignored.
     func play(path: String, pan: Float = 0) {
         guard host != nil, let session = timing.loadedSession,
               let clip = session.radio.all.first(where: { $0.path == path }),
@@ -353,7 +425,7 @@ final class RadioController {
                 self?.ended(token: mine)
             }
             audioStarted = true
-            host.setFeedVolume(0)
+            applyLevels()
         } catch {
             // A damaged file: gone, so the next try downloads it again.
             Task.detached(priority: .utility) { try? FileManager.default.removeItem(at: file) }
