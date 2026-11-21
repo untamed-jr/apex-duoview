@@ -133,15 +133,19 @@ enum RadioModels {
         wholeRace ? nil : pictureTime
     }
 
-    /// "My driver" with no driver chosen lists every clip.
-    static func effective(_ filter: RadioFilter, favourite: String?) -> RadioFilter {
+    /// "My driver" with no driver chosen lists every clip. A remembered driver this session
+    /// doesn't have (`drivers`, the session's racing numbers, when known) lists every clip too.
+    static func effective(_ filter: RadioFilter, favourite: String?, drivers: [String]? = nil) -> RadioFilter {
         if case .myDriver = filter, favourite == nil { return .all }
+        if case .driver(let number) = filter, let drivers, !drivers.contains(number) { return .all }
         return filter
     }
 
-    /// The clips a filter keeps. `favourite` is your driver's racing number.
-    static func filtered(_ clips: [RadioClip], filter: RadioFilter, favourite: String?) -> [RadioClip] {
-        switch effective(filter, favourite: favourite) {
+    /// The clips a filter keeps. `favourite` is your driver's racing number; `drivers` as in
+    /// `effective`.
+    static func filtered(_ clips: [RadioClip], filter: RadioFilter, favourite: String?,
+                         drivers: [String]? = nil) -> [RadioClip] {
+        switch effective(filter, favourite: favourite, drivers: drivers) {
         case .all: return clips
         case .myDriver: return clips.filter { $0.racingNumber == favourite }
         case .driver(let number): return clips.filter { $0.racingNumber == number }

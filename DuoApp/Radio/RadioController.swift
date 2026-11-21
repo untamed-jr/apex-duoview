@@ -761,7 +761,8 @@ final class RadioController {
         let texts = settings.transcripts ? queue : TranscriptionQueue()
         let every = RadioModels.rows(clips: visible, session: session, queue: texts, at: cut, new: new)
         if allRows != every { allRows = every }
-        let kept = RadioModels.filtered(visible, filter: filter, favourite: favourite)
+        let kept = RadioModels.filtered(visible, filter: filter, favourite: favourite,
+                                        drivers: drivers.map(\.number))
         let shown = kept.count == visible.count
             ? every
             : RadioModels.rows(clips: kept, session: session, queue: texts, at: cut, new: new)

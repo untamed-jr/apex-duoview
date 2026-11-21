@@ -68,7 +68,8 @@ private struct RadioChips: View {
     let radio: RadioController
 
     var body: some View {
-        let filter = RadioModels.effective(radio.filter, favourite: radio.favourite)
+        let filter = RadioModels.effective(radio.filter, favourite: radio.favourite,
+                                           drivers: radio.drivers.map(\.number))
         let picked: String? = {
             if case .driver(let number) = filter { return number }
             return nil
@@ -173,7 +174,8 @@ private struct RadioList: View {
     }
 
     private var emptyText: String {
-        let filter = RadioModels.effective(radio.filter, favourite: radio.favourite)
+        let filter = RadioModels.effective(radio.filter, favourite: radio.favourite,
+                                           drivers: radio.drivers.map(\.number))
         let number = RadioModels.driver(of: filter, favourite: radio.favourite)
         let tla = number.map { number in radio.drivers.first { $0.number == number }?.tla ?? number }
         return RadioModels.emptyText(filter: filter, tla: tla)
