@@ -45,6 +45,9 @@ final class AppModel {
     /// The closed phone's event cards and Unfold to See, and the events for haptics: both players
     /// attach it as its host (the single-feed player for haptics only).
     @ObservationIgnored let companionController: CompanionController
+    /// The haptic vocabulary (Core Haptics): the companion plays what its schedule makes due, and
+    /// Settings › Haptics' "Feel it" plays one directly. Its `lastShown` draws the debug label.
+    @ObservationIgnored let haptics: HapticsPlayer
     /// Your driver (Settings › Multiview › My driver): their onboard is the second default feed.
     /// Mirrors the multiview store, which isn't observed.
     private(set) var favouriteDriver: String?
@@ -91,7 +94,11 @@ final class AppModel {
         let radio = RadioController(settings: companion, timing: timing, http: timingHTTP,
                                     token: { await session.bearerToken() })
         self.radio = radio
-        companionController = CompanionController(settings: companion, timing: timing, radio: radio)
+        let companionController = CompanionController(settings: companion, timing: timing, radio: radio)
+        let haptics = HapticsPlayer()
+        companionController.playHaptic = { kind in haptics.play(kind) }
+        self.companionController = companionController
+        self.haptics = haptics
         if let radioCache = RadioFetch.defaultBase {
             Task.detached(priority: .background) {
                 RadioFetch.deleteExpired(in: radioCache, now: Date())

@@ -77,8 +77,14 @@ struct PlayerCover: View {
             }
             .animation(.snappy, value: model.nextLive.offer?.contentId)
         }
+        // Settings › Debug › "Show haptics on screen": "Haptic: Yellow flag" as one plays.
+        .overlay(alignment: .top) {
+            HapticDebugLabel(haptics: model.haptics, settings: model.companion)
+                .padding(.top, 110)
+        }
         .statusBarHidden(controller.player != nil)
-        // The companion follows this player while it shows: haptics only (no pager, no cards).
+        // The companion follows this player while it shows: haptics only (no pager, no cards); the
+        // Radio panel is the chrome's.
         .onAppear { model.companionController.attach(host: controller) }
         .onDisappear { model.companionController.detach(host: controller) }
     }

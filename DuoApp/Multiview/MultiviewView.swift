@@ -287,6 +287,12 @@ struct MultiviewView: View {
             NextLivePrompt(model: model, inPictureInPicture: controller.isInPictureInPicture)
                 .animation(.snappy, value: model.nextLive.offer?.contentId)
         }
+        // Settings › Debug › "Show haptics on screen": "Haptic: Yellow flag" as one plays (its own
+        // view, so this body never reads the haptics).
+        .overlay(alignment: .top) {
+            HapticDebugLabel(haptics: model.haptics, settings: model.companion)
+                .padding(.top, 110)
+        }
         // An editor reopened while the last one was still closing keeps the question waiting.
         .sheet(item: $editor, onDismiss: { editorShowing = editor != nil }) { request in
             FeedsEditor(controller: controller, startSlot: request.slot)

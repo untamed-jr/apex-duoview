@@ -80,6 +80,57 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 20 — haptics
+
+Not on the phone yet. Checked on a computer only (syntax of every changed file; the haptic
+vocabulary and the companion's haptic schedule against the São Paulo race data with a stand-in
+player); the first real compile is the owner's Mac build.
+
+- **A haptic for each event**, felt as the picture reaches it, in either player (the multiview,
+  and the single-feed player, which has no closed-phone pages):
+
+  | Event | Feel |
+  |---|---|
+  | Yellow flag | two short soft taps (at most once a minute of picture time) |
+  | Safety car | three firm pulses |
+  | Virtual safety car | three soft pulses |
+  | Red flag | one long strong buzz, 0.8 s |
+  | Your driver pits | a rising ramp |
+  | Purple sector | one crisp tick (your driver) |
+  | Chequered flag | a slow triple |
+
+- At most one haptic every 2 s; when two come close together the stronger waits for its turn
+  (red, safety car, VSC, chequered, yellow, pits, purple) and the weaker is dropped. Only normal
+  play counts: never data arriving, a seek or a scrub, nor the 2 s after a seek, and a seek
+  forgets a haptic waiting. Your driver's haptics need a driver picked (Settings › Multiview ›
+  My driver).
+- **Settings › Haptics:** "Haptics" (on), then one switch per event, each with "Feel it"; footer
+  "Haptics follow the picture, so they never come before what you see." A haptic plays only
+  when "Haptics" and its own switch are both on. "Feel it" plays it whatever the switches say.
+  Hidden on a phone that can't play haptics (the simulator).
+- **Settings › Debug › "Show haptics on screen"** (off): "Haptic: Yellow flag" at the top of
+  either player for 2 s each time one plays, from the same place as the real haptic, so it also
+  works in the simulator.
+- Core Haptics, haptics-only patterns, one engine for the app, made on the first haptic. It
+  restarts after a reset or an interruption, sleeps between haptics, and starts again with the
+  next one after the app was in the background.
+- Version: 1.0-beta.4 (build 20).
+
+### Untested — check later (build 20)
+
+- The zero-warnings build (`xcodegen generate` first: a new folder, `DuoApp/Haptics`). The
+  Core Haptics calls are checked against a stand-in only.
+- Exit-test step 3 in the simulator with "Show haptics on screen": the race's yellow flags and
+  the two red flags in the São Paulo qualifying replay each show "Haptic: …" as the picture
+  reaches them; nothing on a scrub across one, nor in the 2 s after it.
+- On the Duo: each "Feel it", and each event in a replay; whether the seven feel distinct;
+  whether yellow nags through a busy session; Settings › Haptics shows on the phone.
+- On the Duo with "Show haptics on screen" on: every label comes with a feel, also the first
+  haptic after a long quiet spell (the engine sleeps between haptics).
+- With the screen off or the app in the background (O2): Core Haptics is expected to stop; the
+  next haptic after coming back should still play.
+- A live programme: the haptic lands with the picture, not the timing (T-C4).
+
 ### v1.0-beta.4, build 19 — the closed phone and Unfold to See
 
 Not on the phone yet. Checked on a computer only (syntax of every changed file; the closed

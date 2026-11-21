@@ -1,6 +1,6 @@
 // The single source of the app version. Nothing else sets these.
 MARKETING_VERSION = 1.0
-CURRENT_PROJECT_VERSION = 19
+CURRENT_PROJECT_VERSION = 20
 BETA_LABEL = beta.4
 // The source code a build came from (scripts/install-on-duo.sh sets it); empty from Xcode.
 DUO_COMMIT =

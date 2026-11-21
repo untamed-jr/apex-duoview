@@ -23,7 +23,9 @@ reaches it. Build 19 makes the closed phone a companion: the outer screen pages 
 picture (two feeds stacked, or one with the timing tower), a Radio Scanner that follows one
 driver's radio and plays it as it happens, and a Gap Thermometer for any two cars; an event card
 (a flag, your driver's stop, radio or pass) slides in when the picture reaches it, and opening
-the phone jumps every feed to just before it. Not on the phone yet.
+the phone jumps every feed to just before it. Build 20 adds haptics: one feel per flag, safety
+car, red flag and chequered flag, and for your driver's stop and purple sector, felt as the
+picture reaches them. Not on the phone yet.
 
 **v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
 [changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race

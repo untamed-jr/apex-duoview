@@ -1,9 +1,10 @@
 import F1TV
 import SwiftUI
 
-/// Settings: account, multiview, the track map, team radio, the closed phone, a live fold readout,
-/// About, credits, and Debug (the fold simulator, the screen's size in points for measuring the
-/// outer screen, and build 17's "Transcribe a test clip").
+/// Settings: account, multiview, the track map, team radio, the closed phone, haptics (only on a
+/// phone that can play them), a live fold readout, About, credits, and Debug (the fold simulator,
+/// the screen's size in points for measuring the outer screen, "Show haptics on screen", and
+/// build 17's "Transcribe a test clip").
 /// Shown in the system sheet on a narrow screen, and in the app's own `SettingsPanel` on a wide
 /// one, so it closes through `onDone` rather than the environment's dismiss action.
 struct SettingsView: View {
@@ -21,6 +22,18 @@ struct SettingsView: View {
     /// "Clear watch history" asks first, then says it's done.
     @State private var confirmClearHistory = false
     @State private var historyCleared = false
+    /// "Show haptics on screen": `CompanionSettings` isn't observed, so the switch keeps a copy.
+    @State private var showHaptics: Bool
+
+    init(model: AppModel, fold: FoldState, onDone: @escaping () -> Void, onSignIn: @escaping () -> Void,
+         onSignOut: @escaping () -> Void) {
+        self.model = model
+        self.fold = fold
+        self.onDone = onDone
+        self.onSignIn = onSignIn
+        self.onSignOut = onSignOut
+        _showHaptics = State(initialValue: model.companion.showHapticsOnScreen)
+    }
 
     var body: some View {
         NavigationStack {
@@ -30,6 +43,11 @@ struct SettingsView: View {
                 TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
                 RadioSettingsSection(settings: model.companion).listRowBackground(Theme.surface)
                 ClosedSettingsSection(settings: model.companion).listRowBackground(Theme.surface)
+                // Hidden on a phone without haptics (the simulator): Debug's label is the check there.
+                if model.haptics.supported {
+                    HapticsSettingsSection(settings: model.companion, haptics: model.haptics)
+                        .listRowBackground(Theme.surface)
+                }
                 foldSection.listRowBackground(Theme.surface)
                 watchingSection.listRowBackground(Theme.surface)
                 helpSection.listRowBackground(Theme.surface)
@@ -260,6 +278,14 @@ struct SettingsView: View {
             .disabled(!fake.isActive)
             // For measuring the outer screen (owner check T-B19): the screen's size in points.
             LabeledContent("Screen", value: Self.pointsText(fold.rootSize))
+            // Draws "Haptic: Yellow flag" in the players when one plays, also without haptics.
+            Toggle(HapticPatterns.showOnScreen, isOn: Binding(
+                get: { showHaptics },
+                set: { on in
+                    showHaptics = on
+                    model.companion.showHapticsOnScreen = on
+                }))
+            .tint(Theme.accent)
             // Build 17's probe (owner check O4); removed before release.
             TranscribeProbeRows()
         } header: {

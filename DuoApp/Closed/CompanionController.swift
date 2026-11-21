@@ -4,7 +4,7 @@ import Multiview
 import Observation
 
 /// A player whose feeds a card can jump: the multiview. The single-feed player is only a
-/// `PlaybackHost`, so it gets no cards (haptics only, from Task 13).
+/// `PlaybackHost`, so it gets no cards (haptics only).
 @MainActor
 protocol CompanionJumpHost: PlaybackHost {
     /// Every feed to picture time `t`, through the Scrub Deck's seek, remembering where they were
@@ -28,7 +28,11 @@ protocol CompanionJumpHost: PlaybackHost {
 /// - Closed → open with a card showing, or a tap on it while closed (or on any phone without a
 ///   fold): every feed jumps to the card's `t − rewindSeconds`, and "Back to where you were"
 ///   shows for 15 s. The event jumped to brings no second card when play crosses it again.
-/// - `hapticEvents`: every event crossed in normal play, cards or not, for Task 13.
+/// - `hapticEvents`: every event crossed in normal play, cards or not.
+/// - Haptics, from either player: each event crossed in normal play whose haptic is switched on
+///   (Settings › Haptics, and that kind's own switch) is offered to a `HapticSchedule`, polled on
+///   the same tick (`playHaptic` gets what is due: at most one every 2 s of wall clock, the
+///   strongest waiting). A seek tick, a new session or host and detaching forget what waits.
 @MainActor
 @Observable
 final class CompanionController {
@@ -57,6 +61,10 @@ final class CompanionController {
     /// The multiview's closed layout shows: cards are made.
     @ObservationIgnored private(set) var cardsShown = false
     @ObservationIgnored private var hapticListeners: [UUID: AsyncStream<CompanionEvent>.Continuation] = [:]
+    /// One haptic at most every 2 s, the strongest waiting (`now` in seconds, wall clock).
+    @ObservationIgnored private var hapticSchedule = HapticSchedule()
+    /// Plays a haptic that is due (the app's `HapticsPlayer`); nil plays nothing.
+    @ObservationIgnored var playHaptic: (@MainActor (HapticKind) -> Void)?
 
     init(settings: CompanionSettings, timing: TimingController, radio: RadioController,
          now: (@MainActor () -> Date)? = nil) {
@@ -140,7 +148,7 @@ final class CompanionController {
     // MARK: Haptics
 
     /// Every event crossed in normal play, from now on (each read is its own stream; a slow reader
-    /// keeps the newest 16).
+    /// keeps the newest 16). Unfiltered: what is felt goes through `playHaptic`.
     var hapticEvents: AsyncStream<CompanionEvent> {
         let (stream, continuation) = AsyncStream.makeStream(of: CompanionEvent.self, bufferingPolicy: .bufferingNewest(16))
         let id = UUID()
@@ -149,6 +157,22 @@ final class CompanionController {
             Task { @MainActor [weak self] in self?.hapticListeners[id] = nil }
         }
         return stream
+    }
+
+    /// One tick's haptics: a seek forgets what waits; in normal play each event whose haptic is
+    /// switched on is offered (a stronger one replaces a weaker one waiting); then whatever is
+    /// due plays. Called once per tick with a host, with no events when nothing was crossed.
+    func scheduleHaptics(_ events: [CompanionEvent], motion: PictureMotion) {
+        let seconds = now().timeIntervalSinceReferenceDate
+        if motion == .seek {
+            hapticSchedule.reset()
+        } else {
+            for event in events {
+                guard let kind = HapticKind.from(event.kind), HapticPatterns.wanted(kind, settings: settings) else { continue }
+                hapticSchedule.offer(kind, now: seconds)
+            }
+        }
+        if let kind = hapticSchedule.due(now: seconds) { playHaptic?(kind) }
     }
 
     // MARK: The tick
@@ -178,6 +202,7 @@ final class CompanionController {
         if id != sessionID {
             sessionID = id
             detector = EventDetector()
+            hapticSchedule.reset()
             setStack { $0.removeAll() }
             backChip = nil
         }
@@ -190,13 +215,18 @@ final class CompanionController {
         let motion: PictureMotion = seekTicksLeft > 0 ? .seek : .play
         if seekTicksLeft > 0 { seekTicksLeft -= 1 }
 
-        guard let t = timing.pictureTime else { return }
+        // Without picture time: a seek still forgets the waiting haptic, and one waiting plays.
+        guard let t = timing.pictureTime else {
+            scheduleHaptics([], motion: motion)
+            return
+        }
         if motion == .seek { setStack { $0.dropLater(than: t) } }
         let events = detector.step(to: t, motion: motion, session: session, radio: session.radio,
                                    favourite: mine, listening: [])
         for event in events {
             for continuation in hapticListeners.values { continuation.yield(event) }
         }
+        scheduleHaptics(events, motion: motion)
         if !events.isEmpty, cardsShown, host is any CompanionJumpHost {
             let settings = settings
             setStack { $0.add(events, favourite: mine, groupOn: { settings.cardGroupOn($0) }) }
@@ -211,8 +241,9 @@ final class CompanionController {
         if cards != stack.cards { cards = stack.cards }
     }
 
-    /// No session: no cards, no chip, a fresh detector.
+    /// No session: no cards, no chip, no haptic waiting, a fresh detector.
     private func forgetSession() {
+        hapticSchedule.reset()
         guard sessionID != nil || !stack.cards.isEmpty || backChip != nil else { return }
         sessionID = nil
         detector = EventDetector()
