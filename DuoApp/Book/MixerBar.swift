@@ -30,6 +30,9 @@ struct MixerBar: View {
 ///   (`BookModels.mixerActive`). Coming on, a fresh `HingeMixer` takes the angle (its first reading
 ///   always applies); then every change of `FoldState.hingeAngle` is a reading (smoothed, with its
 ///   5° dead zone). A nil angle (no hinge, not reported yet) is never a reading: the levels stay.
+/// - The hinge reports only changes, so after each reading the mixer settles on a 100 ms timer
+///   (`HingeMixer.settle()`) until it reaches the angle the hinge stopped at; a new reading or
+///   going off cancels the timer.
 /// - Each new set of levels goes to the radio (`setMixer`) and shows the bar for 2 s.
 /// - Going off (another posture, the setting off) or this view going away: `setMixer(nil)`, so a
 ///   clip silences the feeds again and nothing carries over to the single-feed player.
@@ -39,6 +42,11 @@ struct HingeMixerOverlay: View {
     let fold: FoldState
     let radio: RadioController
     let settings: CompanionSettings
+
+    /// How often the mixer steps towards a hinge at rest, and for how many steps at most (about
+    /// 1.5 s takes it from one end to the other; the cap is a guard, never reached).
+    private static let settleStep: Duration = .milliseconds(100)
+    private static let settleStepLimit = 60
 
     @State private var mixer = HingeMixer()
     @State private var levels: MixLevels?
@@ -63,6 +71,19 @@ struct HingeMixerOverlay: View {
         .animation(.easeInOut(duration: 0.2), value: barShown)
         .onChange(of: input, initial: true) { old, new in
             reading(new, comingOn: new.active && (!old.active || old == new))
+        }
+        // After a reading: keep stepping until the mix reaches where the hinge came to rest.
+        .task(id: input) {
+            var steps = 0
+            while input.active, !mixer.isSettled, steps < Self.settleStepLimit {
+                do {
+                    try await Task.sleep(for: Self.settleStep)
+                } catch {
+                    return
+                }
+                steps += 1
+                apply(mixer.settle())
+            }
         }
         .task(id: changes) {
             guard changes > 0 else { return }
@@ -96,7 +117,12 @@ struct HingeMixerOverlay: View {
         if comingOn { mixer = HingeMixer() }
         // No reading without an angle: the levels stay as they are.
         guard let angle = input.angle else { return }
-        guard let next = mixer.update(angle: angle) else { return }
+        apply(mixer.update(angle: angle))
+    }
+
+    /// New levels from a reading or a settling step go to the radio, and a change shows the bar.
+    private func apply(_ new: MixLevels?) {
+        guard let next = new else { return }
         let changed = next != levels
         levels = next
         radio.setMixer(next)

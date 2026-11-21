@@ -78,6 +78,89 @@ import Testing
         #expect(latest == MixLevels(commentary: 1, radio: 0))
     }
 
+    // MARK: Settling: the app's real input, each angle once
+
+    /// Settles as the app does (a step on a short timer until settled; capped), keeping the last
+    /// levels applied. Returns them and the number of steps taken.
+    private func settled(_ mixer: inout HingeMixer, from start: MixLevels?) -> (levels: MixLevels?, steps: Int) {
+        var latest = start
+        var steps = 0
+        while !mixer.isSettled, steps < 200 {
+            if let l = mixer.settle() { latest = l }
+            steps += 1
+        }
+        return (latest, steps)
+    }
+
+    @Test func oneReadingThenRestReachesTheReading() {
+        // The hinge goes from flat-ish to 90° in one reading and stops: only that one reading comes.
+        var mixer = HingeMixer()
+        let first = mixer.update(angle: 160)
+        #expect(first == MixLevels(commentary: 1, radio: 0))
+        let moved = mixer.update(angle: 90)
+        // The reading alone stops short, at 139° (0.3 of the way), and no more readings come.
+        #expect(moved == HingeMixer.levels(angle: 139))
+        #expect(!mixer.isSettled)
+        let (levels, steps) = settled(&mixer, from: moved)
+        #expect(mixer.isSettled)
+        #expect(levels == HingeMixer.levels(angle: 90))
+        // About 1.5 s at the app's 100 ms step.
+        #expect(steps <= 20)
+        // Settled: nothing more to do, and no further levels.
+        #expect(mixer.settle() == nil)
+    }
+
+    @Test func oneReadingPastEachEndReachesTheEnd() {
+        var closing = HingeMixer()
+        _ = closing.update(angle: 150)
+        let a = closing.update(angle: 40)
+        let (radioEnd, _) = settled(&closing, from: a)
+        #expect(radioEnd == MixLevels(commentary: 0, radio: 1))
+        #expect(closing.isSettled)
+
+        var opening = HingeMixer()
+        _ = opening.update(angle: 80)
+        let b = opening.update(angle: 180)
+        let (commentaryEnd, _) = settled(&opening, from: b)
+        #expect(commentaryEnd == MixLevels(commentary: 1, radio: 0))
+        #expect(opening.isSettled)
+    }
+
+    @Test func aRampThenStopEndsWhereTheHingeStopped() {
+        // 6° a reading from 160° down to 88°, each once, then nothing: without settling it lags
+        // about 14° behind.
+        var mixer = HingeMixer()
+        var latest = mixer.update(angle: 160)
+        for angle in stride(from: 154.0, through: 88.0, by: -6.0) {
+            if let l = mixer.update(angle: angle) { latest = l }
+        }
+        #expect(latest != HingeMixer.levels(angle: 88))
+        let (levels, _) = settled(&mixer, from: latest)
+        #expect(levels == HingeMixer.levels(angle: 88))
+    }
+
+    @Test func aJitterReadingNeverAppliesWhenSettling() {
+        var mixer = HingeMixer()
+        #expect(mixer.update(angle: 100) != nil)
+        for jitter in [102.0, 98.0, 103.0, 97.5] {
+            #expect(mixer.update(angle: jitter) == nil)
+            // Within the dead zone: nothing to settle, and settling applies nothing.
+            #expect(mixer.isSettled)
+            #expect(mixer.settle() == nil)
+        }
+    }
+
+    @Test func aNewReadingWhileSettlingIsFollowed() {
+        var mixer = HingeMixer()
+        _ = mixer.update(angle: 160)
+        var latest = mixer.update(angle: 90)
+        // Two steps in, the hinge moves again (to 120°) and stops there.
+        for _ in 0..<2 { if let l = mixer.settle() { latest = l } }
+        if let l = mixer.update(angle: 120) { latest = l }
+        let (levels, _) = settled(&mixer, from: latest)
+        #expect(levels == HingeMixer.levels(angle: 120))
+    }
+
     @Test func heldAtRadioEndReachesItExactly() {
         var mixer = HingeMixer()
         _ = mixer.update(angle: 80)
