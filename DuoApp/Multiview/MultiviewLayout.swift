@@ -287,7 +287,8 @@ enum RivalsSlots {
     }
 
     /// Where `racingNumber`'s onboard goes for `side` (0 or 1), never in place of the other side's
-    /// feed or the feed with the sound (`audioChannelId`):
+    /// feed, the feed with the sound (`audioChannelId`) or the onboard of `keeping` (the other
+    /// rival, still to be put in place, wherever it is now):
     /// 1. no onboard for the car: refused, `.noOnboard`;
     /// 2. already in `side`'s slot: nothing; in another slot: a swap;
     /// 3. else into `side`'s slot when it is empty or its feed isn't the sound (the rival it
@@ -295,7 +296,8 @@ enum RivalsSlots {
     /// 4. else into an empty slot after the two, else in place of a feed there that isn't the
     ///    sound (onboards first, the last slot first), then swapped into `side`;
     /// 5. nowhere: refused, `.noFreeSpot`.
-    static func step(racingNumber: Int, side: Int, slots: [Channel?], channels: [Channel], audioChannelId: Int?) -> Step {
+    static func step(racingNumber: Int, side: Int, slots: [Channel?], channels: [Channel], audioChannelId: Int?,
+                     keeping: Int? = nil) -> Step {
         guard let onboard = channels.first(where: { $0.isOnboard && $0.racingNumber == racingNumber && $0.id != nil }) else {
             return .refused(.noOnboard(racingNumber))
         }
@@ -310,6 +312,7 @@ enum RivalsSlots {
         func free(_ index: Int) -> Bool {
             guard index != other, slots.indices.contains(index) else { return false }
             guard let channel = slots[index] else { return true }
+            if let keeping, channel.isOnboard, channel.racingNumber == keeping { return false }
             return audioChannelId == nil || channel.id != audioChannelId
         }
         if free(side) { return .put(slot: side, channel: onboard) }

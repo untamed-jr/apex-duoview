@@ -649,9 +649,8 @@ final class MultiviewController {
         deckShown = deck
         logbookShown = logbook
         rivalsShown = showsRivals
-        if showsRivals, !wasRivals { placeRivals() }
-        if !showsRivals { rivalsPending = false }
-        if onboardOnTop, !wasTop { chooseTopOnboard() }
+        // Leaving the Logbook or Race Engineer first: its own swap is undone before Rivals places
+        // its pair (else the undo, run from Rivals' own slot changes, would take the left rival off).
         if !onboardOnTop, wasTop {
             undoTopSwap()
             // Left with the viewer's own arrangement (or after the undo): remembered as it is.
@@ -660,6 +659,9 @@ final class MultiviewController {
                 if currentItem != nil { store.lastUsed = picks }
             }
         }
+        if showsRivals, !wasRivals { placeRivals() }
+        if !showsRivals { rivalsPending = false }
+        if onboardOnTop, !wasTop { chooseTopOnboard() }
         sendRaceViews()
     }
 
@@ -702,9 +704,10 @@ final class MultiviewController {
             }
         }
         guard let rivals else { return }
-        for (side, car) in [(0, rivals.left), (1, rivals.right)] {
+        for (side, car, other) in [(0, rivals.left, rivals.right), (1, rivals.right, rivals.left)] {
             guard let number = Int(car) else { continue }
-            if !putRival(number, side: side) { rivalsPending = true }
+            // The other rival's onboard, wherever it is now, never makes way for this one.
+            if !putRival(number, side: side, keeping: Int(other)) { rivalsPending = true }
         }
     }
 
@@ -733,9 +736,9 @@ final class MultiviewController {
 
     /// One rival into its screen's slot (`RivalsSlots.step`). False when it isn't there afterwards
     /// (no onboard, no spot, or a feed not ready to be the main one).
-    private func putRival(_ racingNumber: Int, side: Int) -> Bool {
+    private func putRival(_ racingNumber: Int, side: Int, keeping: Int? = nil) -> Bool {
         let step = RivalsSlots.step(racingNumber: racingNumber, side: side, slots: slots, channels: channels,
-                                    audioChannelId: audioChannelId)
+                                    audioChannelId: audioChannelId, keeping: keeping)
         switch step {
         case .none:
             return true
