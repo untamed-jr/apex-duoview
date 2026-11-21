@@ -4,81 +4,7 @@ Versions follow the standard in [docs/roadmap.md](docs/roadmap.md).
 
 ## Unreleased
 
-### Live multiview (not on the phone yet)
-
-Asked as one multiview PLAY, F1 TV sends a live session's multiview as Widevine, which no iPhone
-plays ("Multiview can't play this live session yet"). Asked one feed at a time, the way Safari
-asks, each feed comes as FairPlay, and several play side by side (owner's probes and FP1). So a
-live multiview now plays each feed on its own FairPlay session.
-
-- Opening a live multiview: when the one multiview PLAY comes back protected, each slot's feed
-  is asked for on its own (the remembered four at once); a feed picked later in Feeds is asked
-  for when it is picked. Every feed the session lists can be picked. The main INTERNATIONAL
-  feed is asked without a channel, as F1 TV's own link is.
-- Each feed has its own FairPlay keys, for as long as the feed plays.
-- A feed that F1 TV won't play shows the reason on its tile; the others play on. If the main
-  feed can't play, the multiview ends with the reason and offers "Watch the main feed".
-- An expired link asks for that one feed again, not every feed (at most once a minute per feed).
-- Replays are unchanged: one multiview PLAY, unprotected streams.
-- DuoCore: `PlayCoordinator.playLiveFeed(contentId:channelId:playChannelId:refresh:)` (tested):
-  one Safari-style PLAY per feed, kept by channel; asking again sends nothing; a single or
-  multiview PLAY, or a stop, clears them.
-
-Untested — check later (on the phone, during a live session: the simulator can't play FairPlay):
-- everything above: four feeds play; the onboards are the right drivers; swapping a feed in
-  Feeds plays it; 10 minutes without a stall; "Watch the main feed" still shows if F1 TV refuses;
-- the first build on the Mac (only the syntax of the app files was checked here).
-
-### Polish — the opening screen and the Apple design pass (in progress, not on the phone yet)
-
-Moved forward from after beta.4 (owner, 2026-11-19), built while waiting for the race weekend.
-The phone keeps the race build (commit `cc569d2`, the same app as `3073622`) until after the Las Vegas race. Each
-change is its own commit so it can be kept or reverted on its own.
-
-- **Opening screen** (direction A, "Night circuit"): the floodlit wet corner, red light trails
-  drawn along the racing line, the neon APEX logo lighting up, "DuoView", "Every lap, every
-  angle.", the version and the small print. About 1.6 s plus a short hold, once per launch; a
-  tap skips it; Reduce Motion makes it a plain fade. The launch screen is now plain near-black
-  (the old square logo is gone from it), so it hands over to the opening's first frame.
-- **Apple design pass**, one commit each so any can be undone alone:
-  - q6: the selected tab is white, not red.
-  - q5: Apple's glass buttons (main actions stay red); the floating Live-now and sign-in
-    banners are glass.
-  - q2: feed name pills, speaker buttons and driver cards are clear glass; only SOUND is red.
-  - q1: multiview's top bar and playback bar are clear glass, grouped; same touch areas.
-  - q3: the floating map and tower are regular glass; docked they stay solid.
-  - q7: tower rows, tyre letters, pit-circle labels and the Scrub Deck PIT grow with the text
-    size (unchanged at the default size).
-  - Waiting: q8 (44 pt touch areas) and q9 (VoiceOver for the map and pit circle, Move and Resize
-    actions for panels), until the laptop-pose tap and drag problems are found. q4 is no change.
-- **Welcome tour and first-time tips** (owner's picks, 2026-11-20): five swipeable cards on the
-  first launch (Skip on each; Settings › Help › "How to use" plays them again), and tips the
-  first time: try laptop pose (flat multiview), tap a car (the Map button), tap to bring the
-  controls back, and closed it keeps playing. Settings › Help also has "Show tips" and "Reset
-  tips". The card pictures are placeholders until the screenshots are taken after the race.
-- **Clearing what you've watched** (owner request, FP1 night): touch and hold a Continue
-  watching tile › "Remove from Continue watching"; "Clear all" beside the row's title (asks
-  first); Settings › Watching › "Clear watch history" clears Continue watching and the watched
-  marks (asks first). DuoCore: `RecentsStore.removeAll()`, `WatchHistory.removeAll()` (tested).
-- **Single-feed player: the app's own controls** (owner's screenshots, FP1 night, option B):
-  Apple's player is gone; the picture is the app's own, with the multiview's look: ✕ and mute,
-  then Map, picture in picture and AirPlay at the top; at the bottom the scrubber, play/pause,
-  back and forward 10 s, a LIVE that takes you live when tapped (red at the live point, outlined
-  behind it), the speed, and one menu for the commentary language and subtitles (subtitles only
-  if the video has any). They hide 4 s after the last touch; tap the picture to bring them
-  back; they stay up while paused, loading or scrubbing. Mute and the subtitle choice stay when
-  tapping a car switches feeds. Picture in picture also still starts by itself on leaving the
-  app; the lock screen and Control Centre keep play, pause and the position; on AirPlay a line
-  says "Playing on AirPlay". Fixes the doubled ✕ and Map, the LIVE that didn't go live, and
-  Apple's controls that stayed stuck on screen. Not brought back: Apple's volume slider (the
-  side buttons set the volume; mute is the app's) and its zoom-to-fill.
-  Built in the simulator with 0 warnings (342b966, 2026-11-20). Untested: using it (simulator
-  replay check next); live checks need the phone after the race.
-- **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
-  touching the phone; `--shots` also saves screenshots of the opening.
-
-Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
-Untested — check later: everything above on the phone (after the race).
+Nothing yet beyond beta.4.
 
 ## v1.0-beta.4 — Radio and the closed phone (not released yet)
 
@@ -100,6 +26,11 @@ the first real compile of the app changes.
   the picture reaches them.
 - **Book layouts and the hinge mixer** (build 21): Onboard and Logbook, Ear-Matched Rivals, and
   a hinge mixer for radio against commentary (clips only, until owner check T-R1).
+- **Live multiview** (after build 16): each live feed asked for on its own, so a live multiview
+  plays through FairPlay; checked only at a race weekend.
+- **Polish**: the opening screen, the Apple design pass (q8 and q9 held until the laptop-pose
+  bugs are fixed) and the single player's own controls (subtitles, mute, picture in picture,
+  lock screen). See the sections below the untested list.
 - **Final fixes** (build 22): from the final review, including the mixer settling at the hinge's
   angle, Unfold to See through an unknown posture, nothing left on the lock screen after closing
   the player, and a live multiview tile that asks again with a fresh link.
@@ -198,6 +129,82 @@ build below stay as they were written.
   moment (or the next change of the feeds) to reach the left screen.
 - On a live programme, haptics, Rivals' auto-play and the radio land with the picture, not the
   timing (T-C4); a card's jump back from the live edge, "Back" to the edge, and LIVE.
+
+### v1.0-beta.4 — live multiview through FairPlay (not on the phone yet)
+
+Asked as one multiview PLAY, F1 TV sends a live session's multiview as Widevine, which no iPhone
+plays ("Multiview can't play this live session yet"). Asked one feed at a time, the way Safari
+asks, each feed comes as FairPlay, and several play side by side (owner's probes and FP1). So a
+live multiview now plays each feed on its own FairPlay session.
+
+- Opening a live multiview: when the one multiview PLAY comes back protected, each slot's feed
+  is asked for on its own (the remembered four at once); a feed picked later in Feeds is asked
+  for when it is picked. Every feed the session lists can be picked. The main INTERNATIONAL
+  feed is asked without a channel, as F1 TV's own link is.
+- Each feed has its own FairPlay keys, for as long as the feed plays.
+- A feed that F1 TV won't play shows the reason on its tile; the others play on. If the main
+  feed can't play, the multiview ends with the reason and offers "Watch the main feed".
+- An expired link asks for that one feed again, not every feed (at most once a minute per feed).
+- Replays are unchanged: one multiview PLAY, unprotected streams.
+- DuoCore: `PlayCoordinator.playLiveFeed(contentId:channelId:playChannelId:refresh:)` (tested):
+  one Safari-style PLAY per feed, kept by channel; asking again sends nothing; a single or
+  multiview PLAY, or a stop, clears them.
+
+Untested — check later (on the phone, during a live session: the simulator can't play FairPlay):
+- everything above: four feeds play; the onboards are the right drivers; swapping a feed in
+  Feeds plays it; 10 minutes without a stall; "Watch the main feed" still shows if F1 TV refuses;
+- the first build on the Mac (only the syntax of the app files was checked here).
+
+### v1.0-beta.4 — polish: the opening screen, the Apple design pass and the single player (not on the phone yet; design-pass q8 and q9 held)
+
+Moved forward from after beta.4 (owner, 2026-11-19), built while waiting for the race weekend.
+The phone keeps the race build (commit `cc569d2`, the same app as `3073622`) until after the Las Vegas race. Each
+change is its own commit so it can be kept or reverted on its own.
+
+- **Opening screen** (direction A, "Night circuit"): the floodlit wet corner, red light trails
+  drawn along the racing line, the neon APEX logo lighting up, "DuoView", "Every lap, every
+  angle.", the version and the small print. About 1.6 s plus a short hold, once per launch; a
+  tap skips it; Reduce Motion makes it a plain fade. The launch screen is now plain near-black
+  (the old square logo is gone from it), so it hands over to the opening's first frame.
+- **Apple design pass**, one commit each so any can be undone alone:
+  - q6: the selected tab is white, not red.
+  - q5: Apple's glass buttons (main actions stay red); the floating Live-now and sign-in
+    banners are glass.
+  - q2: feed name pills, speaker buttons and driver cards are clear glass; only SOUND is red.
+  - q1: multiview's top bar and playback bar are clear glass, grouped; same touch areas.
+  - q3: the floating map and tower are regular glass; docked they stay solid.
+  - q7: tower rows, tyre letters, pit-circle labels and the Scrub Deck PIT grow with the text
+    size (unchanged at the default size).
+  - Waiting: q8 (44 pt touch areas) and q9 (VoiceOver for the map and pit circle, Move and Resize
+    actions for panels), until the laptop-pose tap and drag problems are found. q4 is no change.
+- **Welcome tour and first-time tips** (owner's picks, 2026-11-20): five swipeable cards on the
+  first launch (Skip on each; Settings › Help › "How to use" plays them again), and tips the
+  first time: try laptop pose (flat multiview), tap a car (the Map button), tap to bring the
+  controls back, and closed it keeps playing. Settings › Help also has "Show tips" and "Reset
+  tips". The card pictures are placeholders until the screenshots are taken after the race.
+- **Clearing what you've watched** (owner request, FP1 night): touch and hold a Continue
+  watching tile › "Remove from Continue watching"; "Clear all" beside the row's title (asks
+  first); Settings › Watching › "Clear watch history" clears Continue watching and the watched
+  marks (asks first). DuoCore: `RecentsStore.removeAll()`, `WatchHistory.removeAll()` (tested).
+- **Single-feed player: the app's own controls** (owner's screenshots, FP1 night, option B):
+  Apple's player is gone; the picture is the app's own, with the multiview's look: ✕ and mute,
+  then Map, picture in picture and AirPlay at the top; at the bottom the scrubber, play/pause,
+  back and forward 10 s, a LIVE that takes you live when tapped (red at the live point, outlined
+  behind it), the speed, and one menu for the commentary language and subtitles (subtitles only
+  if the video has any). They hide 4 s after the last touch; tap the picture to bring them
+  back; they stay up while paused, loading or scrubbing. Mute and the subtitle choice stay when
+  tapping a car switches feeds. Picture in picture also still starts by itself on leaving the
+  app; the lock screen and Control Centre keep play, pause and the position; on AirPlay a line
+  says "Playing on AirPlay". Fixes the doubled ✕ and Map, the LIVE that didn't go live, and
+  Apple's controls that stayed stuck on screen. Not brought back: Apple's volume slider (the
+  side buttons set the volume; mute is the app's) and its zoom-to-fill.
+  Built in the simulator with 0 warnings (342b966, 2026-11-20). Untested: using it (simulator
+  replay check next); live checks need the phone after the race.
+- **Build check for the Mac** (`scripts/check-build.sh`): builds for the simulator without
+  touching the phone; `--shots` also saves screenshots of the opening.
+
+Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
+Untested — check later: everything above on the phone (after the race).
 
 ### v1.0-beta.4, build 22 — final fixes
 
