@@ -188,6 +188,16 @@ import Foundation
         #expect(try #require(GapPair.shifted(("3", "4"), by: -1, at: Self.t, session: out)) == ("2", "4"))
     }
 
+    @Test func shiftFromPairWithACarThatHasNoPlace() throws {
+        // 99 has no timing at all (a stored pair from a car that never ran): the swipe reads from
+        // 2's place, so "swipe for another pair" always moves.
+        let session = Self.session()
+        #expect(try #require(GapPair.shifted(("99", "2"), by: 1, at: Self.t, session: session)) == ("3", "4"))
+        #expect(try #require(GapPair.shifted(("2", "99"), by: -1, at: Self.t, session: session)) == ("1", "2"))
+        // Neither placed: nothing to read from.
+        #expect(GapPair.shifted(("98", "99"), by: 1, at: Self.t, session: session) == nil)
+    }
+
     @Test func nothingAfterT() {
         let later = timingLine("00:02:00.000", [("3", #""IntervalToPositionAhead":{"Value":"+0.800"}"#)])
         let session = Self.session(extra: [later])

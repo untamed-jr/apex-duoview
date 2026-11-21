@@ -133,13 +133,15 @@ public enum GapPair {
     }
 
     /// Moves a pair `step` places along the race order (+1 a place back). The pair is read from
-    /// its front car's place; retired cars are stepped over. Nil past either end, and outside races.
+    /// its front car's place; retired cars are stepped over. A car with no place (no timing for it,
+    /// "{CODE} is out — swipe for another pair") leaves the other car's place to read from. Nil
+    /// past either end, with neither car placed, and outside races.
     public static func shifted(_ pair: (String, String), by step: Int, at t: UTCms, session: LoadedSession) -> (String, String)? {
         guard session.info.isRace else { return nil }
         let states = session.timing.at(t)
         let cars = order(states)
         let places = [pair.0, pair.1].compactMap { states[$0]?.position }
-        guard places.count == 2, let frontPlace = places.min() else { return nil }
+        guard let frontPlace = places.min() else { return nil }
         let before = cars.filter { ($0.state.position ?? 0) < frontPlace }.count
         let present = cars.contains { $0.state.position == frontPlace }
         // A front car that has gone out sits between two places: stepping back lands on the car
