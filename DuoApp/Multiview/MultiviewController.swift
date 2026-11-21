@@ -862,9 +862,18 @@ final class MultiviewController {
                   let chosen = channels.first(where: { $0.id == id }) else { return }
             if let other = slots.firstIndex(where: { $0?.id == id }) {
                 if other == slot {
-                    // Picking a feed that stopped again tries it once more.
+                    // Picking a feed that stopped again tries it once more. A live feed that had a
+                    // link asks F1 TV for a fresh link and licence (its last ones may be what
+                    // failed), at most once a minute; sooner, its tile keeps the reason.
                     guard feeds[id] == nil else { return }
-                    attach(chosen)
+                    if playsFeedsAlone, feedURLs[id] != nil {
+                        guard canRefreshFeed(id) else { return }
+                        feedURLs[id] = nil
+                        feedLicenses[id] = nil
+                        attach(chosen, refresh: true)
+                    } else {
+                        attach(chosen)
+                    }
                 } else {
                     slots.swapAt(slot, other)
                     picks.swapAt(slot, other)
@@ -1613,8 +1622,11 @@ final class MultiviewController {
 
     private func feedFailed(channelId: Int, itemID: ObjectIdentifier, expired: Bool, reason: String) {
         guard let feed = liveFeed(channelId, itemID) else { return }
-        if expired, playsFeedsAlone {
-            // A live feed: only that one is asked again.
+        if playsFeedsAlone, expired || !isMain(feed) {
+            // A live feed: only that one is asked again, with a fresh PLAY (a new link and
+            // licence). Any other live tile that stopped, for whatever reason, is asked again too.
+            // At most once a minute per feed (`canRefreshFeed`): failing again sooner, its tile
+            // says why. The main feed keeps beta.1's rule below unless its link expired.
             if canRefreshFeed(channelId) {
                 refreshFeed(channelId)
                 return
