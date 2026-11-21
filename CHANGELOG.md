@@ -80,6 +80,74 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 22 — final fixes
+
+Not on the phone yet. The fixes from the final review of beta.4. Checked on a computer only
+(syntax of every changed file; the DuoCore tests; the closed phone's and the radio's pure files
+against the São Paulo race data with a stand-in player); the first real compile is the owner's
+Mac build.
+
+- **The hinge mixer reaches where the hinge stops.** The hinge reports an angle only when it
+  moves, so the smoothed mix used to stop short once the hinge was still (one quick fold from
+  160° to 90° left it at about 139°). After each reading it now keeps stepping, every 100 ms,
+  until it lands on the resting angle. A small wobble inside the 5° dead zone still changes
+  nothing. DuoCore: `HingeMixer.settle()` and `isSettled` (tested with one reading at a time, as
+  the app gets them).
+- **Unfold to See keeps its jump through an unknown posture.** If the hinge reports part-open
+  before the fold is known, closed → (unknown) → book or flat is still an unfold, and the card
+  showing is jumped to, also when the window reaches the inner screen first. An unknown reading
+  on its own still never moves the video. DuoCore: `UnfoldWatch` (tested).
+- **Closing the single-feed player leaves nothing on the lock screen.** Closing it (or new
+  content, such as tapping a car) ends its lock-screen and Control Centre entry: nothing is
+  published any more, play, pause and the position go, and the player leaves the session.
+  Picture in picture already ended there.
+- **A live multiview tile that stopped asks again with a fresh link and licence.** For any
+  reason, not only an expired link: a new PLAY for that feed, at most once a minute per feed;
+  failing again sooner, the tile says why. Picking a stopped live feed again also asks afresh
+  (after that minute), never with the old link. The main feed keeps beta.1's rule (it ends the
+  multiview and offers "Watch the main feed") unless its link expired.
+- "Watch the main feed" after the main feed stops mid-session starts where the feeds were (the
+  live edge on live), not where the multiview opened.
+- Clear all, Reset or a preset on a live multiview keeps the spinner while a new feed's PLAY is
+  still out.
+- A seek's two quiet ticks wait for picture time to come back (the companion and the radio), so
+  a short seek landing is never taken for normal play.
+- Without a transcript, the Rivals strip and the Radio Scanner show the driver's code, not the
+  lap label a second time under its header.
+- The Radio Scanner holds its leader only once there is a picture time (before it, the order is
+  by racing number).
+- The Gap Thermometer's swipe works when one of the pair has no timing; it reads from the other
+  car's place. DuoCore: `GapPair.shifted` (tested).
+- The Gap Thermometer shows the timing's own note (as the tower does) while the timing is
+  hidden on a rewound live programme, not "Gaps start after the first lap."
+- A remembered radio filter for a driver this session doesn't have shows every clip.
+- A haptic waiting its turn doesn't play once its switch (or Haptics) is off.
+- Settings › Debug's "Haptic: …" label is clear glass, like the rest over the video.
+- Rivals: headphones going in or out while a clip plays end that clip; the next clip plays in
+  its ear. Build 21's note said it moved at once; that line is corrected. No change in the app.
+- Settings › Debug's "Transcribe a test clip" stays in this build: the owner runs it on the Duo
+  (O4, O7) before it is removed in a later commit.
+- Version: 1.0-beta.4 (build 22).
+
+### Untested — check later (build 22)
+
+- The zero-warnings build. No new app files; DuoCore gains `UnfoldWatch.swift` (the package
+  picks it up). Not compiled here: the Now Playing teardown's MediaPlayer calls (in particular
+  removing the session's only player), the mixer's settling task.
+- **Lock screen:** play a single feed, close it, lock the phone and open Control Centre: no
+  Apex DuoView entry. Tap a car twice, then close: still none.
+- Close the single-feed player, or tap a car, while picture in picture shows: no window is left
+  behind.
+- **The hinge mixer on the Duo:** fold quickly and stop; the bar settles at the hinge's angle
+  within about 1.5 s; holding still doesn't make the mix waver.
+- **Unfold to See on the Duo:** with a card up while closed, unfold to book and to flat, slowly
+  and quickly; each time the feeds jump. If one doesn't, record the posture order in the Debug
+  log.
+- **A live multiview:** a tile that stops comes back by itself once (a fresh PLAY); picking it
+  again later than a minute after its last link tries again.
+- In the simulator: Gap Thermometer swipes from a pair with a car that never ran; a remembered
+  driver filter in a session without that car.
+
 ### v1.0-beta.4, build 21 — Onboard and Logbook, Ear-Matched Rivals, the hinge mixer
 
 Not on the phone yet. Checked on a computer only (syntax of every changed file; the book's words,
