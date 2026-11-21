@@ -80,6 +80,67 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+### v1.0-beta.4, build 19 — the closed phone and Unfold to See
+
+Not on the phone yet. Checked on a computer only (syntax of every changed file; the closed
+phone's models and its controller against the São Paulo race data with a stand-in player); the
+first real compile is the owner's Mac build.
+
+- **The closed phone has three pages:** Picture, Radio Scanner and Gap Thermometer. Swipe up or
+  down between them (dots on the right edge, which also take a tap); left or right changes what
+  the page shows. Closing opens the page used last (Picture the first time). The first time:
+  "Swipe up or down for Picture, Radio and Gap". The feeds keep playing, with sound, on every
+  page. This is wherever the multiview uses its closed layout, so also on any iPhone in portrait.
+- **Picture fills the outer screen** (owner, 2026-11-18): with two or more feeds, two of them
+  stacked full width, the main one on top (left and right still change the main one); with one
+  feed, the timing tower fills the space below it. DuoCore: `closed.stack` in `LayoutEngine`.
+- **Radio Scanner:** one driver's code, team colour, position and lap; their clips so far in
+  large type, the newest at the bottom; one big ▶ / ■. A clip plays by itself when the picture
+  reaches it ("Play radio as it happens"); with that off, "New radio — tap to play". Left and
+  right change the driver in race order; the default is your driver, else the leader. "No radio
+  from {CODE} yet. Swipe for another driver." Transcripts are made while the Scanner shows.
+- **Gap Thermometer:** two drivers' codes at either end of a tall bar, the gap in large digits,
+  ▼ closing or ▲ growing; the bar goes from cool blue (3 s or more) through amber (2 s) to red
+  (1 s or less). Twice a second. Left and right move the pair along the race order; touch and
+  hold to pick both drivers. The default pair is your driver and the nearer car ahead or behind.
+  "The Gap Thermometer works in races and sprints.", "Gaps start after the first lap.",
+  "{CODE} in the pits", "{CODE} is out — swipe for another pair".
+- **Unfold to See:** while closed, an event slides in as a card at the top of any page, older
+  ones stacked behind ("+2"): "Yellow flag · Lap 23", "Safety car · Lap 23", "Virtual safety car
+  · Lap 23", "Red flag", your driver's stop, radio, passes and retirement, "Chequered flag", each
+  with "Unfold to see". Cards come only when normal play reaches the moment: never on data
+  arriving, a seek or a scrub, nor for 2 s after a seek; a seek back takes away the cards it
+  passes. Open the phone while a card shows and every feed jumps to 5 s before it (the Scrub
+  Deck's seek), with "Rewound to … — Back to where you were" for 15 s. Swipe a card away and
+  opening simply carries on. On a phone without a fold, or on the Duo while closed, a tap on the
+  card makes the jump. On a live programme, "Back" from the live edge returns to it, and LIVE
+  still does. The moment jumped to brings no second card as the picture plays past it again.
+- **Settings › Closed phone:** "Event cards" ("Flags", "My driver's stops and radio", "My
+  driver's position changes", "Chequered flag") and "Rewind when opening" (3, 5, 10 or 15 s;
+  5). Settings › Debug shows "Screen" in points, for measuring the outer screen.
+- The single-feed player follows the same events (for build 20's haptics), with no pages or
+  cards.
+- Version: 1.0-beta.4 (build 19).
+
+### Untested — check later (build 19)
+
+- The zero-warnings build (`xcodegen generate` first: a new folder, `DuoApp/Closed`). The views
+  and their gestures are checked by eye only.
+- Exit-test step 2 in the simulator (Settings › Debug › Simulate fold › Closed): the Scanner on
+  ANT plays his clips on laps 19, 20 and 22 as the picture reaches them, the transcript scrolls;
+  the Thermometer's colour follows the gap; a yellow flag (laps 17 and 20) brings a card,
+  unfolding jumps every feed to 5 s before it, and "Back to where you were" returns.
+- On the Duo: the outer screen's size (Settings › Debug › "Screen"); readability at arm's
+  length; how the swipes feel (up and down on a tile, on the black around it, on a page; the
+  tower scrolls rather than changes the page); what a real unfold does (the app still in front?
+  how fast the posture changes?); closed with the screen off (O6, Q10).
+- Two stacked feeds on the outer screen: tap to swap, hold and drag to trade, swipe left or
+  right for the main feed; their quality caps.
+- A card at the moment the phone opens: the jump lands before the layout changes, and the card
+  goes.
+- A live programme: a card's jump back from the live edge, "Back" to the edge, and LIVE.
+- The Gap Thermometer's battery use at 2 Hz over a race.
+
 ### v1.0-beta.4, build 18 — team radio transcripts
 
 Not on the phone yet. Checked on a computer only (syntax of every changed file, and the

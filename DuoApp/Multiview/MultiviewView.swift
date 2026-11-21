@@ -42,6 +42,15 @@ import SwiftUI
 /// Touches on a tile are UIKit gesture recognizers (`TileTouchSurface`); SwiftUI's tap and
 /// long-press-then-drag on the same tile stopped both from firing.
 ///
+/// Closed (build 19): the closed layout is the closed phone's pager (`ClosedPagerView`). Its Picture
+/// page is the layout itself: with two or more feeds two of them stacked full width, the main one
+/// on top (`closed.stack`); with one feed and timing, the tower in the space below it. The Radio
+/// Scanner and Gap Thermometer pages cover the tiles, which keep playing with sound. Up and down
+/// change the page (on the tiles, the black around them, a page, or the dots); left and right keep
+/// their jobs. The companion (`CompanionController`) follows this multiview while it shows, makes
+/// cards only while the closed layout shows, and jumps when the phone opens with one showing;
+/// "Back to where you were" (`BackChip`) shows in every posture.
+///
 /// Coordinates: the inner reader ignores the safe area, so its space is the full screen, the same
 /// space as `FoldState.foldFrame` and, on this full-screen cover, as the window coordinates the
 /// drag reports. The outer reader keeps the safe area only to read its insets.
@@ -67,6 +76,10 @@ struct MultiviewView: View {
     @State private var controlsTouch = 0
     /// The scrubber is held.
     @State private var scrubbing = false
+    /// The closed phone's page; nil until read from Settings (the page used last).
+    @State private var closedPage: ClosedPage?
+    /// The closed phone's first-time hint was shown (Settings' copy, read once).
+    @State private var closedHintShown: Bool?
 
     /// How long a press is held before the tile lifts and follows the finger.
     static let holdBeforeDrag: Double = 0.35
@@ -158,12 +171,16 @@ struct MultiviewView: View {
         GeometryReader { safe in
             let insets = safe.safeAreaInsets
             GeometryReader { proxy in
-                let layout = arrangement(screen: proxy.size, insets: insets)
+                let layout = arrangement(screen: proxy.size, insets: insets, page: page)
+                let closed = layout.input.posture == .closed
                 ZStack(alignment: .topLeading) {
                     // Only the background, never the tiles above it: its tap shows or hides the
-                    // controls.
+                    // controls; closed, up and down change the page.
                     Color.black
                         .onTapGesture { toggleControls() }
+                        .gesture(DragGesture(minimumDistance: 24).onEnded { value in
+                            if closed { swiped(value.translation) }
+                        })
                         .accessibilityHidden(true)
                     // Like the floating panels, no data while an error shows.
                     if controller.errorText == nil {
@@ -176,7 +193,7 @@ struct MultiviewView: View {
                         }
                     }
                     ForEach(layout.tiles) { placed in
-                        tile(placed, in: layout)
+                        tile(placed, in: layout, covered: closed && page != .picture)
                     }
                     // Race Engineer with no onboard to put on top: over the main feed.
                     if controller.errorText == nil, layout.regions.console != nil,
@@ -186,6 +203,24 @@ struct MultiviewView: View {
                             .position(x: main.frame.rect.midX, y: main.frame.rect.minY + 36)
                             .zIndex(3)
                             .transition(.opacity)
+                    }
+                    // Closed: the pages, the dots, the event card and the first-time hint.
+                    if closed, controller.errorText == nil {
+                        ClosedPagerView(
+                            companion: model.companionController,
+                            radio: controller.radio,
+                            timing: controller.timing,
+                            settings: model.companion,
+                            page: page,
+                            foldable: fold.posture == .closed,
+                            showsHint: showsClosedHint,
+                            bounds: Self.safeRect(screen: proxy.size, insets: insets),
+                            onPage: { showPage($0) },
+                            onPageSwipe: { swipe in
+                                if let next = CompanionModels.page(after: swipe, from: page) { showPage(next) }
+                            },
+                            onBackground: { toggleControls() })
+                            .zIndex(4)
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
@@ -205,6 +240,14 @@ struct MultiviewView: View {
                 .onChange(of: RaceViews(layout.regions), initial: true) { _, shown in
                     controller.setRaceViews(console: shown.console, deck: shown.deck)
                 }
+                // Unfold to See: the posture's change first (a card showing jumps), then whether
+                // the closed layout shows (cards are made only then; gone, they go).
+                .onChange(of: ClosedState(posture: fold.posture, layoutClosed: closed), initial: true) { old, new in
+                    if old.posture != new.posture {
+                        model.companionController.postureChanged(from: old.posture, to: new.posture)
+                    }
+                    model.companionController.setCardsShown(new.layoutClosed)
+                }
                 .overlay {
                     if controller.errorText == nil {
                         FloatingPanels(
@@ -223,11 +266,18 @@ struct MultiviewView: View {
             .ignoresSafeArea()
         }
         .overlay { status }
-        // First time closed during a video: "Closed, it keeps playing" (once; tips can be off).
+        // First time closed during a video: "Closed, it keeps playing" (once; tips can be off),
+        // after the pager's own hint.
         .overlay(alignment: .bottom) {
-            if fold.posture == .closed {
+            if fold.posture == .closed, !showsClosedHint {
                 ClosedPhoneTipView()
             }
+        }
+        // After Unfold to See's jump, in every posture: "Back to where you were", for 15 s.
+        .overlay(alignment: .top) {
+            BackChip(companion: model.companionController)
+                .padding(.top, 64)
+                .animation(.snappy, value: model.companionController.backChip?.until)
         }
         // While a live programme plays: another one that went live, at the top (never in
         // picture in picture). "Switch" opens it in multiview.
@@ -251,6 +301,10 @@ struct MultiviewView: View {
         // as a tile tap, without another gesture beside it.
         .onChange(of: controller.audioChannelId) { _, _ in noteInteraction() }
         .statusBarHidden(true)
+        // The companion follows this multiview while it shows (the single-feed player takes it
+        // when that shows instead).
+        .onAppear { model.companionController.attach(host: controller) }
+        .onDisappear { model.companionController.detach(host: controller) }
         // The cover reads the fold too: the root's reader sits under the cover, and may not see
         // a change while the cover is up. Both write the same full-screen values; `FoldState`
         // only publishes real changes.
@@ -287,6 +341,33 @@ struct MultiviewView: View {
                 .position(x: rect.midX, y: rect.midY)
                 .transition(.opacity)
         }
+    }
+
+    /// What Unfold to See follows: the fold's posture, and whether the closed layout shows.
+    private struct ClosedState: Equatable {
+        var posture: Posture
+        var layoutClosed: Bool
+    }
+
+    /// The closed phone's page: the one used last (Picture the first time).
+    private var page: ClosedPage {
+        closedPage ?? model.companion.lastClosedPage
+    }
+
+    /// The pager's first-time hint, until the first change of page.
+    private var showsClosedHint: Bool {
+        !(closedHintShown ?? model.companion.closedHintShown)
+    }
+
+    private func showPage(_ next: ClosedPage) {
+        noteInteraction()
+        guard next != page else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            closedPage = next
+            closedHintShown = true
+        }
+        model.companion.lastClosedPage = next
+        model.companion.closedHintShown = true
     }
 
     /// Which race views the layout draws.
@@ -345,7 +426,7 @@ struct MultiviewView: View {
     /// no feed at all) the layout has four tiles and every empty slot shows "Pick a feed" in its
     /// slot's frame (slot index = frame index; slot 0 always has a feed when any slot does);
     /// otherwise it fits the filled slots.
-    private func arrangement(screen full: CGSize, insets: EdgeInsets) -> Arrangement {
+    private func arrangement(screen full: CGSize, insets: EdgeInsets, page: ClosedPage) -> Arrangement {
         let safeRect = CGRect(
             x: insets.leading,
             y: insets.top,
@@ -357,7 +438,10 @@ struct MultiviewView: View {
         let screen = input.screen
         let all = entries
         let filled = all.filter { $0.channel != nil }
-        let shown = controller.effectiveFeedCount == all.count ? all : filled
+        // Closed shows feeds only (two stacked, or one): an empty "Pick a feed" spot never takes
+        // the stack's second place.
+        let keepsSpots = controller.effectiveFeedCount == all.count && !(input.posture == .closed && !filled.isEmpty)
+        let shown = keepsSpots ? all : filled
         let count = shown.count
         // Read once, so the choice, the usable list and the regions agree.
         let hasTiming = controller.timing.hasTiming
@@ -369,8 +453,18 @@ struct MultiviewView: View {
         let regions = LayoutEngine.dataRegions(
             screen: screen, foldFrame: input.foldFrame, posture: input.posture,
             feedCount: count, optionID: option)
-        let tiles = zip(shown, frames).map {
+        var tiles = zip(shown, frames).map {
             PlacedTile(entry: $0.0, frame: TileFrame(rect: input.onScreen($0.1.rect), visible: $0.1.visible))
+        }
+        // Closed, the Picture page with one feed and timing: the feed at the top, the tower below
+        // it, inside the safe area's sides.
+        var towerRect = regions.tower.map { input.onScreen($0) }
+        if input.posture == .closed, page == .picture, hasTiming, count == 1, let main = frames.first,
+           let split = MultiviewLayout.closedTower(main: main.rect, screen: screen) {
+            tiles[0] = PlacedTile(entry: tiles[0].entry, frame: TileFrame(rect: input.onScreen(split.main)))
+            let tower = input.onScreen(split.tower)
+            let sides = tower.intersection(CGRect(x: safeRect.minX, y: tower.minY, width: safeRect.width, height: tower.height))
+            if !sides.isNull, sides.width > 0 { towerRect = sides }
         }
         // Without timing the laptop's bottom half isn't left blank: it says why (never over a tile).
         var noteArea: CGRect?
@@ -390,13 +484,14 @@ struct MultiviewView: View {
             tiles: tiles,
             regions: DataRegions(
                 map: regions.map.map { input.onScreen($0) },
-                tower: regions.tower.map { input.onScreen($0) },
+                tower: towerRect,
                 console: regions.console.map { input.onScreen($0) },
                 deck: regions.deck.map { input.onScreen($0) }),
             timingNoteArea: noteArea)
     }
 
-    private func tile(_ placed: PlacedTile, in layout: Arrangement) -> some View {
+    /// `covered`: a closed page (Radio, Gap) is over the tiles; they keep playing, out of reach.
+    private func tile(_ placed: PlacedTile, in layout: Arrangement, covered: Bool) -> some View {
         let entry = placed.entry
         let rect = placed.frame.rect
         let visible = placed.frame.visible
@@ -443,8 +538,8 @@ struct MultiviewView: View {
             .offset(dragging ? (drag?.translation ?? .zero) : .zero)
             .position(x: rect.midX, y: rect.midY)
             .opacity(visible ? 1 : 0)
-            .allowsHitTesting(visible)
-            .accessibilityHidden(!visible)
+            .allowsHitTesting(visible && !covered)
+            .accessibilityHidden(!visible || covered)
             .zIndex(dragging ? 2 : (raised == entry.key ? 1 : 0))
     }
 
@@ -478,13 +573,17 @@ struct MultiviewView: View {
     }
 
     /// The closed layout: a horizontal swipe makes the next (left) or previous (right) feed the
-    /// main one, wrapping. The pan is only enabled on the closed layout.
+    /// main one, wrapping; up and down change the closed phone's page. The pan is only enabled on
+    /// the closed layout.
     private func swiped(_ translation: CGSize) {
         noteInteraction()
-        let dx = translation.width
-        let dy = translation.height
-        guard abs(dx) > Self.swipeDistance, abs(dx) > abs(dy) else { return }
-        swipeMain(forward: dx < 0)
+        switch CompanionModels.swipe(translation, distance: Self.swipeDistance) {
+        case .left?: swipeMain(forward: true)
+        case .right?: swipeMain(forward: false)
+        case let vertical?:
+            if let next = CompanionModels.page(after: vertical, from: page) { showPage(next) }
+        case nil: break
+        }
     }
 
     private func swipeMain(forward: Bool) {

@@ -19,7 +19,11 @@ at once, a live track map, timing and team radio, all kept in sync with the pict
 that lists each clip under its lap only once the picture has reached it, plays it while the
 feeds go quiet, and marks it on the Scrub Deck and in Race Engineer's console. Build 18 adds
 transcripts: each clip turned into text on the phone, shown in quotes under it once the picture
-reaches it. Not on the phone yet; the closed phone's pages come in the next builds.
+reaches it. Build 19 makes the closed phone a companion: the outer screen pages between the
+picture (two feeds stacked, or one with the timing tower), a Radio Scanner that follows one
+driver's radio and plays it as it happens, and a Gap Thermometer for any two cars; an event card
+(a flag, your driver's stop, radio or pass) slides in when the picture reaches it, and opening
+the phone jumps every feed to just before it. Not on the phone yet.
 
 **v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
 [changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race

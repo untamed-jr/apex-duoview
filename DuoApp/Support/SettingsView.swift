@@ -1,8 +1,9 @@
 import F1TV
 import SwiftUI
 
-/// Settings: account, multiview, the track map, team radio, a live fold readout, About, credits,
-/// and Debug (the fold simulator and build 17's "Transcribe a test clip").
+/// Settings: account, multiview, the track map, team radio, the closed phone, a live fold readout,
+/// About, credits, and Debug (the fold simulator, the screen's size in points for measuring the
+/// outer screen, and build 17's "Transcribe a test clip").
 /// Shown in the system sheet on a narrow screen, and in the app's own `SettingsPanel` on a wide
 /// one, so it closes through `onDone` rather than the environment's dismiss action.
 struct SettingsView: View {
@@ -28,6 +29,7 @@ struct SettingsView: View {
                 MultiviewSettingsSection(model: model).listRowBackground(Theme.surface)
                 TimingSettingsSection(timing: model.timing).listRowBackground(Theme.surface)
                 RadioSettingsSection(settings: model.companion).listRowBackground(Theme.surface)
+                ClosedSettingsSection(settings: model.companion).listRowBackground(Theme.surface)
                 foldSection.listRowBackground(Theme.surface)
                 watchingSection.listRowBackground(Theme.surface)
                 helpSection.listRowBackground(Theme.surface)
@@ -256,6 +258,8 @@ struct SettingsView: View {
                 .tint(Theme.accent)
             }
             .disabled(!fake.isActive)
+            // For measuring the outer screen (owner check T-B19): the screen's size in points.
+            LabeledContent("Screen", value: Self.pointsText(fold.rootSize))
             // Build 17's probe (owner check O4); removed before release.
             TranscribeProbeRows()
         } header: {
@@ -290,6 +294,12 @@ struct SettingsView: View {
     private static func sizeText(_ size: CGSize) -> String {
         guard size.width > 0, size.height > 0 else { return "Not measured yet" }
         return "\(points(size.width)) × \(points(size.height))"
+    }
+
+    /// "466 × 678 pt".
+    private static func pointsText(_ size: CGSize) -> String {
+        guard size.width > 0, size.height > 0 else { return "Not measured yet" }
+        return "\(points(size.width)) × \(points(size.height)) pt"
     }
 
     private static func angleText(_ degrees: Double?) -> String {

@@ -78,6 +78,9 @@ struct PlayerCover: View {
             .animation(.snappy, value: model.nextLive.offer?.contentId)
         }
         .statusBarHidden(controller.player != nil)
+        // The companion follows this player while it shows: haptics only (no pager, no cards).
+        .onAppear { model.companionController.attach(host: controller) }
+        .onDisappear { model.companionController.detach(host: controller) }
     }
 }
 

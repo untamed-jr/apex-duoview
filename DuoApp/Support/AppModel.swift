@@ -42,6 +42,9 @@ final class AppModel {
     /// Team radio for whatever plays, beside the timing: both players attach it as its host, and
     /// it starts afresh with each session the timing loads. Clips come from F1's archive host only.
     @ObservationIgnored let radio: RadioController
+    /// The closed phone's event cards and Unfold to See, and the events for haptics: both players
+    /// attach it as its host (the single-feed player for haptics only).
+    @ObservationIgnored let companionController: CompanionController
     /// Your driver (Settings › Multiview › My driver): their onboard is the second default feed.
     /// Mirrors the multiview store, which isn't observed.
     private(set) var favouriteDriver: String?
@@ -88,6 +91,7 @@ final class AppModel {
         let radio = RadioController(settings: companion, timing: timing, http: timingHTTP,
                                     token: { await session.bearerToken() })
         self.radio = radio
+        companionController = CompanionController(settings: companion, timing: timing, radio: radio)
         if let radioCache = RadioFetch.defaultBase {
             Task.detached(priority: .background) {
                 RadioFetch.deleteExpired(in: radioCache, now: Date())
