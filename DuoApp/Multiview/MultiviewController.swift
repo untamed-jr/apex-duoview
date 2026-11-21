@@ -416,8 +416,8 @@ final class MultiviewController {
             guard generation == mine else { return }
             isLoading = false
             errorText = Self.message(for: error)
-            // No multiview, or a protected one (live multiview comes as Widevine, which iOS can't
-            // play): the main feed can still play in the single-feed player (live as FairPlay).
+            // No multiview, or a protected replay (a protected live one is caught above and
+            // played feed by feed): the main feed can still play in the single-feed player.
             if let error = error as? F1TVError, error == .multiviewUnavailable || error == .protectedContent,
                 let main = detail.channels.first(where: \.isDefault) ?? detail.channels.first {
                 mainFeedFallback = MainFeedFallback(item: showing, channel: main, start: startAt)
@@ -945,7 +945,8 @@ final class MultiviewController {
 
     /// Loads a preset's feeds and its layout choices: a layout the preset doesn't name goes back to
     /// its default, so a later ⟳ choice doesn't outlive the preset. Like every slot change, no
-    /// PLAY: the feeds come from the links this multiview already has.
+    /// multiview PLAY: the feeds come from the links this multiview already has (on a live
+    /// multiview, each new feed asks for its own).
     func apply(_ preset: Preset) {
         guard currentItem != nil, !refreshing, errorText == nil else { return }
         for posture in Multiview.Posture.allCases {
@@ -998,7 +999,8 @@ final class MultiviewController {
 
     /// Fills all four slots from picks at once (clear all, reset, a preset): feeds that stay keep
     /// playing, feeds that leave stop, new ones start from the links already in hand and line up
-    /// with the others. Never a PLAY.
+    /// with the others. No multiview PLAY; on a live multiview a new feed sends its own PLAY when
+    /// it is attached, as any pick does.
     private func replacePicks(_ wanted: [FeedPick?]) {
         guard currentItem != nil, !refreshing, errorText == nil else { return }
         if othersFrozen { bringBackFrozen() }
@@ -1012,8 +1014,9 @@ final class MultiviewController {
         slots = newSlots
         picks = newPicks
         for channel in newSlots.compactMap({ $0 }) { attach(channel) }
-        // Nothing left to start: no spinner waiting for a feed.
-        if feeds.isEmpty { isLoading = false }
+        // Nothing left to start: no spinner waiting for a feed (a live feed's PLAY still out is
+        // something to wait for, as at open).
+        if feeds.isEmpty, feedRequests.isEmpty { isLoading = false }
         slotsChanged()
     }
 
@@ -1453,10 +1456,11 @@ final class MultiviewController {
             if slots[0]?.id == channelId {
                 // As when the main feed stops: the multiview ends with the reason.
                 save()
+                let start = mainStart()
                 teardownAll()
                 isLoading = false
                 errorText = text
-                offerMainFeedIfLive()
+                offerMainFeedIfLive(from: start)
             } else {
                 // Only this feed: its tile says why, the others play on.
                 feedProblems[channelId] = text
@@ -1468,11 +1472,14 @@ final class MultiviewController {
     }
 
     /// A live multiview that ended with an error offers "Watch the main feed" (the session's main
-    /// feed in the single-feed player), as a multiview F1 TV won't play does.
-    private func offerMainFeedIfLive() {
+    /// feed in the single-feed player), as a multiview F1 TV won't play does. `start` is where the
+    /// feeds had got to (`mainStart()`, read before the teardown: the live edge on live), so a
+    /// failure 40 minutes in doesn't send the viewer back to where the multiview opened; with
+    /// none, the opening's start.
+    private func offerMainFeedIfLive(from start: Start? = nil) {
         guard playsFeedsAlone, let item = currentItem,
               let main = sessionChannels.first(where: \.isDefault) ?? sessionChannels.first else { return }
-        mainFeedFallback = MainFeedFallback(item: item, channel: main, start: pendingStart)
+        mainFeedFallback = MainFeedFallback(item: item, channel: main, start: start ?? pendingStart)
     }
 
     private func canRefreshFeed(_ channelId: Int) -> Bool {
@@ -1641,10 +1648,11 @@ final class MultiviewController {
         if isMain(feed) {
             // As beta.1: the main feed stopping ends the multiview, with the reason.
             save()
+            let start = mainStart()
             teardownAll()
             isLoading = false
             errorText = text
-            offerMainFeedIfLive()
+            offerMainFeedIfLive(from: start)
         } else {
             // Like Android's tiles: only this feed stops, and its tile says why.
             detach(channelId)
