@@ -94,9 +94,8 @@ Paulo race data); the first real compile is the owner's Mac build.
 
 ### Untested — check later (build 17)
 
-- The zero-warnings build: run `xcodegen generate` first (new folder `DuoApp/Radio`). Nothing here
-  has been compiled for iOS yet; Swift 6 isolation in `RadioAudio`, `TranscribeProbe` and the two
-  players' radio hooks is checked by eye only.
+- ~~The zero-warnings build~~ checked on the Mac 2026-11-21: BUILD OK, 0 warnings at 15424b1 (the
+  first build, at 3cb8d80, had 5 iOS 27 deprecation warnings in `RadioAudio`, now fixed).
 - São Paulo race replay, laps 17–23: clips appear only as reached, under their lap; ANT has 8 over
   the race (Show the whole race on, My driver or ANT's chip).
 - A clip plays while the feeds go quiet, at the feeds' speed (try 2×); the sound comes back at the
