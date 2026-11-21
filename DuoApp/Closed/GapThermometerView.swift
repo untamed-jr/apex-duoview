@@ -93,8 +93,8 @@ struct GapThermometerView: View {
                 } else if let t = timing.pictureTime, let pair = currentPair {
                     thermometer(pair, at: t, session: session)
                 } else {
-                    // No pair yet: no timing at picture time, or fewer than two cars.
-                    line(CompanionModels.gapBeforeFirstLap)
+                    // No picture time yet, or fewer than two cars: nothing to read, nothing said.
+                    Spacer(minLength: 0)
                 }
             } else {
                 LaptopTimingNote(timing: timing)

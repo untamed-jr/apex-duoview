@@ -109,7 +109,8 @@ final class CompanionController {
     /// The fold moved. Closed → open with a card showing jumps to it. Call it before the closed
     /// layout is reported gone (`setCardsShown(false)`), which clears the cards.
     func postureChanged(from old: Posture, to new: Posture) {
-        guard old == .closed, new != .closed, let card = stack.top else { return }
+        // Only a real opening: an unknown reading is not an unfold, and must not move the video.
+        guard old == .closed, [.flat, .book, .laptop].contains(new), let card = stack.top else { return }
         jump(to: card)
     }
 

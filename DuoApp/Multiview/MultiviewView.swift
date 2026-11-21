@@ -171,7 +171,7 @@ struct MultiviewView: View {
         GeometryReader { safe in
             let insets = safe.safeAreaInsets
             GeometryReader { proxy in
-                let layout = arrangement(screen: proxy.size, insets: insets, page: page)
+                let layout = arrangement(screen: proxy.size, insets: insets)
                 let closed = layout.input.posture == .closed
                 ZStack(alignment: .topLeading) {
                     // Only the background, never the tiles above it: its tap shows or hides the
@@ -249,7 +249,9 @@ struct MultiviewView: View {
                     model.companionController.setCardsShown(new.layoutClosed)
                 }
                 .overlay {
-                    if controller.errorText == nil {
+                    // Not over the closed phone's Radio and Gap pages: they cover the picture and
+                    // take its swipes.
+                    if controller.errorText == nil, !(closed && page != .picture) {
                         FloatingPanels(
                             timing: controller.timing,
                             radio: controller.radio,
@@ -426,7 +428,7 @@ struct MultiviewView: View {
     /// no feed at all) the layout has four tiles and every empty slot shows "Pick a feed" in its
     /// slot's frame (slot index = frame index; slot 0 always has a feed when any slot does);
     /// otherwise it fits the filled slots.
-    private func arrangement(screen full: CGSize, insets: EdgeInsets, page: ClosedPage) -> Arrangement {
+    private func arrangement(screen full: CGSize, insets: EdgeInsets) -> Arrangement {
         let safeRect = CGRect(
             x: insets.leading,
             y: insets.top,
@@ -456,10 +458,11 @@ struct MultiviewView: View {
         var tiles = zip(shown, frames).map {
             PlacedTile(entry: $0.0, frame: TileFrame(rect: input.onScreen($0.1.rect), visible: $0.1.visible))
         }
-        // Closed, the Picture page with one feed and timing: the feed at the top, the tower below
-        // it, inside the safe area's sides.
+        // Closed with one feed and timing: the feed at the top, the tower below it, inside the safe
+        // area's sides. On every page: under the Radio and Gap pages the tower stays docked (no
+        // floating copy) and the tile stays where it is.
         var towerRect = regions.tower.map { input.onScreen($0) }
-        if input.posture == .closed, page == .picture, hasTiming, count == 1, let main = frames.first,
+        if input.posture == .closed, hasTiming, count == 1, let main = frames.first,
            let split = MultiviewLayout.closedTower(main: main.rect, screen: screen) {
             tiles[0] = PlacedTile(entry: tiles[0].entry, frame: TileFrame(rect: input.onScreen(split.main)))
             let tower = input.onScreen(split.tower)

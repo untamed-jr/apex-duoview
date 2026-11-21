@@ -46,9 +46,6 @@ struct ClosedSettingsSection: View {
             }
         } header: {
             Text("Closed phone").sectionLabel()
-        } footer: {
-            Text("Cards come only when the picture reaches the moment. Open the phone while one shows "
-                + "and every feed goes back to just before it.")
         }
     }
 
