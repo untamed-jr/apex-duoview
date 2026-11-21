@@ -80,7 +80,7 @@ struct HapticDebugLabel: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.75), in: Capsule())
+                    .videoGlass(in: Capsule())
                     .transition(.opacity)
             }
         }
