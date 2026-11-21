@@ -14,31 +14,20 @@ at once, a live track map, timing and team radio, all kept in sync with the pict
 
 ## Status
 
-**v1.0-beta.4 — Radio and the closed phone** is being built (from build 17; see the
-[changelog](CHANGELOG.md)). Build 17 brings team radio to replays: a Radio panel beside the map
-that lists each clip under its lap only once the picture has reached it, plays it while the
-feeds go quiet, and marks it on the Scrub Deck and in Race Engineer's console. Build 18 adds
-transcripts: each clip turned into text on the phone, shown in quotes under it once the picture
-reaches it. Build 19 makes the closed phone a companion: the outer screen pages between the
-picture (two feeds stacked, or one with the timing tower), a Radio Scanner that follows one
-driver's radio and plays it as it happens, and a Gap Thermometer for any two cars; an event card
-(a flag, your driver's stop, radio or pass) slides in when the picture reaches it, and opening
-the phone jumps every feed to just before it. Build 20 adds haptics: one feel per flag, safety
-car, red flag and chequered flag, and for your driver's stop and purple sector, felt as the
-picture reaches them. Build 21 adds two book layouts and the hinge mixer: Onboard and Logbook
-(one onboard, and that driver's radio, laps, stops and race control on the other screen), and
-Ear-Matched Rivals (two onboards, one per screen, each driver's radio in that ear with
-headphones); with "Hinge mixer" on, folding gives more radio and opening more commentary while a
-clip plays. Not on the phone yet.
+**v1.0-beta.4 — Radio and the closed phone** is built (builds 17 to 22; see the
+[changelog](CHANGELOG.md)) and waits to be tested on the phone after the Las Vegas race. It adds
+team radio on replays, with each clip turned into text on the phone and shown only once the
+picture reaches it. The closed phone becomes a companion: pages for the picture, a Radio Scanner
+and a Gap Thermometer, and an event card that, when you open the phone, jumps every feed to just
+before the moment. Haptics mark flags, your driver's stop and purple sectors as the picture
+reaches them. In book pose there are two new layouts, Onboard and Logbook and Ear-Matched Rivals,
+and an optional hinge mixer for radio against commentary. None of it has run on the phone yet.
 
-**v1.0-beta.3 — Live data** is built and being tested (builds 11 to 16; see the
-[changelog](CHANGELOG.md)). On a replay, a track map, the timing tower, driver cards and race
-marks on the timeline follow the picture, never running ahead of it; tapping a car brings up its
-onboard. Half-open like a laptop, the phone shows Race Engineer (an onboard above, the
-engineer's console below) or Scrub Deck (the video above, a touch timeline of the race below).
-Races get a pit circle showing where each car would rejoin after a stop. Live sessions get F1's
-live timing, recorded on the phone so you can rewind, and an offer of the next live programme. The live parts can only be tried on a live weekend (next:
-Las Vegas, November 19–22); the changelog lists what is still to check.
+**v1.0-beta.3 — Live data** is built (builds 11 to 16): on a replay, a track map, timing tower,
+driver cards and race marks follow the picture and never run ahead of it. Half-open like a
+laptop, the phone shows Race Engineer or Scrub Deck; races get a pit circle. Live sessions get F1's
+live timing, recorded on the phone so you can rewind. It is the build on the phone for the Las
+Vegas weekend; the changelog lists what is still to check.
 
 **v1.0-beta.2 — Multiview and fold** is released (2026-11-14, pre-release): four feeds at once
 in step, fitted to every fold of the phone, on top of beta.1's sign-in, browsing, one feed with
