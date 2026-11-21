@@ -62,8 +62,9 @@ struct RadioScannerView: View {
             radio.stopListening(by: Self.surface)
             radio.setSurface(Self.surface, shown: false)
         }
-        .onChange(of: order.first, initial: true) { _, first in
-            if heldLeader == nil { heldLeader = first }
+        // Held only once there is a picture time: before it, the order is by racing number.
+        .onChange(of: timing.pictureTime == nil ? nil : order.first, initial: true) { _, first in
+            if heldLeader == nil, let first { heldLeader = first }
         }
         // One stream per driver: auto-play (or the prompt) only from clips crossed in normal play.
         .task(id: driverNow) {
