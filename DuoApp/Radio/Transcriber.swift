@@ -19,10 +19,14 @@ import Speech
 ///   after a minute.
 /// - Hints (`AnalysisContext.contextualStrings`, or the recognizer's `contextualStrings`): the
 ///   session's names and teams and the radio words, from `TranscriptState.hints(drivers:)`.
-/// - Permission: speech recognition turned off for the app in Settings is `.permissionDenied`.
-///   `SFSpeechRecognizer` needs it, so that engine asks first. The analyzer engines don't ask up
-///   front (whether they need it is owner check O1); if one fails while iOS hasn't been asked,
-///   it asks once, and a no is `.permissionDenied`.
+/// - Permission (whether the analyzers need it is owner check O1):
+///   - `SFSpeechRecognizer` needs speech recognition allowed: that engine asks when it isn't
+///     decided, and a denial is `.permissionDenied`.
+///   - The analyzer engines never ask up front, and a denial alone doesn't stop them. Only an
+///     analyzer run that fails while speech recognition is denied gives `.permissionDenied` (until
+///     it's allowed again). A failure that says it wasn't authorized, while iOS hasn't been asked,
+///     asks once; an Allow tries that clip again.
+///   - Every `SFSpeech…` call is in `LegacySpeech`, so a change to those APIs is one place.
 /// - Never logs, and keeps nothing but the engine it found.
 actor Transcriber: RadioTranscribing {
     /// The engine `prepare()` found.
@@ -63,22 +67,28 @@ actor Transcriber: RadioTranscribing {
     private var modelInstalled = false
     private var installing = false
     private var installFailedAt: ContinuousClock.Instant?
-    /// Asked for speech permission after an analyzer failure (once).
-    private var askedPermission = false
+    /// An analyzer run failed while speech recognition was denied: held back until it's allowed.
+    private var analyzerDenied = false
 
     /// Ready, or why not. Quick: a model download goes on in the background.
     func prepare() async -> TranscriberReadiness {
-        let permission = SFSpeechRecognizer.authorizationStatus()
-        if permission == .denied || permission == .restricted { return .permissionDenied }
         if noEngine { return .unavailable }
         if engine == nil {
             engine = await Self.findEngine()
             if engine == nil { noEngine = true }
         }
         guard let engine else { return .unavailable }
+        let permission = LegacySpeech.permission()
         guard engine.usesAnalyzer else {
-            if permission == .authorized { return .ready }
-            return await Self.askPermission() == .authorized ? .ready : .permissionDenied
+            switch permission {
+            case .allowed: return .ready
+            case .denied: return .permissionDenied
+            case .notAsked: return await LegacySpeech.askPermission() == .allowed ? .ready : .permissionDenied
+            }
+        }
+        if analyzerDenied {
+            if permission == .denied { return .permissionDenied }
+            analyzerDenied = false
         }
         if modelInstalled { return .ready }
         if await Self.isModelInstalled(engine) {
@@ -106,16 +116,25 @@ actor Transcriber: RadioTranscribing {
             throw error
         } catch {
             if Task.isCancelled { throw CancellationError() }
-            if engine.usesAnalyzer, !askedPermission, SFSpeechRecognizer.authorizationStatus() == .notDetermined {
-                askedPermission = true
-                if await Self.askPermission() == .authorized {
+            switch LegacySpeech.permission() {
+            case .denied:
+                // Failed with speech recognition turned off for the app: say so.
+                if engine.usesAnalyzer { analyzerDenied = true }
+                throw TranscriberError.permissionDenied
+            case .notAsked where engine.usesAnalyzer && LegacySpeech.isNotAuthorized(error):
+                switch await LegacySpeech.askPermission() {
+                case .allowed:
                     // Allowed just now: the clip once more, so asking doesn't cost it its turn.
                     return try await Self.run(engine, fileURL: fileURL, hints: hints)
+                case .denied:
+                    analyzerDenied = true
+                    throw TranscriberError.permissionDenied
+                case .notAsked:
+                    throw error
                 }
+            default:
+                throw error
             }
-            let permission = SFSpeechRecognizer.authorizationStatus()
-            if permission == .denied || permission == .restricted { throw TranscriberError.permissionDenied }
-            throw error
         }
     }
 
@@ -146,10 +165,7 @@ actor Transcriber: RadioTranscribing {
             }
         }
         for identifier in locales {
-            if let recognizer = SFSpeechRecognizer(locale: Locale(identifier: identifier)),
-               recognizer.supportsOnDeviceRecognition {
-                return .recognizer(recognizer.locale)
-            }
+            if let locale = LegacySpeech.onDeviceLocale(identifier) { return .recognizer(locale) }
         }
         return nil
     }
@@ -192,16 +208,6 @@ actor Transcriber: RadioTranscribing {
         }
     }
 
-    /// Asks iOS for speech recognition (the Info.plist reason says the app never listens).
-    @concurrent
-    private static func askPermission() async -> SFSpeechRecognizerAuthorizationStatus {
-        await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { @Sendable status in
-                continuation.resume(returning: status)
-            }
-        }
-    }
-
     @concurrent
     private static func run(_ engine: Engine, fileURL: URL, hints: [String]) async throws -> String {
         switch engine {
@@ -220,7 +226,7 @@ actor Transcriber: RadioTranscribing {
                 }
             }
         case .recognizer(let locale):
-            return try await recognize(locale: locale, fileURL: fileURL, hints: hints)
+            return try await LegacySpeech.recognize(locale: locale, fileURL: fileURL, hints: hints)
         }
     }
 
@@ -265,10 +271,61 @@ actor Transcriber: RadioTranscribing {
             Task { await analyzer.cancelAndFinishNow() }
         }
     }
+}
+
+/// Every call into the older Speech API (`SFSpeechRecognizer`, its permission, its URL request and
+/// task) in one place, so a change to those APIs in a new SDK is fixed here only.
+private enum LegacySpeech {
+    /// Speech recognition for the app, as Settings has it.
+    enum Permission: Sendable, Equatable {
+        case allowed
+        /// Denied, or restricted on this phone.
+        case denied
+        case notAsked
+    }
+
+    static func permission() -> Permission {
+        permission(SFSpeechRecognizer.authorizationStatus())
+    }
+
+    private static func permission(_ status: SFSpeechRecognizerAuthorizationStatus) -> Permission {
+        // Compared, not switched, so a status added later needs no `@unknown default`.
+        if status == .authorized { return .allowed }
+        if status == .denied || status == .restricted { return .denied }
+        return .notAsked
+    }
+
+    /// Asks iOS for speech recognition (the Info.plist reason says the app never listens).
+    @concurrent
+    static func askPermission() async -> Permission {
+        let status = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in
+                continuation.resume(returning: status)
+            }
+        }
+        return permission(status)
+    }
+
+    /// Whether an engine's error says speech recognition wasn't authorized: the recognizer's own
+    /// "not authorized" (`kAFAssistantErrorDomain` 1700), or a description that says so (Speech
+    /// documents no such code for the analyzers). Anything else never raises the prompt.
+    static func isNotAuthorized(_ error: any Error) -> Bool {
+        let error = error as NSError
+        if error.domain == "kAFAssistantErrorDomain", error.code == 1700 { return true }
+        return error.localizedDescription.lowercased().contains("authoriz")
+    }
+
+    /// The recognizer's locale for `identifier`, when it recognises on the phone; nil otherwise.
+    static func onDeviceLocale(_ identifier: String) -> Locale? {
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: identifier)),
+              recognizer.supportsOnDeviceRecognition
+        else { return nil }
+        return recognizer.locale
+    }
 
     /// The last fallback: `SFSpeechRecognizer` on the file, on the phone only.
     @concurrent
-    private static func recognize(locale: Locale, fileURL: URL, hints: [String]) async throws -> String {
+    static func recognize(locale: Locale, fileURL: URL, hints: [String]) async throws -> String {
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.supportsOnDeviceRecognition else {
             throw TranscriberError.unavailable
         }

@@ -97,10 +97,11 @@ transcriber); the first real compile is the owner's Mac build.
   checked by eye only.
 - Transcripts in the simulator, if the build 17 probe showed it can transcribe (O4).
 - On the Duo: seconds per clip over 10 clips; the "Getting the speech model ready…" line the
-  first time; whether a speech-recognition prompt appears (O1: the app asks only if a
-  transcription fails without ever having asked, then tries that clip again if allowed; "Don't
-  Allow" turns transcripts off until it's allowed in Settings); which engine ran (O7: the probe's
-  "Engine").
+  first time; whether a speech-recognition prompt appears (O1: with `SpeechTranscriber` or
+  `DictationTranscriber` the app asks only if a transcription fails saying it wasn't authorized,
+  then tries that clip again if allowed; a denial stops them only once one fails while denied;
+  the `SFSpeechRecognizer` fallback asks before its first clip); which engine ran (O7: the
+  probe's "Engine").
 - Text appears only once the picture reaches its clip, also after rewinding and with "Show the
   whole race".
 - Closing the panel mid-clip, then opening it: the same clip is done again, nothing is skipped.
