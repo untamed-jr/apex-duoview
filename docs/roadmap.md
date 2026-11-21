@@ -31,27 +31,29 @@ Beta.5 and beta.6 designs are prepared for the owner's choices while beta.4 is b
 
 ## Duo ideas and where they land
 
-All of 1 to 23 are in. 24 to 28 are experiments for beta.7, tried on the real device.
+Ideas 1 to 23 each have a beta. 1 to 3, 11, 19 and 20 have landed; 4, 6, 7, 8, 9, 16 and 17
+landed in beta.4, which is built and waits for the phone. 24 to 28 are experiments for beta.7,
+tried on the real device.
 
 | # | Idea | Pose | Beta |
 |---|---|---|---|
 | 1 | Folding is the interface: unfold zooms in, fold zooms out, never lose your place | All | 2 |
 | 2 | Close equals bookmark: shutting pauses and marks; opening resumes or offers "while you were away" live | All | 1 |
 | 3 | Three rooms: Race Weekend, Paddock, Archive | All | 1 |
-| 4 | Haptic vocabulary: yellow flag, safety car, your driver pits, purple sector | All | 4 |
+| 4 | Haptic vocabulary: yellow flag, safety car, your driver pits, purple sector | All | 4 (landed in beta.4) |
 | 5 | Fold-shut recap: 60-second summary on the outer screen after a session | All | 6 |
-| 6 | Hinge as an audio mixer: angle crossfades commentary and driver radio | All | 4 |
-| 7 | Radio Scanner: one driver's radio with scrolling transcript, swipe to change | Closed | 4 |
-| 8 | Unfold to See: event card; opening jumps to that moment, rewound a few seconds | Closed | 4 |
-| 9 | Gap Thermometer: two cars, colour shifts as the gap closes | Closed | 4 |
+| 6 | Hinge as an audio mixer: angle crossfades commentary and driver radio | All | 4 (landed in beta.4) |
+| 7 | Radio Scanner: one driver's radio with scrolling transcript, swipe to change | Closed | 4 (landed in beta.4) |
+| 8 | Unfold to See: event card; opening jumps to that moment, rewound a few seconds | Closed | 4 (landed in beta.4) |
+| 9 | Gap Thermometer: two cars, colour shifts as the gap closes | Closed | 4 (landed in beta.4) |
 | 10 | Island Flag Ring: flag, lap and position in the Dynamic Island (needs device test) | Closed | 6 |
 | 11 | Director's Desk: big picture, thumbnail feeds, tower and map (needs device test) | Open | 3 (landed in beta.3) |
 | 12 | Race Table: flat between two people, each half faces its viewer | Open | 7 (moved from 2 on 2026-11-13: needs the real hardware) |
 | 13 | Strategy Lab: tyre stints and a "pit now?" rejoin estimate | Open | 5 |
 | 14 | Archive Atlas: pick a circuit, every race there since 1981 | Open | 6 |
 | 15 | Mirror Lap: two onboards synced by track position, gap on the hinge (replays first) | Book | 5 |
-| 16 | Onboard and Logbook: onboard plus that driver's radio, sectors and stops | Book | 4 |
-| 17 | Ear-Matched Rivals: each rival's radio in one AirPod | Book | 4 |
+| 16 | Onboard and Logbook: onboard plus that driver's radio, sectors and stops | Book | 4 (landed in beta.4) |
+| 17 | Ear-Matched Rivals: each rival's radio in one AirPod | Book | 4 (landed in beta.4) |
 | 18 | Then and Now: today's race beside a classic at the same circuit (needs test) | Book | 5 |
 | 19 | Race Engineer: onboard upright, engineer's console below | Laptop | 3 (landed in beta.3) |
 | 20 | Scrub Deck: video upright, touch timeline of race events below | Laptop | 3 (landed in beta.3) |
