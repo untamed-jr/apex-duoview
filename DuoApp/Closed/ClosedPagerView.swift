@@ -43,8 +43,10 @@ struct ClosedPagerView: View {
                                        onPageSwipe: onPageSwipe, onBackground: onBackground)
                 }
             }
+            // Just above the middle: on two stacked feeds that is the top tile's lower right
+            // corner, clear of both speaker buttons (top right) and the feed names (lower left).
             PageDots(page: page, height: bounds.height, onPage: onPage)
-                .position(x: bounds.maxX - 14, y: bounds.midY)
+                .position(x: bounds.maxX - 14, y: bounds.midY - max(44, bounds.height * 0.07))
             if showsHint {
                 Text(CompanionModels.pagerHint)
                     .font(.system(size: max(15, bounds.height * 0.024), weight: .semibold))
