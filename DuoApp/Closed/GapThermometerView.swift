@@ -90,6 +90,10 @@ struct GapThermometerView: View {
             if let session = timing.loadedSession {
                 if !session.info.isRace {
                     line(CompanionModels.gapNotRace)
+                } else if timing.timingHidden {
+                    // A live programme rewound past what the archive has: the timing's own note,
+                    // as the Logbook and tower say it, never a wrong "Gaps start after the first lap."
+                    line(timing.catchUpNote ?? LiveNote.catchingUp)
                 } else if let t = timing.pictureTime, let pair = currentPair {
                     thermometer(pair, at: t, session: session)
                 } else {
