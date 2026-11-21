@@ -18,7 +18,10 @@ import SwiftUI
 /// - Everything is read at the cut (picture time; the whole race with "Show the whole race" on);
 ///   with no picture time nothing shows but the header's code. The logbook is built off the main
 ///   actor twice a second (`BookModels.logbook`); a build for another car, or for later than the
-///   picture now (a rewind meanwhile), is dropped.
+///   picture now (a rewind meanwhile), is dropped. The one showing keeps the moment it was built
+///   for, and hides (back to the code alone) as soon as the picture is earlier than that, checked
+///   four times a second (`BookModels.logbookShows`), so a rewind never leaves stops or race
+///   control from after the picture on screen until the next build lands.
 /// - Radio comes from the radio's rows (`clips(for:limit:)`), so only clips the picture has
 ///   reached, with their transcripts through the gated queue; this view counts as a radio view
 ///   (`setSurface`), so transcription runs while it shows. A row's tap plays it, or stops it.
@@ -31,13 +34,19 @@ struct LogbookView: View {
     let onCar: @MainActor (String) -> Void
 
     @State private var model: LogbookModel?
+    /// The cut `model` was built at (nil: the whole race).
+    @State private var modelCut: UTCms?
 
     var body: some View {
         let car = controller.topOnboardNumber
         DataRegionFrame {
             Group {
                 if let car, let session = timing.loadedSession {
-                    content(car: car, session: session)
+                    // Re-checked 4 times a second against picture time (not observed), so a rewind
+                    // hides a build from later than the picture at once.
+                    TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+                        content(car: car, session: session, model: shownModel)
+                    }
                 } else {
                     Text(timing.timingHidden ? (timing.catchUpNote ?? "") : BookModels.pickOnboard)
                         .font(.footnote)
@@ -53,6 +62,7 @@ struct LogbookView: View {
         // A new car: its logbook from nothing (never the last car's), then twice a second.
         .task(id: car) {
             model = nil
+            modelCut = nil
             guard let car else { return }
             while !Task.isCancelled {
                 await refresh(car: car)
@@ -75,6 +85,8 @@ struct LogbookView: View {
             return
         }
         let t = timing.pictureTime, whole = timing.showWholeRace
+        // The one showing is from later than the picture (a rewind): gone now, not after this build.
+        if model != nil, !BookModels.logbookShows(cut: modelCut, pictureTime: t, wholeRace: whole) { model = nil }
         let built = await Task.detached(priority: .userInitiated) {
             BookModels.logbook(car: car, pictureTime: t, wholeRace: whole, session: session)
         }.value
@@ -87,9 +99,18 @@ struct LogbookView: View {
             }
         }
         if model != built { model = built }
+        modelCut = whole ? nil : t
     }
 
-    private func content(car: String, session: LoadedSession) -> some View {
+    /// The build, only while it isn't from later than the picture.
+    private var shownModel: LogbookModel? {
+        guard let model,
+              BookModels.logbookShows(cut: modelCut, pictureTime: timing.pictureTime, wholeRace: timing.showWholeRace)
+        else { return nil }
+        return model
+    }
+
+    private func content(car: String, session: LoadedSession, model: LogbookModel?) -> some View {
         let code = CompanionModels.code(car, drivers: session.drivers)
         return ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 14) {

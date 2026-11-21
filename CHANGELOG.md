@@ -110,14 +110,18 @@ stand-in player); the first real compile is the owner's Mac build.
     have the sound; the feed with the commentary keeps playing out of sight. Leaving Rivals keeps
     the feeds as they are.
   - With "Play radio as it happens" on, a clip plays by itself as the picture reaches it (never on
-    a seek or a scrub), in the ear of the screen its driver is on.
+    a seek or a scrub), in the ear of the screen its driver is on. Headphones going in or out
+    while it plays move it to its ear or to the middle at once.
+  - **Leaving Rivals keeps its two onboards** at the front of the feeds (and remembered as the
+    last used); the main feed from before isn't put back.
 - **The hinge mixer** (Settings › Team radio › "Hinge mixer — fold to hear more radio, open for
   more commentary", off): in book and laptop, while a clip plays, the hinge sets the balance:
   70° all radio, 160° all commentary, in between a straight line; smoothed, with a 5° dead zone.
   A bar shows for 2 s when the mix changes, "Commentary ◀━━●━━▶ Radio", or "No radio to mix yet"
   before the first clip. With it off (or in other postures) a clip silences the feeds, as before.
-  Without a clip the feeds are at full level. Multiview only: the single-feed player keeps
-  silencing the feeds under a clip.
+  Without a clip the feeds are at full level. In book the bar sits in the main feed's half, off
+  the fold. **The hinge mixer is multiview-only in this build** (controller ruling): the
+  single-feed player keeps silencing the feeds under a clip.
 - A tap in the Logbook (or a rival put in) that adds a feed keeps the book layout, as the laptop's
   data layouts are kept.
 - Version: 1.0-beta.4 (build 21).

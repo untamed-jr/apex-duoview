@@ -268,6 +268,18 @@ struct MultiviewView: View {
                     controls(layout)
                         .padding(insets)
                 }
+                // The hinge mixer (book and laptop, Settings' "Hinge mixer" on): its own view
+                // follows the hinge, so a reading never redraws this body; its bar shows for 2 s on
+                // a change, low in the main feed's half in book (never on the fold, as the controls).
+                .overlay(alignment: .bottom) {
+                    let half = mainHalf(layout)
+                    HingeMixerOverlay(fold: fold, radio: controller.radio, settings: model.companion)
+                        .frame(maxWidth: .infinity)
+                        .padding(.leading, half.leading)
+                        .padding(.trailing, half.trailing)
+                        .padding(.bottom, 28)
+                        .padding(insets)
+                }
             }
             .ignoresSafeArea()
         }
@@ -296,12 +308,6 @@ struct MultiviewView: View {
         .overlay(alignment: .top) {
             HapticDebugLabel(haptics: model.haptics, settings: model.companion)
                 .padding(.top, 110)
-        }
-        // The hinge mixer (book and laptop, Settings' "Hinge mixer" on): its own view follows the
-        // hinge, so a reading never redraws this body; its bar shows for 2 s on a change.
-        .overlay(alignment: .bottom) {
-            HingeMixerOverlay(fold: fold, radio: controller.radio, settings: model.companion)
-                .padding(.bottom, 28)
         }
         // An editor reopened while the last one was still closing keeps the question waiting.
         .sheet(item: $editor, onDismiss: { editorShowing = editor != nil }) { request in

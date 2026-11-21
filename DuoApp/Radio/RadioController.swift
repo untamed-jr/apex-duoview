@@ -27,6 +27,8 @@ protocol RadioPlayback: AnyObject {
     func play(fileURL: URL, pan: Float, rate: Float, onEnd: @escaping @MainActor () -> Void) throws
     /// The speed of the clip playing (the feeds' speed).
     func setRate(_ rate: Float)
+    /// The pan of the clip playing (−1 left … 1 right), changed while it plays.
+    func setPan(_ pan: Float)
     /// Stops at once; no `onEnd`.
     func stop()
     /// A clip is playing now (false once it ended or the system stopped the audio).
@@ -180,6 +182,9 @@ final class RadioController {
     @ObservationIgnored private var storeLoaded = false
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var playTask: Task<Void, Never>?
+    /// The ear the clip playing was asked for (Rivals: true left, false right); nil for a plain
+    /// pan. Its pan follows the route: ±1 with headphones, 0 without.
+    @ObservationIgnored private var playingEar: Bool?
     /// Bumped by every play and finish: a late download or a late end for an older clip is dropped.
     @ObservationIgnored private var playToken = 0
     /// The audio was started for `playing` (not just downloading).
@@ -204,6 +209,10 @@ final class RadioController {
         self.audio.onRouteChange = { [weak self] phones in
             guard let self, self.headphones != phones else { return }
             self.headphones = phones
+            // A clip playing in one ear moves to the middle without headphones, and back.
+            if let ear = self.playingEar, self.audioStarted, self.playing != nil {
+                self.audio.setPan(BookModels.pan(left: ear, headphones: phones))
+            }
         }
     }
 
@@ -376,8 +385,9 @@ final class RadioController {
     /// Plays a visible clip: downloads it the first time, then plays it while the feeds are quiet
     /// (or, with the hinge mixer on, at its levels). `pan` is −1 (left ear) … 1 (right ear); Rivals
     /// pans each driver to their screen's ear. A clip not visible at the cut (after picture time)
-    /// is ignored.
-    func play(path: String, pan: Float = 0) {
+    /// is ignored. `ear` (Rivals: true for the left screen's driver) overrides `pan`: the clip goes
+    /// to that ear with headphones, centred without, and follows route changes while it plays.
+    func play(path: String, pan: Float = 0, ear: Bool? = nil) {
         guard host != nil, let session = timing.loadedSession,
               let clip = session.radio.all.first(where: { $0.path == path }),
               !RadioModels.shouldStop(playing: clip, pictureTime: timing.pictureTime, wholeRace: timing.showWholeRace)
@@ -385,6 +395,7 @@ final class RadioController {
         finish()
         let mine = playToken
         playing = path
+        playingEar = ear
         let key = session.info.key.map { String($0) } ?? session.info.path
         guard let base = cacheBase, !key.isEmpty,
               let url = RadioClips.audioURL(sessionPath: session.info.path, clipPath: path)
@@ -411,7 +422,7 @@ final class RadioController {
         finish()
     }
 
-    private func start(file: URL, path: String, pan: Float, token mine: Int) {
+    private func start(file: URL, path: String, pan asked: Float, token mine: Int) {
         // The picture may have gone back past it while it downloaded.
         guard let host, let session = timing.loadedSession,
               let clip = session.radio.all.first(where: { $0.path == path }),
@@ -420,6 +431,8 @@ final class RadioController {
             finish()
             return
         }
+        // An ear's pan from the route as it is now (it may have changed while the clip downloaded).
+        let pan = playingEar.map { BookModels.pan(left: $0, headphones: headphones) } ?? asked
         do {
             try audio.play(fileURL: file, pan: pan, rate: Float(host.playbackRate)) { [weak self] in
                 self?.ended(token: mine)
@@ -445,6 +458,7 @@ final class RadioController {
         playTask = nil
         playToken &+= 1
         audioStarted = false
+        playingEar = nil
         audio.stop()
         if playing != nil { playing = nil }
         host?.setFeedVolume(1)

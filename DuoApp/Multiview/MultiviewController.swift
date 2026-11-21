@@ -687,8 +687,11 @@ final class MultiviewController {
     // MARK: Rivals
 
     /// Rivals coming up (or tried again): the rivals (the session's chosen pair, else
-    /// `BookModels.defaultRivals` at picture time) go in slots 0 and 1. Pending while a step
-    /// can't be done yet (a feed with no player for the main spot, a refresh).
+    /// `BookModels.defaultRivals` at picture time) go in slots 0 and 1. Pending only while a step
+    /// can't be done *yet* (a refresh, the feeds not in, a feed with no player for the main spot):
+    /// tried again on the next change of the slots and when a live feed's PLAY answers. A refusal
+    /// that can't change (no onboard for the car, no spot to put it) isn't pending, so later slot
+    /// changes (a drag, the editor) never move the feeds back.
     private func placeRivals() {
         rivalsPending = false
         placingRivals = true
@@ -707,7 +710,7 @@ final class MultiviewController {
         for (side, car, other) in [(0, rivals.left, rivals.right), (1, rivals.right, rivals.left)] {
             guard let number = Int(car) else { continue }
             // The other rival's onboard, wherever it is now, never makes way for this one.
-            if !putRival(number, side: side, keeping: Int(other)) { rivalsPending = true }
+            if putRival(number, side: side, keeping: Int(other)) == .notYet { rivalsPending = true }
         }
     }
 
@@ -728,20 +731,29 @@ final class MultiviewController {
         // The other screen keeps its driver; picking the other screen's driver trades the two.
         let left = side == 0 ? car : (onboardNumber(inSlot: 0) == car ? onboardNumber(inSlot: 1) : onboardNumber(inSlot: 0))
         let right = side == 1 ? car : (onboardNumber(inSlot: 1) == car ? onboardNumber(inSlot: 0) : onboardNumber(inSlot: 1))
-        if !putRival(racingNumber, side: side), rivalsShown { rivalsPending = true }
+        if putRival(racingNumber, side: side) == .notYet, rivalsShown { rivalsPending = true }
         // Remembered for coming back to Rivals (the session's pair from now on).
         if let left, let right, left != right { rivals = (left: left, right: right) }
         return nil
     }
 
-    /// One rival into its screen's slot (`RivalsSlots.step`). False when it isn't there afterwards
-    /// (no onboard, no spot, or a feed not ready to be the main one).
-    private func putRival(_ racingNumber: Int, side: Int, keeping: Int? = nil) -> Bool {
+    /// How putting one rival in place went.
+    private enum RivalOutcome {
+        /// On its screen.
+        case placed
+        /// Not yet: a feed with no player for the main spot, or a refresh in the way.
+        case notYet
+        /// Never, as things stand: no onboard for the car, or no spot to put it.
+        case refused
+    }
+
+    /// One rival into its screen's slot (`RivalsSlots.step`).
+    private func putRival(_ racingNumber: Int, side: Int, keeping: Int? = nil) -> RivalOutcome {
         let step = RivalsSlots.step(racingNumber: racingNumber, side: side, slots: slots, channels: channels,
                                     audioChannelId: audioChannelId, keeping: keeping)
         switch step {
         case .none:
-            return true
+            return .placed
         case .swap(let from):
             moveFeed(from: from, to: side)
         case .put(let slot, let channel):
@@ -750,9 +762,9 @@ final class MultiviewController {
             keepDataLayout(fromCount: before)
             if slot != side { moveFeed(from: slot, to: side) }
         case .refused:
-            return false
+            return .refused
         }
-        return onboardNumber(inSlot: side) == String(racingNumber)
+        return onboardNumber(inSlot: side) == String(racingNumber) ? .placed : .notYet
     }
 
     /// Race Engineer: a car tapped (ahead or behind on the console, its mini map, the map or the
@@ -1423,6 +1435,8 @@ final class MultiviewController {
             feedRefreshedAt[channelId] = Date()
             attach(channel)
             applyRoles()
+            // A live rival waiting for its player (it couldn't be the main feed until now).
+            if rivalsPending, !placingRivals { placeRivals() }
         case .failure(let error):
             // The play session was replaced from elsewhere: nothing to show here.
             if error is CancellationError { return }

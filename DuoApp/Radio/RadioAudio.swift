@@ -133,6 +133,11 @@ final class RadioAudio: RadioPlayback {
         if node.volume != value { node.volume = value }
     }
 
+    func setPan(_ pan: Float) {
+        let value = pan.isFinite ? min(max(pan, -1), 1) : 0
+        if node.pan != value { node.pan = value }
+    }
+
     func setRate(_ rate: Float) {
         let value = Self.clamped(rate)
         if pitch.rate != value { pitch.rate = value }

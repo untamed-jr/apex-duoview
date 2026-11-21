@@ -1,4 +1,5 @@
 import LiveTiming
+import Multiview
 import SwiftUI
 
 /// One of Ear-Matched Rivals' strips (`DataRegions.leftStrip`, `rightStrip`), under its screen's
@@ -13,7 +14,8 @@ import SwiftUI
 /// ```
 /// - The last clip the picture has reached (`clips(for:limit:)`), with its transcript through the
 ///   gated queue; "No radio from {CODE} yet." until there is one. ▶ plays it in this screen's ear
-///   (`BookModels.pan`; centred without headphones), ■ stops it.
+///   (`play(path:ear:)`: centred without headphones, and re-panned if they go in or out while it
+///   plays), ■ stops it.
 /// - A tap on the header opens the running order: the driver picked goes on this screen
 ///   (`MultiviewController.setRival`). Picking the other screen's driver trades the two.
 /// - The left strip says "Put on headphones to hear each driver in one ear" while there are none.
@@ -133,7 +135,7 @@ struct RivalsStrip: View {
                     if playing {
                         radio.stop()
                     } else {
-                        radio.play(path: last.path, pan: BookModels.pan(left: side == 0, headphones: radio.headphones))
+                        radio.play(path: last.path, ear: side == 0)
                     }
                 } label: {
                     Image(systemName: playing ? "stop.fill" : "play.fill")
@@ -190,7 +192,7 @@ struct RivalsListener: View {
                     // The screen the driver is on now (a tile tap may have swapped the two).
                     guard let side = [0, 1].first(where: { controller.onboardNumber(inSlot: $0) == clip.racingNumber })
                     else { continue }
-                    radio.play(path: clip.path, pan: BookModels.pan(left: side == 0, headphones: radio.headphones))
+                    radio.play(path: clip.path, ear: side == 0)
                 }
             }
     }

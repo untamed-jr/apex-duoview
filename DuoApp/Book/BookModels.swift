@@ -157,6 +157,15 @@ enum BookModels {
                           radio: session.radio, raceControl: session.raceControl)
     }
 
+    /// Whether a logbook built at `cut` (nil: the whole race) may still show now: never one built
+    /// for later than the picture (a rewind landed after it was built), nor a whole-race build once
+    /// "Show the whole race" is off. Without picture time, only with the whole race on.
+    static func logbookShows(cut: UTCms?, pictureTime: UTCms?, wholeRace: Bool) -> Bool {
+        if wholeRace { return true }
+        guard let cut, let pictureTime else { return false }
+        return cut <= pictureTime
+    }
+
     // MARK: Rivals
 
     /// Rivals' first pair, ahead first: in a race, your driver and the nearer rival
