@@ -73,15 +73,16 @@ struct HingeMixerOverlay: View {
             reading(new, comingOn: new.active && (!old.active || old == new))
         }
         // After a reading: keep stepping until the mix reaches where the hinge came to rest.
+        // Sleeps first, so the reading (onChange) has always been taken before the first look.
         .task(id: input) {
-            var steps = 0
-            while input.active, !mixer.isSettled, steps < Self.settleStepLimit {
+            guard input.active else { return }
+            for _ in 0..<Self.settleStepLimit {
                 do {
                     try await Task.sleep(for: Self.settleStep)
                 } catch {
                     return
                 }
-                steps += 1
+                guard !mixer.isSettled else { return }
                 apply(mixer.settle())
             }
         }
