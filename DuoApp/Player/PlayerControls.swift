@@ -104,10 +104,10 @@ struct PlayerChrome: View {
 
 // MARK: - Top bar
 
-/// ✕ on the left; Map and AirPlay on the right.
+/// ✕ and mute on the left; Map, Radio, picture in picture and AirPlay on the right.
 private struct PlayerTopBar: View {
     let controller: PlayerController
-    /// Playing (not loading): Map and AirPlay show. ✕ always does.
+    /// Playing (not loading): mute, Map, Radio, picture in picture and AirPlay show. ✕ always does.
     let showsTiming: Bool
     let onInteraction: @MainActor () -> Void
 
