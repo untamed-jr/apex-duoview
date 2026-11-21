@@ -1,0 +1,311 @@
+<title>Beta 4 Test Checklist</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a sticky progress strip; sections as timing-sheet groups, rows as checks. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #15171c; --muted: #5d6370; --line: #dfe2e8;
+  --accent: #7b3fe4;            /* timing purple */
+  --ok: #138a4b; --ok-bg: #e3f5ea;
+  --bad: #c2410c; --bad-bg: #fdebe0;
+  --todo: #8a8f9a;
+  --code-bg: #eef0f4;
+  --f-display: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a1f10;
+  --todo: #6b7280; --code-bg: #20242c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #181b21; --fg: #e8eaee; --muted: #9aa1ad; --line: #2a2f38;
+  --accent: #a77bff; --ok: #4ade80; --ok-bg: #12301f; --bad: #fb923c; --bad-bg: #3a1f10;
+  --todo: #6b7280; --code-bg: #20242c; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 64px; }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+h1 { font-size: 30px; line-height: 1.15; letter-spacing: .01em; }
+h2 { font-size: 19px; letter-spacing: .02em; }
+.lede { color: var(--muted); margin: 6px 0 0; max-width: 62ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.meter { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.meter span { display: block; height: 100%; transition: width .3s; }
+.meter .m-ok { background: var(--ok); } .meter .m-bad { background: var(--bad); }
+.barrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.barrow b { color: var(--fg); font-weight: 600; }
+.filters { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip:focus-visible, .seg button:focus-visible, textarea:focus-visible, .copy:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.saved { font-size: 12px; }
+
+section.group { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+section.group > details > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+section.group > details > summary::-webkit-details-marker { display: none; }
+.count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+.gnote { font-size: 13px; color: var(--muted); padding: 0 16px 10px; margin: 0; }
+
+.item { border-top: 1px solid var(--line); padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; }
+.item[data-s="ok"] { box-shadow: inset 3px 0 0 var(--ok); }
+.item[data-s="bad"] { box-shadow: inset 3px 0 0 var(--bad); }
+.it-text { min-width: 0; }
+.it-title { font-weight: 600; }
+.it-how { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tag { font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--code-bg); color: var(--muted); }
+.tag.code { color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; align-self: start; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 10px; border: 0; background: var(--surface); color: var(--muted); cursor: pointer; min-height: 36px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"][data-v="todo"] { background: var(--code-bg); color: var(--fg); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="ok"] { background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.seg button[aria-pressed="true"][data-v="bad"] { background: var(--bad-bg); color: var(--bad); font-weight: 600; }
+.note { grid-column: 1 / -1; }
+.note textarea { width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.note label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.addnote { grid-column: 1 / -1; justify-self: start; font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+
+pre.cmd { margin: 8px 0 0; background: var(--code-bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-family: var(--f-mono); font-size: 13px; line-height: 1.6; }
+.cmdrow { display: flex; align-items: start; gap: 8px; }
+.cmdrow pre { flex: 1; min-width: 0; }
+.copy { font: inherit; font-size: 12px; margin-top: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+details.steps { margin-top: 8px; }
+details.steps > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); }
+details.steps ol { margin: 8px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+details.steps ol li::marker { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.pass { margin: 8px 0 0; font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--ok-bg); color: var(--fg); }
+.pass b { color: var(--ok); }
+.foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+.empty { padding: 14px 16px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 520px) { .item { grid-template-columns: 1fr; } .filters { margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) { .meter span { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Apex DuoView · v1.0-beta.4</div>
+    <h1>Beta 4 test checklist</h1>
+    <p class="lede">Radio and the closed phone, builds 17 to 22, checked on your iPhone Duo after the Las Vegas race. Start with the Mac and the simulator. Settings › Debug › "Simulate fold" stays off on the phone. Mark each row <b>Works</b> or <b>Problem</b>; for a problem, say what you saw in the note. Claude can read this page's results back.</p>
+  </header>
+
+  <div class="bar" role="region" aria-label="Progress">
+    <div class="meter" aria-hidden="true"><span class="m-ok" id="mOk"></span><span class="m-bad" id="mBad"></span></div>
+    <div class="barrow">
+      <span><b id="cOk">0</b> work</span><span><b id="cBad">0</b> problems</span><span><b id="cTodo">0</b> to try</span>
+      <span class="saved" id="saved">Loading your results…</span>
+      <div class="filters" role="group" aria-label="Show">
+        <button class="chip" data-f="all" aria-pressed="true">All</button>
+        <button class="chip" data-f="todo" aria-pressed="false">To try</button>
+        <button class="chip" data-f="bad" aria-pressed="false">Problems</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="groups" class="wrap" style="gap:14px"></main>
+
+  <div class="foot">
+    <button class="copy" id="copyProblems" type="button">Copy problems as text</button>
+    <span id="copyMsg" aria-live="polite"></span>
+  </div>
+</div>
+
+<script>
+const GROUPS = [
+  { id: "prep", title: "Before the phone", open: true,
+    note: "On your Mac. Run xcodegen generate first: builds 17 to 21 added folders.",
+    items: [
+      { id: "b4-mac", t: "Build on the Mac with 0 warnings", h: "Product › Build. Any warning or error: save the build log and send it to Claude. Nothing in builds 18 to 22 has been compiled yet.", tags: ["Mac"] },
+      { id: "b4-sim-close", t: "Simulator: open a replay, close it, no crash", h: "Play a replay in the single-feed player, close it, then tap a car in another replay and close again. Nothing should crash. This is the lock-screen clean-up from build 22. If closing crashes, tell Claude.", tags: ["Simulator", "Build 22"] },
+      { id: "b4-sim-radio", t: "Simulator: build 17 radio on a replay", h: "São Paulo race, laps 17 to 23, Show the whole race on. Clips appear only as the picture reaches them, under their lap. A clip silences the feeds, then the sound comes back at its end.", tags: ["Simulator", "Build 17"] },
+    ]},
+  { id: "radio", title: "Radio (builds 17–18)",
+    note: "On the São Paulo replay, on the phone. Use headphones out unless a row says otherwise.",
+    items: [
+      { id: "b4-r-clips", t: "Clips show as the picture reaches them", h: "Open the Radio panel. Anton's clips (ANT, 8 over the race) show under their laps. Nothing appears ahead of the picture, also after a rewind.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-play", t: "A clip silences the feeds, at the feeds' speed", h: "Try 2×. The sound comes back at the clip's end, on a second tap, on a rewind past it, and on closing the player. In multiview, moving the sound to another tile mid-clip keeps that tile quiet until the clip ends.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-flash", t: "The soft flash", h: "One soft flash when a clip is crossed in normal play. None after a seek, a scrub, ±10 s or a Scrub Deck tap. Change the speed while a clip is due: the flash should still come.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-ticks", t: "Radio ticks on the Scrub Deck", h: "Ticks are taller for your driver and none show past the picture. Tapping one jumps to it. Race Engineer shows the radio for the top onboard.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-bar", t: "The top bar still fits with the Radio button", h: "In multiview, closed and in book pose: the title shortens first and nothing is cut off.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-fail", t: "A clip F1 refuses to send", h: "You should see \"Couldn't load this clip\", the video plays on, and you aren't signed out. Only if it happens; don't force it.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-interrupt", t: "Headphones, a call, an alarm or Siri during a clip", h: "Plug headphones in or out while a clip plays: the clip ends and the next one plays. A call, an alarm or Siri: the clip ends and the feeds' sound comes back.", tags: ["Phone", "Build 17"] },
+      { id: "b4-r-probe", t: "Transcribe a test clip (owner checks O4 and O7)", h: "Settings › Debug › \"Transcribe a test clip\", on the Duo. Copy what it shows into the note: available, language, model, seconds, text, and which Engine ran. If iOS wants a speech-recognition permission the app may close when you tap it; that is the answer, write it down.", tags: ["Phone", "O4", "O7"] },
+      { id: "b4-r-speed", t: "Transcripts: seconds per clip", h: "Time about 10 clips. The first time you should see \"Getting the speech model ready…\". Say whether a speech-recognition prompt appeared and when.", tags: ["Phone", "Build 18"] },
+      { id: "b4-r-text", t: "Text appears only when the picture reaches the clip", h: "Also after rewinding and with Show the whole race. Close the panel mid-clip and reopen it: the same clip is done again, none skipped.", tags: ["Phone", "Build 18"] },
+      { id: "b4-r-switch", t: "Transcripts off, on, and denied", h: "Transcripts off in Settings: no line and no text; on again: they return. Deny speech recognition in iOS Settings: a line says so; allow it again: transcripts carry on.", tags: ["Phone", "Build 18"] },
+      { id: "b4-r-warm", t: "Warmth, and nothing in the background", h: "20 minutes with the Radio panel on screen: does the phone get warm? With picture in picture or the screen off, nothing should be transcribed.", tags: ["Phone", "Build 18"] },
+      { id: "b4-r-t1", t: "T-R1: which audio track carries team radio", h: "Play an onboard on the São Paulo replay and list its audio options. Listen to each: is the team-radio track continuous radio, clips only, or just the car's sound? Write the answer in the note.", tags: ["Phone", "T-R1"] },
+    ]},
+  { id: "closed", title: "The closed phone (build 19)",
+    note: "Close the phone while a replay plays in multiview. The feeds keep their sound on every page.",
+    items: [
+      { id: "b4-c-size", t: "The outer screen and the pages", h: "Settings › Debug › \"Screen\" shows its size: write it down. Closed, swipe up and down: Picture, Radio Scanner, Gap Thermometer; the dots on the right edge take a tap. Closing again opens the page you used last.", tags: ["Phone", "Build 19"] },
+      { id: "b4-c-picture", t: "Picture page", h: "Two or more feeds: two stacked full width, the main one on top, left and right change it. Tap a feed to swap; hold and drag to trade. One feed: the timing tower fills the space below, and scrolls instead of changing the page.", tags: ["Phone", "Build 19"] },
+      { id: "b4-c-scanner", t: "Radio Scanner", h: "ANT's clips on laps 19, 20 and 22 play by themselves as the picture reaches them and the transcript scrolls. Left and right change driver. Readable at arm's length.", tags: ["Phone", "Build 19"] },
+      { id: "b4-c-gap", t: "Gap Thermometer", h: "Two drivers and the gap in large digits. The bar goes blue (3 s or more), amber (2 s), red (1 s or less) and the arrow shows closing or growing. Left and right move the pair; touch and hold to pick both. Does it feel smooth, and how much battery does a race use?", tags: ["Phone", "Build 19"] },
+      { id: "b4-c-cards", t: "Event cards", h: "A yellow flag (laps 17 and 20) slides in a card at the top of any page: \"Yellow flag · Lap 23\", with \"Unfold to see\". Cards stack with a \"+2\". Swipe one away and opening just carries on.", tags: ["Phone", "Build 19"] },
+      { id: "b4-c-unfold", t: "Unfold to See", h: "With a card up, open the phone to book and to flat, slowly and quickly. Every feed should jump to 5 s before the event, with \"Rewound to … — Back to where you were\" for 15 s. If one time it doesn't jump, note the order the postures changed in the Debug log.", tags: ["Phone", "Build 19", "Build 22"] },
+      { id: "b4-c-unknown", t: "Opening through an unknown posture", h: "Open the phone slowly, so the hinge sits part-open for a moment, with a card up. The jump should still happen once it opens. Does opening feel right: is the app still in front, and how fast does the layout change?", tags: ["Phone", "Build 22"] },
+      { id: "b4-c-off", t: "Closed with the screen off", h: "Close the phone with sound playing, then open it. Note whether the feeds, radio and cards kept going while the screen was off (owner checks O6, Q10).", tags: ["Phone", "Build 19"] },
+    ]},
+  { id: "haptics", title: "Haptics (build 20)",
+    note: "Settings › Haptics. It is hidden in the simulator, so this part is phone only.",
+    items: [
+      { id: "b4-h-feel", t: "\"Feel it\" for each event", h: "Press each Feel it: yellow flag, safety car, virtual safety car, red flag, your driver pits, purple sector, chequered flag. Do the seven feel different from each other?", tags: ["Phone", "Build 20"] },
+      { id: "b4-h-replay", t: "Haptics in a replay", h: "Pick your driver (Settings › Multiview › My driver). Each event buzzes as the picture reaches it. Nothing when you scrub across one, nor in the 2 s after.", tags: ["Phone", "Build 20"] },
+      { id: "b4-h-nag", t: "Does yellow nag?", h: "Play a busy session. Yellow flags buzz at most once a minute. Is that too much, or just right?", tags: ["Phone", "Build 20"] },
+      { id: "b4-h-label", t: "Show haptics on screen", h: "Turn on Settings › Debug › \"Show haptics on screen\". Every \"Haptic: …\" label comes with a feel, including the first one after a quiet spell.", tags: ["Phone", "Build 20"] },
+      { id: "b4-h-off", t: "Screen off or app in the background", h: "Haptics are expected to stop while the screen is off. When you come back, the next haptic should still play.", tags: ["Phone", "Build 20", "O2"] },
+    ]},
+  { id: "book", title: "Book modes and the hinge mixer (build 21)",
+    note: "Book pose with a replay and timing loaded. In book, ⟳ switches between the two book modes.",
+    items: [
+      { id: "b4-b-onboard", t: "Onboard and Logbook", h: "One onboard on the left, that driver's Logbook on the right: header, Radio, Laps, Stops, Race control. The real halves are as wide as the onboard. Tap the car ahead or behind in the header: both screens switch to it.", tags: ["Phone", "Build 21"] },
+      { id: "b4-b-logbook", t: "The Logbook stops at the picture", h: "Rewind: laps, stops and radio go back with it. With no onboard on the left you should see \"Tap a car to pick an onboard\".", tags: ["Phone", "Build 21"] },
+      { id: "b4-b-rivals", t: "Rivals, with AirPods in", h: "Two onboards, one per screen, each with a strip: \"Left ear · CODE\" and \"Right ear · CODE\". Put AirPods in: the left driver's radio is in the left ear, the right's in the right, commentary in both. Tap a strip's header to change that driver.", tags: ["Phone", "AirPods", "Build 21"] },
+      { id: "b4-b-nopods", t: "Rivals, with AirPods out", h: "Take them out: clips play in the middle and the left strip says \"Put on headphones to hear each driver in one ear\". Take them out or put them in while a clip plays: that clip ends and the next plays in the right place.", tags: ["Phone", "AirPods", "Build 21"] },
+      { id: "b4-b-leave", t: "Leaving Rivals", h: "Switch to another mode: the two onboards stay at the front of the feeds. Adding a feed from the Logbook keeps the book layout.", tags: ["Phone", "Build 21"] },
+      { id: "b4-b-mixer-on", t: "Hinge mixer: turn it on", h: "Settings › Team radio › Hinge mixer, on. In book (or laptop) with a clip playing, the bar \"Commentary ◀━━●━━▶ Radio\" shows for 2 s when the mix changes.", tags: ["Phone", "Build 21"] },
+      { id: "b4-b-mixer-ends", t: "The mixer reaches both ends", h: "Rest the hinge at 70° or less: only the radio clip is heard. Rest it at 160° or more: only the commentary. In between, a smooth mix. Is the 5° dead zone steppy?", tags: ["Phone", "Build 21"] },
+      { id: "b4-b-mixer-settle", t: "The mixer settles", h: "Fold quickly, then stop: the bar settles at the hinge's angle within about 1.5 s. Hold still: the mix doesn't waver.", tags: ["Phone", "Build 22"] },
+      { id: "b4-b-live-rival", t: "Live multiview in Rivals", h: "At a live session only. The left rival may take a moment to reach the left screen.", tags: ["Phone", "Live", "Build 21"] },
+    ]},
+  { id: "single", title: "Single player",
+    note: "The single-feed player now has the app's own controls. Play a replay from Archive, one feed.",
+    items: [
+      { id: "b4-s-controls", t: "The controls", h: "Top bar: ✕, mute, Map, picture in picture, AirPlay. Bottom: scrubber, play/pause, ±10 s, LIVE, speed, one menu for commentary and subtitles. Each does what it says.", tags: ["Phone"] },
+      { id: "b4-s-subs", t: "Subtitles", h: "Open the commentary and subtitles menu and turn subtitles on, then off. The words show on the picture and go away.", tags: ["Phone"] },
+      { id: "b4-s-mute", t: "Mute", h: "Tap mute: the sound stops. Play a radio clip: you still hear it. Tap again: the sound is back.", tags: ["Phone"] },
+      { id: "b4-s-pip", t: "The PiP button", h: "Tap picture in picture in the top bar: a small window plays. Leaving the app also starts it. Tap the window to come back to the app.", tags: ["Phone"] },
+      { id: "b4-s-pip-close", t: "Closing while PiP shows", h: "Close the player, or tap a car, while the PiP window shows. No window should be left behind.", tags: ["Phone", "Build 22"] },
+      { id: "b4-s-lock", t: "Lock-screen controls", h: "Play a feed and lock the phone. The lock screen and Control Centre show Apex DuoView with working play, pause and skip.", tags: ["Phone"] },
+      { id: "b4-s-lock-gone", t: "Closing leaves no lock-screen entry", h: "Close the player, lock the phone and open Control Centre: there should be no Apex DuoView entry. Tap a car twice, then close: still none.", tags: ["Phone", "Build 22"] },
+      { id: "b4-s-tap", t: "Tap a car while a clip plays", h: "The clip stops and the radio list is empty for a moment while the new feed loads. That is expected; it then fills again.", tags: ["Phone", "Build 17"] },
+    ]},
+  { id: "live", title: "Live, at a race weekend",
+    note: "Only during a live session. The simulator can't play live video, so this is phone only.",
+    items: [
+      { id: "b4-l-multi", t: "T-B11b: live multiview through FairPlay", h: "Open a live session and tap Watch multiview. Four feeds play; the onboards are the right drivers. Swap a feed in Feeds and it plays. Ten minutes without a stall. If F1 TV refuses, \"Watch the main feed\" still shows.", tags: ["Phone", "Live", "T-B11b"] },
+      { id: "b4-l-stuck", t: "A stuck tile recovers", h: "When a tile stops, it should come back by itself once. Pick it again more than a minute after its last try and it tries again. Remove a stopped feed and add it back: it should come back without waiting.", tags: ["Phone", "Live", "Build 22"] },
+      { id: "b4-l-radio", t: "New radio arrives live", h: "With only the Radio panel open, new clips arrive as the session goes on.", tags: ["Phone", "Live", "Build 17"] },
+      { id: "b4-l-edge", t: "Cards, haptics and Back on a live programme", h: "A card's jump back from the live edge, then Back returns to it, and LIVE still works. A haptic lands with the picture, not the timing. Note anything that looks late.", tags: ["Phone", "Live", "Build 19", "Build 20"] },
+    ]},
+];
+
+const LABELS = { todo: "Not tried", ok: "Works", bad: "Problem" };
+let state = {};          // id -> {s, n}
+let filter = "all";
+let db = null, local = false;
+const openNotes = new Set();
+const openSteps = new Set();
+document.addEventListener("toggle", e => {
+  const id = e.target.dataset?.steps; if (!id) return;
+  if (e.target.open) openSteps.add(id); else openSteps.delete(id);
+}, true);
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function st(id) { return state[id] || { s: "todo", n: "" }; }
+
+function render() {
+  const all = GROUPS.flatMap(g => g.items);
+  const ok = all.filter(i => st(i.id).s === "ok").length, bad = all.filter(i => st(i.id).s === "bad").length;
+  document.getElementById("cOk").textContent = ok;
+  document.getElementById("cBad").textContent = bad;
+  document.getElementById("cTodo").textContent = all.length - ok - bad;
+  document.getElementById("mOk").style.width = (all.length ? ok / all.length * 100 : 0) + "%";
+  document.getElementById("mBad").style.width = (all.length ? bad / all.length * 100 : 0) + "%";
+
+  const openGroups = new Set([...document.querySelectorAll("details[open]")].map(d => d.dataset.g));
+  const first = !document.querySelector("details");
+  const focusId = document.activeElement?.id;
+  const main = document.getElementById("groups");
+  main.innerHTML = GROUPS.map(g => {
+    const items = g.items.filter(i => filter === "all" || st(i.id).s === filter);
+    const done = g.items.filter(i => st(i.id).s !== "todo").length;
+    const isOpen = first ? (g.open || g.items.length === 0) : openGroups.has(g.id) || filter !== "all";
+    const rows = items.map(i => {
+      const v = st(i.id), showNote = v.s === "bad" || v.n || openNotes.has(i.id);
+      const tags = [...(i.code ? [`<span class="tag code">${esc(i.code)}</span>`] : []), ...(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`)].join("");
+      return `<div class="item" data-s="${v.s}">
+        <div class="it-text"><div class="it-title">${esc(i.t)}</div>${i.h ? `<div class="it-how">${esc(i.h)}</div>` : ""}
+          ${i.cmd ? `<pre class="cmd">${esc(i.cmd)}</pre><button class="copy" type="button" data-copy="${esc(i.id)}">Copy commands</button>` : ""}
+          ${tags ? `<div class="tags">${tags}</div>` : ""}
+          ${i.steps ? `<details class="steps" data-steps="${i.id}" ${openSteps.has(i.id) ? "open" : ""}><summary>How to test</summary><ol>${i.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>${i.pass ? `<p class="pass"><b>Works if:</b> ${esc(i.pass)}</p>` : ""}</details>` : ""}</div>
+        <div class="seg" role="group" aria-label="Result for ${esc(i.t)}">${["todo", "ok", "bad"].map(s => `<button type="button" data-id="${i.id}" data-v="${s}" aria-pressed="${v.s === s}">${LABELS[s]}</button>`).join("")}</div>
+        ${showNote ? `<div class="note"><label for="n-${i.id}">${v.s === "bad" ? "What went wrong?" : "Note"}</label><textarea id="n-${i.id}" data-note="${i.id}" placeholder="${v.s === "bad" ? "What you did, what you saw" : "Optional"}">${esc(v.n || "")}</textarea></div>` : `<button class="addnote" type="button" data-addnote="${i.id}">Add a note</button>`}
+      </div>`;
+    }).join("");
+    const empty = g.items.length === 0 ? "" : (items.length === 0 ? `<div class="empty">Nothing here for this filter.</div>` : "");
+    return `<section class="group"><details data-g="${g.id}" ${isOpen ? "open" : ""}><summary><h2>${esc(g.title)}</h2><span class="count">${g.items.length ? `${done}/${g.items.length}` : "soon"}</span></summary>
+      ${g.note ? `<p class="gnote">${esc(g.note)}</p>` : ""}${rows}${empty}</details></section>`;
+  }).join("");
+  if (focusId) document.getElementById(focusId)?.focus();
+}
+
+async function save(id, patch) {
+  const next = { ...st(id), ...patch, at: new Date().toISOString() };
+  state[id] = next; render();
+  if (db) {
+    try { await db.collection("checks").doc(id).set({ s: next.s, n: next.n || "", at: next.at }); setSaved("Saved to your Claude account"); }
+    catch (e) { setSaved("Couldn't save just now. Your last change may not be kept."); }
+  } else {
+    try { localStorage.setItem("beta4-checks", JSON.stringify(state)); } catch {}
+  }
+}
+function setSaved(t) { document.getElementById("saved").textContent = t; }
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.f) { filter = b.dataset.f; document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c === b)); render(); return; }
+  if (b.dataset.v && b.dataset.id) { if (st(b.dataset.id).s !== b.dataset.v) save(b.dataset.id, { s: b.dataset.v }); return; }
+  if (b.dataset.addnote) { openNotes.add(b.dataset.addnote); render(); document.getElementById("n-" + b.dataset.addnote)?.focus(); return; }
+  if (b.dataset.copy) { const i = GROUPS.flatMap(g => g.items).find(x => x.id === b.dataset.copy); copyText(i.cmd, b); return; }
+  if (b.id === "copyProblems") {
+    const lines = GROUPS.flatMap(g => g.items.filter(i => st(i.id).s === "bad").map(i => `- [${g.title}] ${i.t}${st(i.id).n ? ": " + st(i.id).n : ""}`));
+    copyText(lines.length ? "Problems found in the beta 4 test checklist:\n" + lines.join("\n") : "No problems marked yet.", b, document.getElementById("copyMsg"));
+  }
+});
+const timers = {};
+document.addEventListener("input", e => {
+  const id = e.target.dataset?.note; if (!id) return;
+  const val = e.target.value; state[id] = { ...st(id), n: val };
+  clearTimeout(timers[id]); timers[id] = setTimeout(() => save(id, { n: val }), 900);
+});
+document.addEventListener("focusout", e => {
+  const id = e.target.dataset?.note; if (!id) return;
+  if (timers[id]) { clearTimeout(timers[id]); delete timers[id]; save(id, { n: e.target.value }); }
+});
+async function copyText(text, btn, msgEl) {
+  const old = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; if (msgEl) msgEl.textContent = ""; }
+  catch { if (msgEl) { msgEl.textContent = text; } else { btn.textContent = "Select the text above to copy"; } }
+  setTimeout(() => { btn.textContent = old; }, 1600);
+}
+
+render();
+(async () => {
+  db = await (window.claude?.use ? window.claude.use("db") : null);
+  if (!db) {
+    local = true;
+    try { state = JSON.parse(localStorage.getItem("beta4-checks") || "{}") || {}; } catch { state = {}; }
+    setSaved("Saved on this device only"); render(); return;
+  }
+  const timer = setTimeout(() => setSaved("Can't reach your saved results yet."), 10000);
+  db.collection("checks").onSnapshot(snap => {
+    const next = {};
+    snap.docs.forEach(d => { const v = d.data(); next[d.id] = { s: v.s || "todo", n: v.n || "" }; });
+    const editing = document.activeElement?.dataset?.note;
+    if (editing && state[editing]) next[editing] = { ...next[editing], n: state[editing].n };
+    state = next;
+    if (!snap.metadata.fromCache) { clearTimeout(timer); setSaved("Saved to your Claude account"); }
+    render();
+  }, () => { clearTimeout(timer); setSaved("Saving is unavailable right now."); });
+})();
+</script>
