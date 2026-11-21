@@ -131,6 +131,10 @@ Mac build.
 
 ### Untested — check later (build 22)
 
+- **First, in the simulator:** play a replay in the single-feed player, close it, then tap a car
+  in another one and close again; nothing crashes. If closing crashes, the suspect is the last
+  line of `PlayerController.stopNowPlaying()` (`removePlayer` on the session's only player):
+  remove that line.
 - The zero-warnings build. No new app files; DuoCore gains `UnfoldWatch.swift` (the package
   picks it up). Not compiled here: the Now Playing teardown's MediaPlayer calls (in particular
   removing the session's only player), the mixer's settling task.
@@ -144,7 +148,9 @@ Mac build.
   and quickly; each time the feeds jump. If one doesn't, record the posture order in the Debug
   log.
 - **A live multiview:** a tile that stops comes back by itself once (a fresh PLAY); picking it
-  again later than a minute after its last link tries again.
+  again later than a minute after its last link tries again. Removing a stopped feed and adding
+  it back, Clear all, Reset or a preset first try the link it had; only if that fails does it ask
+  afresh (once a minute).
 - In the simulator: Gap Thermometer swipes from a pair with a car that never ran; a remembered
   driver filter in a session without that car.
 
