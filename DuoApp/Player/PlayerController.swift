@@ -755,6 +755,8 @@ final class PlayerController {
         removeObservers()
         jumpSample = nil
         player?.pause()
+        // The lock screen and Control Centre let go before the player does.
+        stopNowPlaying()
         player?.replaceCurrentItem(with: nil)
         // Ends a picture in picture still up; its stop then finds nothing to do.
         isInPictureInPicture = false
@@ -765,7 +767,6 @@ final class PlayerController {
         pictureInPictureController = nil
         surface?.playerLayer.player = nil
         surface = nil
-        nowPlaying = nil
         player = nil
         canSave = false
         pendingStart = .position(0)
@@ -929,6 +930,23 @@ final class PlayerController {
         }
         session.becomeActiveIfPossible { _ in }
         nowPlaying = session
+    }
+
+    /// Ends the lock screen's and Control Centre's entry for this player, on a close and before
+    /// new content: nothing is published any more, the handlers go, the info is cleared, and the
+    /// session lets go of the player. It does not wait for the session to be released. The audio
+    /// session itself goes inactive in `close()`.
+    private func stopNowPlaying() {
+        guard let session = nowPlaying else { return }
+        nowPlaying = nil
+        session.automaticallyPublishesNowPlayingInfo = false
+        session.nowPlayingInfoCenter.nowPlayingInfo = nil
+        let commands = session.remoteCommandCenter
+        commands.playCommand.removeTarget(nil)
+        commands.pauseCommand.removeTarget(nil)
+        commands.togglePlayPauseCommand.removeTarget(nil)
+        commands.changePlaybackPositionCommand.removeTarget(nil)
+        if let player { session.removePlayer(player) }
     }
 
     private func forgetViewerChoices() {
