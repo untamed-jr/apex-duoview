@@ -80,6 +80,125 @@ change is its own commit so it can be kept or reverted on its own.
 Built in the simulator with 0 warnings (opening screen and q1, q2, q3, q5, q6, q7; 2026-11-19).
 Untested — check later: everything above on the phone (after the race).
 
+## v1.0-beta.4 — Radio and the closed phone (not released yet)
+
+Beta 4 is built (builds 17 to 22) and has not been tried on the phone. The phone keeps the race
+build until after the Las Vegas race; then beta.4 is installed and the list below is checked.
+Everything here was checked on a computer only: the DuoCore tests (706), the pure app files
+against the São Paulo race data, and the syntax of every changed file. The owner's Mac build is
+the first real compile of the app changes.
+
+- **Team radio on replays** (build 17): a Radio panel, clips shown only once the picture has
+  reached them, played while the feeds go quiet, with marks on the Scrub Deck and in Race
+  Engineer.
+- **Transcripts** (build 18): each clip turned into text on the phone by iOS's own speech
+  recognition; never a server, never the microphone.
+- **The closed phone** (build 19): the outer screen has three pages (Picture, Radio Scanner,
+  Gap Thermometer), and Unfold to See: an event card slides in, and opening the phone jumps every
+  feed to just before it.
+- **Haptics** (build 20): one feel for each flag, your driver's stop and purple sectors, felt as
+  the picture reaches them.
+- **Book layouts and the hinge mixer** (build 21): Onboard and Logbook, Ear-Matched Rivals, and
+  a hinge mixer for radio against commentary (clips only, until owner check T-R1).
+- **Final fixes** (build 22): from the final review, including the mixer settling at the hinge's
+  angle, Unfold to See through an unknown posture, nothing left on the lock screen after closing
+  the player, and a live multiview tile that asks again with a fresh link.
+
+### Untested — check later (all of beta.4)
+
+One list for builds 17 to 22, with what a later build answered taken out. The lists under each
+build below stay as they were written.
+
+**First, in the simulator**
+- **The close check** (tests the lock-screen teardown): play a replay in the single-feed player,
+  close it, then tap a car in another one and close again; nothing crashes. If closing crashes,
+  the suspect is the last line of `PlayerController.stopNowPlaying()` (`removePlayer` on the
+  session's only player): remove that line.
+- The zero-warnings Mac build (`xcodegen generate` first: new folders `DuoApp/Closed`,
+  `DuoApp/Haptics` and `DuoApp/Book`, and new files in `DuoApp/Radio`; DuoCore gains
+  `UnfoldWatch.swift`). Not compiled here: the Now Playing teardown's MediaPlayer calls, the
+  mixer's settling task, the Speech calls and Swift 6 isolation in `Transcriber`, the Core Haptics
+  calls, the audio route and headphone calls, the views and gestures. (Build 17's own build was
+  checked on the Mac at 15424b1: 0 warnings.)
+- São Paulo race replay, laps 17–23: clips appear only as reached, under their lap; ANT has 8
+  over the race ("Show the whole race", My driver or ANT's chip).
+- Radio and transcripts: a clip plays while the feeds go quiet, at the feeds' speed (try 2×), and
+  the sound comes back at its end, on a second tap, on a rewind past it and on closing the player;
+  moving the sound to another tile during a clip; the soft flash only in normal play (also check
+  a speed change while a clip is due); transcripts (if the probe shows the simulator can
+  transcribe, O4); text only once the picture reaches its clip, also after a rewind and with
+  "Show the whole race"; closing the panel mid-clip then opening it does the same clip again;
+  "Transcripts" off and on; speech recognition denied and allowed again.
+- Exit-test step 2 with Settings › Debug › Simulate fold › Closed: the Scanner on ANT plays his
+  clips on laps 19, 20 and 22 as the picture reaches them; the Thermometer's colour follows the
+  gap; a yellow flag (laps 17 and 20) brings a card, unfolding jumps every feed to 5 s before it,
+  and "Back to where you were" returns.
+- Exit-test step 3 with "Show haptics on screen": the race's yellow flags and the two red flags
+  in the São Paulo qualifying replay each show "Haptic: …" as the picture reaches them; nothing
+  on a scrub across one, nor in the 2 s after it.
+- Both book options with a replay (⟳ in book with timing loaded); the Logbook follows a tap on
+  the car ahead or behind; Rivals' header menu; the mixer with Simulate fold's angle slider (the
+  bar, the levels, 70° and 160°).
+- The Gap Thermometer swiping from a pair with a car that never ran; a remembered driver filter
+  in a session without that car.
+- Panning with headphones on the Mac running the simulator; centred without.
+
+**On the phone**
+- **Owner check T-R1 is still open:** play an onboard and list its audio options; is its
+  team-radio track continuous radio, clips only, or onboard sound? The mixer is built for clips
+  only; T-R1 decides whether a continuous-radio crossfade is added later.
+- **Transcribe a test clip** (Settings › Debug) on the Duo, for O4 and O7: whether iOS can
+  transcribe, the engine it picked, the locale, the seconds. It stays in this build until you
+  have run it. If iOS wants a speech-recognition reason for this and the app closes when you tap
+  it, that is the O1 answer, not a bug to chase.
+- Transcripts: seconds per clip over 10 clips; the "Getting the speech model ready…" line the
+  first time; whether a speech-recognition prompt appears (O1) and which engine ran (O7);
+  warmth over 20 minutes of radio on screen; nothing transcribed with the app in the background
+  (picture in picture, or the screen off with sound).
+- **Lock screen:** play a single feed, close it, lock the phone and open Control Centre: no Apex
+  DuoView entry. Tap a car twice, then close: still none. Close the player, or tap a car, while
+  picture in picture shows: no window is left behind.
+- The Radio panel on the Duo: the Scrub Deck's radio ticks (taller for your driver; none past the
+  picture) and a tap on one; Race Engineer's spot for the top onboard (the mini map above it is a
+  little shorter; with a notice line showing, its 122 pt may overflow); the multiview's top bar
+  with the Radio button still fits closed and in book pose; a clip download that F1 refuses shows
+  "Couldn't load this clip", the video plays on and nobody is signed out; a call, an alarm or
+  Siri while a clip plays ends the clip and brings the feeds' sound back; tapping a car in the
+  single-feed player while a clip plays stops the clip and empties the list for a moment.
+- **The closed phone:** the outer screen's size (Settings › Debug › "Screen"); readability at
+  arm's length; how the swipes feel (on a tile, on the black around it, on a page; the tower
+  scrolls rather than changes the page); closed with the screen off (O6, Q10); two stacked feeds
+  (tap to swap, hold and drag to trade, swipe left or right for the main feed; their quality
+  caps); the Gap Thermometer's battery use at 2 Hz over a race.
+- **Unfold to See on the Duo:** with a card up while closed, unfold to book and to flat, slowly
+  and quickly; each time the feeds jump, the jump lands before the layout changes and the card
+  goes. If one doesn't, record the posture order in the Debug log.
+- **Haptics:** each "Feel it", and each event in a replay; whether the seven feel distinct;
+  whether yellow nags through a busy session; Settings › Haptics shows on the phone; every
+  "Show haptics on screen" label comes with a feel, also the first one after a long quiet spell;
+  with the screen off or the app in the background (O2) Core Haptics is expected to stop, and the
+  next haptic after coming back should still play; a yellow's haptic plays again after an Unfold
+  to See jump back (it matches "haptics follow the picture"; say if the feel is wrong).
+- **Book on the Duo:** the real book halves (the strips are as wide as their onboard, which in
+  book is the whole half); AirPods panning; headphones going in or out while a clip plays end
+  that clip and the next one plays in its ear.
+- **The hinge mixer on the Duo:** fold quickly and stop; the bar settles at the hinge's angle
+  within about 1.5 s; holding still doesn't make the mix waver; the feel of angle noise, how
+  often the angle comes, and whether the 5° dead zone feels steppy.
+
+**On a live weekend**
+- **A live multiview:** four feeds play; the onboards are the right drivers; swapping a feed in
+  Feeds plays it; a tile that stops comes back by itself once (a fresh PLAY); picking it again
+  later than a minute after its last link tries again. Removing a stopped feed and adding it
+  back, Clear all, Reset or a preset first try the link it had; only if that fails does it ask
+  afresh (once a minute).
+- New radio clips arrive with only the Radio panel open (the radio keeps the live timing being
+  rebuilt while a player is open, as the map and tower do).
+- In Rivals, a live feed starts only once its own PLAY answers, so the left rival may take a
+  moment (or the next change of the feeds) to reach the left screen.
+- On a live programme, haptics, Rivals' auto-play and the radio land with the picture, not the
+  timing (T-C4); a card's jump back from the live edge, "Back" to the edge, and LIVE.
+
 ### v1.0-beta.4, build 22 — final fixes
 
 Not on the phone yet. The fixes from the final review of beta.4. Checked on a computer only
