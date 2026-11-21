@@ -233,13 +233,15 @@ final class CompanionController {
         if let last = lastSeekGeneration, last != generation { seekTicksLeft = Self.seekTicks }
         lastSeekGeneration = generation
         let motion: PictureMotion = seekTicksLeft > 0 ? .seek : .play
-        if seekTicksLeft > 0 { seekTicksLeft -= 1 }
 
         // Without picture time: a seek still forgets the waiting haptic, and one waiting plays.
+        // The seek's ticks are kept for ticks that have a picture time, so the landing is never
+        // read as normal play.
         guard let t = timing.pictureTime else {
             scheduleHaptics([], motion: motion)
             return
         }
+        if seekTicksLeft > 0 { seekTicksLeft -= 1 }
         if motion == .seek { setStack { $0.dropLater(than: t) } }
         let events = detector.step(to: t, motion: motion, session: session, radio: session.radio,
                                    favourite: mine, listening: [])

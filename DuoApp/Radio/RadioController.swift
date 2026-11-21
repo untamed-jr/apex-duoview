@@ -712,9 +712,10 @@ final class RadioController {
         }
         lastSeekGeneration = generation
         let motion: PictureMotion = seekTicksLeft > 0 ? .seek : .play
-        if seekTicksLeft > 0 { seekTicksLeft -= 1 }
 
         let pictureTime = timing.pictureTime
+        // The seek's ticks count only with a picture time, so the landing is never normal play.
+        if pictureTime != nil, seekTicksLeft > 0 { seekTicksLeft -= 1 }
         let whole = timing.showWholeRace
         if let t = pictureTime {
             let cars = Set(session.drivers.keys).union(session.radio.all.map(\.racingNumber))
