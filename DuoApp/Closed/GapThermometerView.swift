@@ -26,6 +26,10 @@ struct GapThermometerView: View {
     @State private var chosen: [String]?
     @State private var loadedChoice = false
     @State private var picking = false
+    /// With no pair chosen: the default when the page first found one, kept (not remembered) so
+    /// the pair doesn't flip between the cars ahead and behind as the gaps move. Found again when
+    /// your driver changes.
+    @State private var heldPair: [String]?
 
     var body: some View {
         // 2 Hz: the reading is at picture time, which isn't observed.
@@ -45,6 +49,17 @@ struct GapThermometerView: View {
                 loadedChoice = true
             }
         }
+        // The default pair, once found, holds until your driver changes.
+        .task(id: companion.favourite) {
+            heldPair = nil
+            while !Task.isCancelled {
+                if chosen == nil, heldPair == nil, let session = timing.loadedSession, let t = timing.pictureTime,
+                   let pair = GapPair.defaultPair(favourite: companion.favourite, at: t, session: session) {
+                    heldPair = [pair.0, pair.1]
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
         .sheet(isPresented: $picking) {
             if let session = timing.loadedSession {
                 GapPairPicker(session: session, order: ClosedPager.raceOrder(at: timing.pictureTime ?? .min, session: session),
@@ -58,7 +73,7 @@ struct GapThermometerView: View {
 
     private var currentPair: (String, String)? {
         guard let session = timing.loadedSession, let t = timing.pictureTime else { return nil }
-        return CompanionModels.gapPair(stored: chosen, favourite: companion.favourite, at: t, session: session)
+        return CompanionModels.gapPair(stored: chosen, favourite: companion.favourite, held: heldPair, at: t, session: session)
     }
 
     @ViewBuilder

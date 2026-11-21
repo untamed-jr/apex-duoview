@@ -193,14 +193,15 @@ final class CompanionController {
         if motion == .seek { setStack { $0.dropLater(than: t) } }
         let events = detector.step(to: t, motion: motion, session: session, radio: session.radio,
                                    favourite: mine, listening: [])
-        guard !events.isEmpty else { return }
         for event in events {
             for continuation in hapticListeners.values { continuation.yield(event) }
         }
-        if cardsShown, host is any CompanionJumpHost {
+        if !events.isEmpty, cardsShown, host is any CompanionJumpHost {
             let settings = settings
             setStack { $0.add(events, favourite: mine, groupOn: { settings.cardGroupOn($0) }) }
         }
+        // Only in normal play: a seek tick may still read the time before the seek landed.
+        if motion == .play { stack.played(to: t) }
     }
 
     /// Changes the stack and publishes its cards only when they changed.

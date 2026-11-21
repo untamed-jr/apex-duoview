@@ -97,12 +97,14 @@ first real compile is the owner's Mac build.
 - **Radio Scanner:** one driver's code, team colour, position and lap; their clips so far in
   large type, the newest at the bottom; one big ▶ / ■. A clip plays by itself when the picture
   reaches it ("Play radio as it happens"); with that off, "New radio — tap to play". Left and
-  right change the driver in race order; the default is your driver, else the leader. "No radio
+  right change the driver in race order; the default is your driver, else the leader (kept when
+  the lead changes). "No radio
   from {CODE} yet. Swipe for another driver." Transcripts are made while the Scanner shows.
 - **Gap Thermometer:** two drivers' codes at either end of a tall bar, the gap in large digits,
   ▼ closing or ▲ growing; the bar goes from cool blue (3 s or more) through amber (2 s) to red
   (1 s or less). Twice a second. Left and right move the pair along the race order; touch and
-  hold to pick both drivers. The default pair is your driver and the nearer car ahead or behind.
+  hold to pick both drivers. The default pair is your driver and the nearer car ahead or behind,
+  as found when the page first shows (it doesn't flip as the gaps move).
   "The Gap Thermometer works in races and sprints.", "Gaps start after the first lap.",
   "{CODE} in the pits", "{CODE} is out — swipe for another pair".
 - **Unfold to See:** while closed, an event slides in as a card at the top of any page, older

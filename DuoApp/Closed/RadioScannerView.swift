@@ -31,6 +31,9 @@ struct RadioScannerView: View {
     @State private var loadedChoice = false
     /// A clip crossed with auto-play off, waiting for a tap.
     @State private var pending: String?
+    /// With no driver chosen and none of yours: the leader when the page first found one, kept
+    /// (not remembered) so a change of lead doesn't move the page to another driver.
+    @State private var heldLeader: String?
 
     var body: some View {
         Group {
@@ -57,6 +60,9 @@ struct RadioScannerView: View {
         .onDisappear {
             radio.listen([])
             radio.setSurface(Self.surface, shown: false)
+        }
+        .onChange(of: order.first, initial: true) { _, first in
+            if heldLeader == nil { heldLeader = first }
         }
         // One stream per driver: auto-play (or the prompt) only from clips crossed in normal play.
         .task(id: driverNow) {
@@ -89,7 +95,7 @@ struct RadioScannerView: View {
     }
 
     private var driverNow: String? {
-        CompanionModels.scannerDriver(stored: chosen, favourite: radio.favourite, order: order)
+        CompanionModels.scannerDriver(stored: chosen, favourite: radio.favourite, held: heldLeader, order: order)
     }
 
     private func scanner(_ session: LoadedSession) -> some View {

@@ -156,18 +156,26 @@ enum CompanionModels {
     }
 
     /// The Scanner's driver: the stored one when this session has that car, else your driver, else
-    /// the leader (`order` is the race order, `ClosedPager.raceOrder`).
-    static func scannerDriver(stored: String?, favourite: String?, order: [String]) -> String? {
+    /// `held` (the leader when the page first found one, so a change of lead doesn't move the
+    /// page), else the leader (`order` is the race order, `ClosedPager.raceOrder`).
+    static func scannerDriver(stored: String?, favourite: String?, held: String? = nil, order: [String]) -> String? {
         if let stored, order.contains(stored) { return stored }
+        if let favourite, order.contains(favourite) { return favourite }
+        if let held, order.contains(held) { return held }
         return ClosedPager.defaultDriver(favourite: favourite, order: order)
     }
 
-    /// The Thermometer's pair: the stored one when both are this session's cars, else your driver
-    /// and the nearer car ahead or behind (`GapPair.defaultPair`).
-    static func gapPair(stored: [String]?, favourite: String?, at t: UTCms, session: LoadedSession) -> (String, String)? {
-        if let stored, stored.count == 2, stored[0] != stored[1] {
-            let cars = Set(ClosedPager.raceOrder(at: t, session: session))
-            if cars.contains(stored[0]), cars.contains(stored[1]) { return (stored[0], stored[1]) }
+    /// The Thermometer's pair: the stored one when both are this session's cars, else `held` (the
+    /// default when the page first found one, so the pair doesn't flip between the cars ahead and
+    /// behind as the gaps move), else your driver and the nearer car ahead or behind
+    /// (`GapPair.defaultPair`).
+    static func gapPair(stored: [String]?, favourite: String?, held: [String]? = nil, at t: UTCms,
+                        session: LoadedSession) -> (String, String)? {
+        let cars = Set(ClosedPager.raceOrder(at: t, session: session))
+        for pair in [stored, held] {
+            if let pair, pair.count == 2, pair[0] != pair[1], cars.contains(pair[0]), cars.contains(pair[1]) {
+                return (pair[0], pair[1])
+            }
         }
         return GapPair.defaultPair(favourite: favourite, at: t, session: session)
     }
@@ -265,10 +273,16 @@ struct CardStack: Equatable, Sendable {
         if cards.count > Self.limit { cards.removeLast(cards.count - Self.limit) }
     }
 
-    /// After a seek: the cards for moments the picture hasn't reached any more go.
+    /// After a seek: the cards for moments the picture hasn't reached any more go. The event
+    /// jumped to is kept: the first seek tick may still read the time before the jump landed.
     mutating func dropLater(than t: UTCms) {
         cards.removeAll { $0.t > t }
-        if let jumped = jumpedTo, jumped.t > t &+ 60_000 || jumped.t < t &- 60_000 { jumpedTo = nil }
+    }
+
+    /// Normal play is at `t`: once it is 10 s past the event jumped to without crossing it (the
+    /// crossing fell in a seek's quiet, or the viewer went on past it), that event is forgotten.
+    mutating func played(to t: UTCms) {
+        if let jumped = jumpedTo, jumped.t < t &- 10_000 { jumpedTo = nil }
     }
 
     mutating func dismissTop() {
